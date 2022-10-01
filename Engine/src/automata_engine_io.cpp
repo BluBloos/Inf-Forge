@@ -139,8 +139,6 @@ namespace automata_engine {
                             StretchyBuffer_GetCount(rawModel.vertexData) += 8;
                             memcpy((rawModel.vertexData + remapped_vIndex * 8), 
                               (rawModel.vertexData + (vIndex) * 8), sizeof(float) * 8);
-                            // TODO(Noah): This code path is untested - test.
-                            PlatformLoggerWarn("this code path is untested");
                           }
                           stbds_hmput(vertex_uv_pair_map, i_vertexUV, remapped_vIndex);
                           // NOTE(Noah): each vertex is 8 floats (vertex stride),
