@@ -1,0 +1,261 @@
+#include <automata_engine.h>
+#include <cstdarg>
+
+#if defined(GL_BACKEND)
+#include <automata_engine_gl.h>
+namespace automata_engine {
+    namespace GL {
+        void GLClearError() { while(glGetError() != GL_NO_ERROR); }
+        bool GLCheckError(char *function, char *file, int line) {
+            bool result = true;
+            while(GLenum error = glGetError()) {
+                PlatformLoggerLog("GL_ERROR: %d\nFUNCTION: %s\nFILE: %s\nLINE: %d", 
+                    error, function, file, line);
+                result = false;
+            }
+            return result;
+        }
+        vertex_attrib_desc::vertex_attrib_desc(
+            uint32_t attribIndex,
+            std::initializer_list<uint32_t> indices_list,
+            vbo_t vbo,
+            bool iterInstance
+        ) : attribIndex(attribIndex), indices(nullptr), vbo(vbo), iterInstance(iterInstance) {
+            for (uint32_t i = 0; i < indices_list.size(); i++) {
+                StretchyBufferPush(indices, std::data(indices_list)[i]);
+            }
+        };
+        vertex_attrib::vertex_attrib(GLenum type, uint32_t count) :
+            type(type), count(count) {};
+        bool glewIsInit = false;
+        GLuint compileShader(uint32_t type, char *shader) {
+            uint32_t id = glCreateShader(type);
+            glShaderSource(id, 1, &shader, NULL);
+            glCompileShader(id);
+            int result;
+            glGetShaderiv(id, GL_COMPILE_STATUS, &result);
+            if(result == GL_FALSE) {
+                int length;
+                glGetShaderiv(id, GL_INFO_LOG_LENGTH, &length);
+                char *message = (char *)automata_engine::platform::alloc(length * sizeof(char));
+                if (message != NULL) {
+                    glGetShaderInfoLog(id, length, &length, message);
+                    PlatformLoggerError("Failed to comile shader!\n");
+                    PlatformLoggerError("%s\n", message);
+                    automata_engine::platform::free(message);
+                }
+                glDeleteShader(id);
+                return -1;
+            }
+            return id;
+        }
+        // failure mode for this function is -1
+        GLuint createShader(char *vertFilePath, char *fragFilePath) {
+            uint32_t program;
+            // Step 1: Setup our vertex and fragment GLSL shaders!
+            loaded_file f1 = automata_engine::platform::readEntireFile(vertFilePath);
+            loaded_file f2 = automata_engine::platform::readEntireFile(fragFilePath);
+            GL_CALL(program = glCreateProgram());
+            uint32_t vs = compileShader(GL_VERTEX_SHADER, (char *)f1.contents);
+            uint32_t fs = compileShader(GL_FRAGMENT_SHADER, (char *)f2.contents);
+            if ((int)vs == -1 || (int)fs == -1) {
+                // we failed.
+                glDeleteProgram(program);
+                return -1;
+            }
+            glAttachShader(program, vs);
+            glAttachShader(program, fs);
+            glLinkProgram(program);
+            glValidateProgram(program);
+            // Cleanup
+            glDeleteShader(vs);
+            glDeleteShader(fs);
+            automata_engine::platform::freeLoadedFile(f1);
+            automata_engine::platform::freeLoadedFile(f2);
+            return program;
+        }
+        void initGlew() {
+            if (!glewIsInit) {
+                GLenum err = glewInit();
+                if(GLEW_OK != err) {
+                    // TODO(Noah): GLEW failed, what the heck do we do?
+                    PlatformLoggerError("Something is seriously wrong");
+                    assert(false);
+                } else {
+                    glewIsInit = true;
+                }
+            }
+        }
+        // TODO(Noah): Are there performance concerns with always calling GetUniformLocation?
+        void setUniformMat4f(GLuint shader, char *uniformName, ae::math::mat4 val) {
+            GLuint loc = glGetUniformLocation(shader, uniformName);
+            glUniformMatrix4fv(loc, 1, GL_FALSE, (val).matp); 
+        }
+
+        GLuint createTexture(unsigned int *pixelPointer, unsigned int width, unsigned int height) {
+            GLuint newTexture;
+            glGenTextures(1, &newTexture);
+            glBindTexture(GL_TEXTURE_2D, newTexture);
+            // TODO(Noah): So, when we go about creating textures in the future, 
+            // maybe we actually care about setting some different parameters.
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+            glTexImage2D(
+                GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixelPointer);
+            glBindTexture(GL_TEXTURE_2D, 0);
+            return newTexture;
+        }
+
+        // TODO(Noah): add err checking
+        vbo_t createAndSetupVbo(
+            uint32_t counts,
+            ...) {
+            vbo_t myVbo = {};
+            glGenBuffers(1, &myVbo.glHandle);
+            va_list vl;
+            va_start(vl, counts);
+            for (uint32_t i = 0; i < counts; i++) {
+                vertex_attrib_t attrib = va_arg(vl, vertex_attrib_t);
+                StretchyBufferPush(myVbo.attribs, attrib);
+            }
+            va_end(vl);
+            return myVbo;
+        }
+
+        uint32_t GLenumToBytes(GLenum glType) {
+            uint32_t strideDelta = 0;
+            switch(glType) {
+                case GL_BYTE:
+                case GL_UNSIGNED_BYTE:
+                    strideDelta = 1;
+                    break;
+                case GL_SHORT:
+                case GL_UNSIGNED_SHORT:
+                case GL_HALF_FLOAT:
+                    strideDelta = 2;
+                    break;
+                case GL_INT:
+                case GL_UNSIGNED_INT:
+                case GL_FIXED:
+                case GL_FLOAT:
+                    // packed formats
+                case GL_INT_2_10_10_10_REV:
+                case GL_UNSIGNED_INT_2_10_10_10_REV:
+                case GL_UNSIGNED_INT_10F_11F_11F_REV:
+                    strideDelta = 4;
+                    break;  
+                case GL_DOUBLE:
+                    strideDelta = 8;
+                    break;
+            }
+            return strideDelta;
+        }
+
+        uint32_t vbo_GetOffset(vbo_t &vbo, uint32_t indexK) {
+            uint32_t offset = 0;
+            for (uint32_t i = 0; i < indexK; i++) {
+                vertex_attrib_t attrib = vbo.attribs[i];
+                offset += GLenumToBytes(attrib.type) * attrib.count;
+            }
+            return offset;
+        }
+
+        uint32_t vbo_GetStride(vbo_t &vbo) {
+            return vbo_GetOffset(vbo, StretchyBufferCount(vbo.attribs));
+        }
+
+        // TODO(Noah): Make the indexing into vbo SAFE.
+        GLuint createAndSetupVao(uint32_t attribCounts, ...) {
+            GLuint vao;
+            glGenVertexArrays(1, &vao); glBindVertexArray(vao);
+            GLuint boundVbo = 0;            
+            va_list vl;
+            va_start(vl, attribCounts);
+            for (uint32_t i = 0; i < attribCounts; i++) {
+                vertex_attrib_desc_t attribDesc = va_arg(vl, vertex_attrib_desc_t);
+                vbo_t *pVbo = &attribDesc.vbo;
+                if (pVbo->attribs == nullptr) {
+                    PlatformLoggerError(
+                        "Fatal in createAndSetupVao\n"
+                        "VBO is likely not initialized\n");
+                    automata_engine::setFatalExit();
+                } else {
+                    if (pVbo->glHandle != boundVbo) {
+                        glBindBuffer(GL_ARRAY_BUFFER, pVbo->glHandle);
+                    }
+                    uint32_t attribIndex = attribDesc.attribIndex;
+                    
+                    for (uint32_t j = 0; j < StretchyBufferCount(attribDesc.indices); j++) {
+                        uint32_t k = attribDesc.indices[j];
+                        vertex_attrib_t attrib = pVbo->attribs[k];
+                        uint32_t offset = 0;
+                        for (uint32_t w = 0; w < (uint32_t)ceilf(attrib.count / 4.0f); w++) {
+                            uint32_t attribCount = attrib.count - (w * 4); 
+                            uint32_t componentCount = (attribCount > 4) ? 4 : attribCount;
+                            intptr_t ptr;
+                            glVertexAttribPointer(
+                                attribIndex,
+                                componentCount,
+                                attrib.type,
+                                // NOTE: we are basically going to be making this a default - glfalse.
+                                GL_FALSE,
+                                vbo_GetStride(*pVbo),
+                                (const void *)(ptr = (intptr_t)offset + vbo_GetOffset(*pVbo, k))
+                            );
+                            PlatformLoggerWarn(
+                                "did glVertexAttribPointer(%d, %d, type, GL_FALSE, %d, %d);",
+                                attribIndex, (attribCount > 4) ? 4 : attribCount, 
+                                vbo_GetStride(*pVbo), ptr);
+                            offset += componentCount * GLenumToBytes(attrib.type);
+                            glEnableVertexAttribArray(attribIndex);
+                            if ( attribDesc.iterInstance ) {
+                                glVertexAttribDivisor(attribIndex, 1);
+                            }
+                            attribIndex++;
+                        }
+                    }
+                }
+                // NOTE(Noah): I'm not sure how I feel about this ...
+                // seems like a hack / bad API?
+                StretchyBufferFree(attribDesc.indices);
+            }
+            va_end(vl);
+            return vao;
+        }
+
+        void objToVao(raw_model_t rawModel, ibo_t *iboOut, vbo_t *vboOut, GLuint *vaoOut) {
+            // create the index buffer
+            glGenBuffers(1, &iboOut->glHandle);
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, iboOut->glHandle);
+            iboOut->count = StretchyBufferCount(rawModel.indexData);
+            glBufferData(GL_ELEMENT_ARRAY_BUFFER, iboOut->count * sizeof(unsigned int),
+                rawModel.indexData, GL_STATIC_DRAW);
+            // vbo def defines components
+            *vboOut = ae::GL::createAndSetupVbo(
+                3,
+                vertex_attrib_t(GL_FLOAT, 3),
+                vertex_attrib_t(GL_FLOAT, 2),
+                vertex_attrib_t(GL_FLOAT, 3)
+            );
+            // taking a BO and selecting vertex components to slot into our VAO desc.
+            *vaoOut = ae::GL::createAndSetupVao(
+                3,
+                vertex_attrib_desc_t(0, {0}, *vboOut, false /* per vertex */),
+                vertex_attrib_desc_t(1, {1}, *vboOut, false /* per vertex */),
+                vertex_attrib_desc_t(2, {2}, *vboOut, false /* per vertex */)
+            );
+            // upload vertex data.
+            glBindBuffer(GL_ARRAY_BUFFER, vboOut->glHandle);
+            // GL_STATIC_DRAW = we won't really update this data.
+            glBufferData(GL_ARRAY_BUFFER, sizeof(float) * StretchyBufferCount(rawModel.vertexData),
+                rawModel.vertexData, GL_STATIC_DRAW);
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+            glBindBuffer(GL_ARRAY_BUFFER, 0);
+        }
+    }
+};
+
+
+#endif
