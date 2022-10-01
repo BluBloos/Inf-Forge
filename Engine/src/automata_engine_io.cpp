@@ -17,36 +17,38 @@ namespace automata_engine {
       loaded_file_t fileResult = ae::platform::readEntireFile(path);
       if (fileResult.contentSize != 0) {
         bitmap_header_t *header = (bitmap_header *)fileResult.contents;
-        bitmap.pixelPointer = (unsigned int *) ((unsigned char *)fileResult.contents + header->BitmapOffset);
-        uint32_t imgSize = header->Height *header->Width * sizeof(uint32_t);
-        uint32_t *newData = (uint32_t *)ae::platform::alloc(imgSize);
-        if (newData != nullptr) {
-          memcpy(newData, bitmap.pixelPointer, imgSize);
-          bitmap.pixelPointer = newData;
-          bitmap.height = header->Height;
-          bitmap.width = header->Width;
-          // Colors in .bmp are stored as ARGB (MSB -> LSB), i.e. 0xAARRGGBB
-          // below code to convert to 0xRRGGBBAA.
-          unsigned int *SourceDest = bitmap.pixelPointer;
-          for (int y = 0; y < bitmap.height; ++y) {
-            for (int x = 0; x < bitmap.width; ++x) {
-              unsigned int pixel_val = *SourceDest;
-              unsigned int R = (pixel_val >> 16) & 0x000000FF;
-              unsigned int G = (pixel_val >> 8) & 0x000000FF;
-              unsigned int B = (pixel_val >> 0) & 0x000000FF;
-              unsigned int A = (pixel_val >> 24) & 0x000000FF;
-              *SourceDest++ = (A << 24) | (B << 16) | (G << 8) | (R << 0);
+        if (header->BitsPerPixel == 32) {
+          uint32_t imgSize = header->Height * header->Width * sizeof(uint32_t);
+          uint32_t *newData = (uint32_t *)ae::platform::alloc(imgSize);
+          if (newData != nullptr) {
+            bitmap.pixelPointer = (unsigned int *) ((unsigned char *)fileResult.contents + header->BitmapOffset);
+            memcpy(newData, bitmap.pixelPointer, imgSize);
+            bitmap.pixelPointer = newData;
+            bitmap.height = header->Height;
+            bitmap.width = header->Width;
+            // Colors in .bmp are stored as ARGB (MSB -> LSB), i.e. 0xAARRGGBB
+            // below code to convert to 0xRRGGBBAA.
+            unsigned int *SourceDest = bitmap.pixelPointer;
+            for (int y = 0; y < bitmap.height; ++y) {
+              for (int x = 0; x < bitmap.width; ++x) {
+                unsigned int pixel_val = *SourceDest;
+                unsigned int R = (pixel_val >> 16) & 0x000000FF;
+                unsigned int G = (pixel_val >> 8) & 0x000000FF;
+                unsigned int B = (pixel_val >> 0) & 0x000000FF;
+                unsigned int A = (pixel_val >> 24) & 0x000000FF;
+                *SourceDest++ = (A << 24) | (B << 16) | (G << 8) | (R << 0);
+              }
             }
+            ae::platform::freeLoadedFile(fileResult);
+          } else {
+            PlatformLoggerError("loadBMP failed to alloc.");
           }
-          ae::platform::freeLoadedFile(fileResult);
         } else {
-          PlatformLoggerError("loadBMP failed to alloc.");
-          bitmap.pixelPointer = nullptr;
+          PlatformLoggerError("%s is %d bpp, not %d", path, header->BitsPerPixel, 32);
         }
       }
       return bitmap;
     }
-
     void freeObj(raw_model_t obj) {
       StretchyBufferFree(obj.vertexData);
       StretchyBufferFree(obj.indexData);
