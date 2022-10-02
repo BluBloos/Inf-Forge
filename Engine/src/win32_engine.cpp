@@ -199,7 +199,7 @@ static void ProccessKeyboardMessage(unsigned int vkCode, bool down) {
     globalUserInput.keyDown[(uint32_t)GAME_KEY_0 + (vkCode - '0')] = down;
   } else if (vkCode == VK_SPACE) {
     globalUserInput.keyDown[GAME_KEY_SPACE] = down;
-  } else if (vkCode == VK_LSHIFT || vkCode == VK_RSHIFT) {
+  } else if (vkCode == VK_SHIFT) {
     globalUserInput.keyDown[GAME_KEY_SHIFT] = down;
   }
 }

@@ -165,10 +165,16 @@ namespace automata_engine {
         // TODO(Noah): Understand rvalues. Because, I'm a primitive ape, and,
         // they go right over my head, man.
         vec4_t operator*(mat4_t b, vec4_t a);
-        vec3_t operator+=(vec3_t &, vec3_t);
+        vec4_t operator*=(vec4_t &a, float scalar);
+        vec4_t operator+=(vec4_t &, vec4_t);
         mat4_t operator*(mat4_t a, mat4_t b);
+        vec3_t operator+=(vec3_t &, vec3_t);
         vec3_t operator*(mat3_t b, vec3_t a);
         mat4_t buildMat4fFromTransform(transform_t trans);
+        mat4_t buildProjMat(camera_t cam);
+        mat4_t buildViewMat(camera_t cam);
+        mat4_t buildRotMat4(vec3_t eulerAngles);
+        mat4_t transposeMat4(mat4_t  mat);
     }
 
     typedef struct super {

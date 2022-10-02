@@ -26,14 +26,21 @@ namespace automata_engine {
     typedef struct vec2 {
       float x,y;
     } vec2_t;
+    typedef struct vec4 vec4_t;
     typedef struct vec3 {
       float x,y,z;
+      vec3 operator-();
       vec3();
       vec3(float, float, float);
+      vec3(vec4_t);
     } vec3_t;
     typedef struct vec4 {
       float x,y,z,w;
+      vec4();
+      vec4(float, float, float, float);
+      vec4(vec3_t, float);
     } vec4_t;
+    typedef struct mat4 mat4_t;
     typedef struct mat3 {
       union {
         float mat[3][3];
@@ -41,6 +48,7 @@ namespace automata_engine {
         vec3_t matv[3];
       };
       mat3(std::initializer_list<float>);
+      mat3(mat4_t);
     } mat3_t;
     typedef struct mat4 {
       union {
@@ -58,9 +66,18 @@ namespace automata_engine {
       */
     typedef struct transform {
       vec3_t pos;
-      vec3_t eulerAngles; // euler angles with rotation order of Z, X, and Y (like Unity).
+      vec3_t eulerAngles; // euler angles with rotation order of Z, Y, and X.
       vec3_t scale;
     } transform_t;
+    /**
+      * @param fov is field of vision. Angle is applied in the vertical.
+      */
+    typedef struct camera {
+      transform_t trans;
+      float fov;
+      float nearPlane;
+      float farPlane;
+    } camera_t;
   }
 }
 
