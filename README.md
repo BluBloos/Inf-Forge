@@ -5,7 +5,9 @@
 
 Build system for generic GUI applications.
 
-P.S. those cool examples seen in the photo above will be released soon! The raytracer is already up: https://github.com/BluBloos/Raytracer
+P.S. those cool examples seen in the photo above will be released soon!
+- Raytracer: https://github.com/BluBloos/Raytracer
+- MonkeyDemo: https://github.com/BluBloos/MonkeyDemo
 
 # Steps for Building
 
