@@ -200,6 +200,8 @@ namespace automata_engine {
     // function that go here are those that are a layer above the read entire file call
     // these functions do further processing (parse a file format).
     namespace io {
+        void freeWav(loaded_wav wavFile);
+        loaded_wav_t loadWav(char *);
         loaded_image_t loadBMP(char *path);
         raw_model_t loadObj(const char *filePath);
         void freeObj(raw_model_t obj);
