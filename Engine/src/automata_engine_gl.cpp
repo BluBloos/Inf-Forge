@@ -206,8 +206,7 @@ namespace automata_engine {
                             );
                             PlatformLoggerWarn(
                                 "did glVertexAttribPointer(%d, %d, type, GL_FALSE, %d, %d);",
-                                attribIndex, (attribCount > 4) ? 4 : attribCount, 
-                                vbo_GetStride(*pVbo), ptr);
+                                attribIndex, componentCount, vbo_GetStride(*pVbo), ptr);
                             offset += componentCount * GLenumToBytes(attrib.type);
                             glEnableVertexAttribArray(attribIndex);
                             if ( attribDesc.iterInstance ) {
