@@ -1,6 +1,8 @@
 #include <automata_engine.h>
 #include <cstdarg>
 
+// TODO(Noah): impl dealloc unfunction for vbo_t
+
 #if defined(GL_BACKEND)
 #include <automata_engine_gl.h>
 namespace automata_engine {

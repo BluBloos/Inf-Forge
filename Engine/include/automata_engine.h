@@ -167,6 +167,9 @@ namespace automata_engine {
         );
         GLuint compileShader(uint32_t type, char *shader);
         void setUniformMat4f(GLuint shader, char *uniformName, math::mat4 val);
+        // TODO(Noah): is there any reason that we cannot use templates for our createAndSetupVbo?
+        vbo_t createAndSetupVbo(uint32_t counts, ...);
+        GLuint createAndSetupVao(uint32_t attribCounts, ...);
     }
 #endif
 
