@@ -91,15 +91,36 @@ namespace automata_engine {
             GLuint loc = glGetUniformLocation(shader, uniformName);
             glUniformMatrix4fv(loc, 1, GL_FALSE, (val).matp); 
         }
+        
+        GLuint createTextureFromFile(
+            const char *filePath,
+            GLint minFilter, GLint magFilter
+        ) {
+            loaded_image_t img = ae::platform::stbImageLoad((char *)filePath);
+            GLuint tex = 0;
+            if (img.pixelPointer != nullptr) {
+                tex = createTexture(
+                    img.pixelPointer, img.width, img.height,
+                    minFilter, magFilter
+                );
+                glFlush(); // push all buffered commands to GPU
+                glFinish(); // block until GPU is complete
+                ae::io::freeLoadedImage(img);
+            }
+            return tex;
+        }
 
-        GLuint createTexture(unsigned int *pixelPointer, unsigned int width, unsigned int height) {
+        GLuint createTexture(
+            unsigned int *pixelPointer, unsigned int width, unsigned int height,
+            GLint minFilter, GLint magFilter
+        ) {
             GLuint newTexture;
             glGenTextures(1, &newTexture);
             glBindTexture(GL_TEXTURE_2D, newTexture);
             // TODO(Noah): So, when we go about creating textures in the future, 
             // maybe we actually care about setting some different parameters.
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, minFilter);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, magFilter);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
             glTexImage2D(

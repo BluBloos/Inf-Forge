@@ -155,7 +155,16 @@ namespace automata_engine {
         bool getGLInitialized();
         void objToVao(raw_model_t rawModel, ibo_t *iboOut, vbo_t *vboOut, GLuint *vaoOut);
         GLuint createShader(char *vertFilePath, char *fragFilePath);
-        GLuint createTexture(unsigned int *pixelPointer, unsigned int width, unsigned int height);
+        // TODO(Noah): There's got to be a nice and clean way to get rid of the duplication
+        // here with the header of the wrapper.
+        GLuint createTextureFromFile(
+            const char *filePath,
+            GLint minFilter = GL_LINEAR, GLint magFilter = GL_LINEAR
+        );
+        GLuint createTexture(
+            unsigned int *pixelPointer, unsigned int width, unsigned int height,
+            GLint minFilter = GL_LINEAR, GLint magFilter = GL_LINEAR
+        );
         GLuint compileShader(uint32_t type, char *shader);
         void setUniformMat4f(GLuint shader, char *uniformName, math::mat4 val);
     }
