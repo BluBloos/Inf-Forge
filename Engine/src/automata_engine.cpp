@@ -80,15 +80,28 @@ namespace automata_engine {
     // substring match? Please ... fix this code.
     typedef void (*f_ptr_t)(game_memory_t *); 
     static uint32_t _currentApp = 0;
-    static f_ptr_t *appTable_func = nullptr;
+    typedef struct {
+        f_ptr_t updateFunc;
+        f_ptr_t transitionInto;
+        f_ptr_t transitionOut;
+    } bifrost_app_t;
+    static bifrost_app_t *appTable_func = nullptr;
     static const char **appTable_name = nullptr;
-    void bifrost::registerApp(const char *appName, f_ptr_t callback) {
-        StretchyBufferPush(appTable_func, callback);
+    void bifrost::registerApp(
+        const char *appName, f_ptr_t callback,
+        f_ptr_t transitionInto, f_ptr_t transitionOut
+    ) {
+        bifrost_app_t app = {callback, transitionInto, transitionOut};
+        StretchyBufferPush(appTable_func, app);
         StretchyBufferPush(appTable_name, appName);
     }
-    void bifrost::updateApp(const char *appname) {
+    void bifrost::updateApp(game_memory_t * gameMemory, const char *appname) {
         for (uint32_t i = 0; i < StretchyBufferCount(appTable_name); i++) {
             if (strcmp(appTable_name[i], appname) == 0) {
+                if (appTable_func[_currentApp].transitionOut != nullptr)
+                    appTable_func[_currentApp].transitionOut(gameMemory);
+                if (appTable_func[i].transitionInto != nullptr)
+                    appTable_func[i].transitionInto(gameMemory);
                 _currentApp = i;
             }
         }
@@ -96,15 +109,15 @@ namespace automata_engine {
     std::function<void(game_memory_t *)> bifrost::getCurrentApp() {
         // TODO(Noah): This can crash if _currentApp gets corrupted or something silly.
         return (appTable_func == nullptr) ? nullptr : 
-            appTable_func[_currentApp];
+            appTable_func[_currentApp].updateFunc;
     }
-    void super::updateAndRender() {
+    void super::updateAndRender(game_memory_t * gameMemory) {
         // Present the ImGui stuff to allow user to switch apps.
 #ifndef RELEASE
         ImGui::Begin("AutomataEngine Devtools");
         static int item_current = 0;
         ImGui::Combo("App", &item_current, appTable_name, StretchyBufferCount(appTable_name));
-        if (item_current != _currentApp) { _currentApp = item_current; }
+        if (item_current != _currentApp) { bifrost::updateApp(gameMemory, appTable_name[item_current]); }
         ImGui::End();
 #endif
     }

@@ -162,7 +162,6 @@ namespace automata_engine {
         mat4_t buildProjMat(camera_t cam) {
             float n = cam.nearPlane;
             float f = cam.farPlane;
-            game_window_info_t winInfo = ae::platform::getWindowInfo();
             float aspectRatio = (float)cam.height / (float)cam.width;
             float r = tanf(cam.fov * DEGREES_TO_RADIANS / 2.0f) * n;
             float l = -r;

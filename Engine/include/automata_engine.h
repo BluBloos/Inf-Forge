@@ -209,12 +209,16 @@ namespace automata_engine {
         // called by platform
         static void close();
         // called by user
-        static void updateAndRender();
+        static void updateAndRender(game_memory_t * gameMemory);
     } super_t;
 
     typedef struct bifrost {
-        static void registerApp(const char *appName, void (*callback)(game_memory_t *));
-        static void updateApp(const char *appName);
+        static void registerApp(
+            const char *appName, 
+            void (*callback)(game_memory_t *),
+            void (*transInto)(game_memory_t *) = nullptr,
+            void (*transOut)(game_memory_t *) = nullptr);
+        static void updateApp(game_memory_t * gameMemory, const char *appName);
         static std::function<void(game_memory_t *)> getCurrentApp();
     } bifrost_t;
 
