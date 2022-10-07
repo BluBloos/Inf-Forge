@@ -259,6 +259,8 @@ namespace automata_engine {
         void setMousePos(int xPos, int yPos);
         void showMouse(bool);
 
+        extern float lastFrameTime;
+        extern float lastFrameTimeTotal;
         extern bool GLOBAL_RUNNING;
         extern bool GLOBAL_VSYNC;
         extern int GLOBAL_PROGRAM_RESULT;

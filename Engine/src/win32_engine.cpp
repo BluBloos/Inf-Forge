@@ -26,10 +26,15 @@ static void (*GameCleanup)(game_memory_t *) = nullptr;
 
 namespace ae = automata_engine;
 
-// macros should always be in all caps.
+// TODO(Noah): What do we do for the very first frame, where we do not have
+// data about the last frame?
+float ae::platform::lastFrameTime = 1 / 60.0f;
+float ae::platform::lastFrameTimeTotal = 1 / 60.0f;
 bool ae::platform::GLOBAL_RUNNING = true;
 ae::update_model_t ae::platform::GLOBAL_UPDATE_MODEL =
     ae::AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC; // default.
+bool ae::platform::GLOBAL_VSYNC = false;
+static LONGLONG g_PerfCountFrequency64;
 
 void ae::platform::setMousePos(int xPos, int yPos) {
     SetCursorPos(xPos, yPos);
@@ -129,15 +134,13 @@ bool automata_engine::GL::getGLInitialized() {
 }
 #endif
 
-bool ae::platform::GLOBAL_VSYNC = false;
-
 // TODO(Noah): Need to also impl for DirectX, and same goes with update models ...
 void ae::platform::setVsync(bool b) {
     ae::platform::GLOBAL_VSYNC = b;
 #if defined(GL_BACKEND)
     if (wglSwapInterval) {
         (b) ? wglSwapInterval(1) : wglSwapInterval(0);
-    }    
+    }
 #endif
 }
 
@@ -181,6 +184,20 @@ static void Win32ResizeBackbuffer(win32_backbuffer_t *buffer, int newWidth, int 
     globalGameMemory.backbufferPixels = (uint32_t *)buffer->memory;
     globalGameMemory.backbufferWidth = newWidth;
     globalGameMemory.backbufferHeight = newHeight;
+}
+
+float Win32GetSecondsElapsed(
+    LARGE_INTEGER Start, LARGE_INTEGER End, LONGLONG PerfCountFrequency64
+) {
+	float Result = 1.0f * (End.QuadPart - Start.QuadPart) / PerfCountFrequency64;
+	return (Result);
+}
+
+LARGE_INTEGER Win32GetWallClock()
+{
+	LARGE_INTEGER Result;
+	QueryPerformanceCounter(&Result);
+	return (Result);
 }
 
 void Win32DisplayBufferWindow(HDC deviceContext, game_window_info_t winInfo) {
@@ -510,6 +527,14 @@ int CALLBACK WinMain(HINSTANCE instance,
     }
     #endif
 
+    // Query performance counter
+    {
+        LARGE_INTEGER PerfCountFrequency;
+        QueryPerformanceFrequency(&PerfCountFrequency);
+        g_PerfCountFrequency64 = PerfCountFrequency.QuadPart;
+    }
+
+
     windowClass.style = CS_VREDRAW | CS_HREDRAW; // Set window to redraw after being resized
     windowClass.lpfnWndProc = Win32WindowProc; // Set callback
     windowClass.hInstance = instance;
@@ -663,6 +688,8 @@ int CALLBACK WinMain(HINSTANCE instance,
     isImGuiInitialized = true;
 #endif
 
+    LARGE_INTEGER LastCounter = Win32GetWallClock();
+
     // TODO(Noah):
     // add stalling in the CPU model (i.e. the engine does not call game update)
     // as fast as possible. Then make ae::setVsync() control whether this happens, or no.
@@ -707,6 +734,13 @@ int CALLBACK WinMain(HINSTANCE instance,
         // Reset for next frame
         globalUserInput.deltaMouseX = 0; globalUserInput.deltaMouseY = 0;
 
+        {
+            LARGE_INTEGER WorkCounter = Win32GetWallClock();
+            float WorkSecondsElapsed =
+                Win32GetSecondsElapsed(LastCounter, WorkCounter, g_PerfCountFrequency64);
+            ae::platform::lastFrameTime = WorkSecondsElapsed;
+        }
+
 #if defined(GL_BACKEND)
         if (ae::platform::GLOBAL_UPDATE_MODEL == ae::AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC) {
             glFlush(); // push all buffered commands to GPU
@@ -715,6 +749,8 @@ int CALLBACK WinMain(HINSTANCE instance,
         SwapBuffers(gHdc);
 #endif
 
+        // TODO(Noah): for CPU backend, add sleep if vsync = ON.
+        // and I suppose figure out how to sync with the monitor?
 #if defined(CPU_BACKEND)
         // NOTE(Noah): Here we are going to call our custom windows platform layer function that
         // will write our custom buffer to the screen.
@@ -723,6 +759,14 @@ int CALLBACK WinMain(HINSTANCE instance,
         Win32DisplayBufferWindow(deviceContext, winInfo);
         ReleaseDC(windowHandle, deviceContext);
 #endif
+
+        {
+            LARGE_INTEGER EndCounter = Win32GetWallClock();
+            float TotalFrameTime =
+                (Win32GetSecondsElapsed(LastCounter, EndCounter, g_PerfCountFrequency64));
+            ae::platform::lastFrameTimeTotal = TotalFrameTime;
+            LastCounter = EndCounter;
+        }
 
     }
 

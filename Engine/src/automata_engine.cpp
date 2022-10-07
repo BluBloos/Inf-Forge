@@ -115,13 +115,18 @@ namespace automata_engine {
         // Present the ImGui stuff to allow user to switch apps.
 #ifndef RELEASE
         ImGui::Begin("AutomataEngine");
-        static int item_current = 0;
+        int item_current = _currentApp;
         ImGui::Combo("App", &item_current, appTable_name, StretchyBufferCount(appTable_name));
         if (item_current != _currentApp) { bifrost::updateApp(gameMemory, appTable_name[item_current]); }
-        ImGui::Text("Application average %.3f ms/frame (%.1f FPS)",
-            1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+        ImGui::Text("lastFrameTime: %.3f ms", 1000.0f * platform::lastFrameTime);
+        ImGui::Text("lastFrameTimeTotal: %.3f ms (%.1f FPS)",
+            1000.0f * platform::lastFrameTimeTotal, 1.0f / platform::lastFrameTimeTotal);
         ImGui::Text("updateModel: %s", updateModelToString(platform::GLOBAL_UPDATE_MODEL));
-        ImGui::Text("vsync: %s", (platform::GLOBAL_VSYNC) ? "ON" : "OFF");
+        bool vsync = platform::GLOBAL_VSYNC;
+        ImGui::Checkbox("vsync", &vsync);
+        if (platform::GLOBAL_VSYNC != vsync) {
+            platform::setVsync(vsync);
+        }
         ImGui::End();
 #endif
     }
