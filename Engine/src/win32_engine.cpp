@@ -35,6 +35,10 @@ void ae::platform::setMousePos(int xPos, int yPos) {
     SetCursorPos(xPos, yPos);
 }
 
+void ae::platform::showMouse(bool show) {
+    ShowCursor(show);
+}
+
 void ae::platform::freeLoadedFile(loaded_file_t file) {
     VirtualFree(file.contents, 0, MEM_RELEASE);
 }
@@ -102,9 +106,9 @@ static void InitOpenGL(HWND windowHandle, HDC dc) {
     SetPixelFormat(dc, suggestedPixelFormatIndex, &suggestedPixelFormat);
     glContext = wglCreateContext(dc);
     if(win32_glInitialized = wglMakeCurrent(dc, glContext)) {
-        // setup VSYNC, even though it's on by default :)
+        // setup VSYNC
         wglSwapInterval = (wgl_swap_interval_ext *)wglGetProcAddress("wglSwapIntervalEXT");
-        if(wglSwapInterval) {
+        if(wglSwapInterval && ae::platform::GLOBAL_VSYNC) {
             wglSwapInterval(1);
         }
         // NOTE(Noah): We are permitted to init glew here and expect this to be fine with our game
@@ -125,14 +129,15 @@ bool automata_engine::GL::getGLInitialized() {
 }
 #endif
 
+bool ae::platform::GLOBAL_VSYNC = false;
+
 // TODO(Noah): Need to also impl for DirectX, and same goes with update models ...
 void ae::platform::setVsync(bool b) {
+    ae::platform::GLOBAL_VSYNC = b;
 #if defined(GL_BACKEND)
-    if (b) {
-        wglSwapInterval(1);
-    } else {
-        wglSwapInterval(0);
-    }
+    if (wglSwapInterval) {
+        (b) ? wglSwapInterval(1) : wglSwapInterval(0);
+    }    
 #endif
 }
 

@@ -123,8 +123,9 @@ namespace automata_engine {
     
     typedef enum update_model {
         AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC = 0,
-        AUTOMATA_UPDATE_MODEL_FRAME_BUFFERING,
-        AUTOMATA_UPDATE_MODEL_ONE_LATENT_FRAME
+        AUTOMATA_ENGINE_UPDATE_MODEL_FRAME_BUFFERING,
+        AUTOMATA_ENGINE_UPDATE_MODEL_ONE_LATENT_FRAME,
+        AUTOMATA_ENGINE_UPDATE_MODEL_COUNT
     } update_model_t;
 
     extern game_window_profile_t defaultWinProfile;
@@ -143,6 +144,7 @@ namespace automata_engine {
     void setGlobalRunning(bool); // this one enables more of a graceful exit.
     void setFatalExit();
     void setUpdateModel(update_model_t updateModel);
+    const char *updateModelToString(update_model_t updateModel);
     void ImGuiRenderMat4(char *matName, math::mat4_t mat);
     void ImGuiRenderVec3(char *vecName, math::vec3_t vec);
 
@@ -255,10 +257,12 @@ namespace automata_engine {
 
         void getUserInput(struct user_input *userInput);
         void setMousePos(int xPos, int yPos);
-        
+        void showMouse(bool);
+
         extern bool GLOBAL_RUNNING;
+        extern bool GLOBAL_VSYNC;
         extern int GLOBAL_PROGRAM_RESULT;
-        extern update_model_t GLOBAL_UPDATE_MODEL;
+        extern update_model_t GLOBAL_UPDATE_MODEL;        
 
         game_window_info_t getWindowInfo();
         void free(void *memToFree);

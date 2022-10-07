@@ -114,10 +114,14 @@ namespace automata_engine {
     void super::updateAndRender(game_memory_t * gameMemory) {
         // Present the ImGui stuff to allow user to switch apps.
 #ifndef RELEASE
-        ImGui::Begin("AutomataEngine Devtools");
+        ImGui::Begin("AutomataEngine");
         static int item_current = 0;
         ImGui::Combo("App", &item_current, appTable_name, StretchyBufferCount(appTable_name));
         if (item_current != _currentApp) { bifrost::updateApp(gameMemory, appTable_name[item_current]); }
+        ImGui::Text("Application average %.3f ms/frame (%.1f FPS)",
+            1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+        ImGui::Text("updateModel: %s", updateModelToString(platform::GLOBAL_UPDATE_MODEL));
+        ImGui::Text("vsync: %s", (platform::GLOBAL_VSYNC) ? "ON" : "OFF");
         ImGui::End();
 #endif
     }
@@ -128,5 +132,20 @@ namespace automata_engine {
     void super::init() {
         stbi_set_flip_vertically_on_load(true);
         stbi_flip_vertically_on_write(true);
+    }
+    const char *updateModelToString(update_model_t updateModel) {
+        const char *names[] = {
+            "AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC",
+            "AUTOMATA_ENGINE_UPDATE_MODEL_FRAME_BUFFERING",
+            "AUTOMATA_ENGINE_UPDATE_MODEL_ONE_LATENT_FRAME"
+        };
+        static_assert(_countof(names) == AUTOMATA_ENGINE_UPDATE_MODEL_COUNT,
+            "updateModelToString needs update.");
+        int idx = updateModel;
+        if (idx >= 0 && idx < _countof(names)) {
+            return names[idx];
+        } else {
+            return "UNKNOWN";
+        }
     }
 };
