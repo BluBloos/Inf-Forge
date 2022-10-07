@@ -89,7 +89,7 @@ typedef enum game_key {
     GAME_KEY_P, GAME_KEY_Q, GAME_KEY_R, GAME_KEY_S, GAME_KEY_T,
     GAME_KEY_U, GAME_KEY_V, GAME_KEY_W, GAME_KEY_X, GAME_KEY_Y,
     GAME_KEY_Z,
-    GAME_KEY_SHIFT, GAME_KEY_SPACE, 
+    GAME_KEY_SHIFT, GAME_KEY_SPACE, GAME_KEY_ESCAPE, 
     GAME_KEY_COUNT
 } game_key_t;
 
@@ -101,6 +101,7 @@ typedef struct user_input {
     int deltaMouseX = 0;
     int deltaMouseY = 0;
     bool mouseLBttnDown = false;
+    bool mouseRBttnDown = false;
     // bool mouseRBttnDown = false;
     // TODO(Noah): We will prolly want to change how we represent keys.
     bool keyDown[(uint32_t)GAME_KEY_COUNT];
@@ -253,6 +254,8 @@ namespace automata_engine {
         loaded_image_t stbImageLoad(char *fileName); 
 
         void getUserInput(struct user_input *userInput);
+        void setMousePos(int xPos, int yPos);
+        
         extern bool GLOBAL_RUNNING;
         extern int GLOBAL_PROGRAM_RESULT;
         extern update_model_t GLOBAL_UPDATE_MODEL;

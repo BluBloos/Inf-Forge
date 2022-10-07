@@ -31,6 +31,10 @@ bool ae::platform::GLOBAL_RUNNING = true;
 ae::update_model_t ae::platform::GLOBAL_UPDATE_MODEL =
     ae::AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC; // default.
 
+void ae::platform::setMousePos(int xPos, int yPos) {
+    SetCursorPos(xPos, yPos);
+}
+
 void ae::platform::freeLoadedFile(loaded_file_t file) {
     VirtualFree(file.contents, 0, MEM_RELEASE);
 }
@@ -200,10 +204,18 @@ static void ProccessKeyboardMessage(unsigned int vkCode, bool down) {
     globalUserInput.keyDown[(uint32_t)GAME_KEY_A + (vkCode - 'A')] = down;
   } else if (vkCode >= '0' && vkCode <= '9') {
     globalUserInput.keyDown[(uint32_t)GAME_KEY_0 + (vkCode - '0')] = down;
-  } else if (vkCode == VK_SPACE) {
-    globalUserInput.keyDown[GAME_KEY_SPACE] = down;
-  } else if (vkCode == VK_SHIFT) {
-    globalUserInput.keyDown[GAME_KEY_SHIFT] = down;
+  } else {
+    switch(vkCode) {
+        case VK_SPACE:
+            globalUserInput.keyDown[GAME_KEY_SPACE] = down;
+            break;
+        case VK_SHIFT:
+            globalUserInput.keyDown[GAME_KEY_SHIFT] = down;
+            break;
+        case VK_ESCAPE:
+            globalUserInput.keyDown[GAME_KEY_ESCAPE] = down;
+            break;
+    }
   }
 }
 
@@ -253,6 +265,13 @@ LRESULT CALLBACK Win32WindowProc(HWND window,
         } break;
         case WM_LBUTTONUP:{
             globalUserInput.mouseLBttnDown = false;
+        } break;
+        // right mouse button
+        case WM_RBUTTONDOWN: {
+            globalUserInput.mouseRBttnDown = true;
+        } break;
+        case WM_RBUTTONUP:{
+            globalUserInput.mouseRBttnDown = false;
         } break;
         //keyboard messages
         case WM_KEYUP: {
