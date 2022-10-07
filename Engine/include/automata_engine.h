@@ -96,6 +96,8 @@ typedef enum game_key {
 typedef struct user_input {
     int mouseX = 0;
     int mouseY = 0;
+    int rawMouseX = 0;
+    int rawMouseY = 0;
     int deltaMouseX = 0;
     int deltaMouseY = 0;
     bool mouseLBttnDown = false;
