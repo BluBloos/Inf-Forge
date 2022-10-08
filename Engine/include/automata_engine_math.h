@@ -30,7 +30,7 @@ namespace automata_engine {
     typedef struct vec4 vec4_t;
     typedef struct vec3 {
       float x,y,z;
-      vec3();
+      constexpr vec3();
       vec3(float, float, float);
       vec3(vec4_t);
       vec3 operator-();
@@ -38,7 +38,7 @@ namespace automata_engine {
     } vec3_t;
     typedef struct vec4 {
       float x,y,z,w;
-      vec4();
+      constexpr vec4();
       vec4(float, float, float, float);
       vec4(vec3_t, float);
       float &operator[](int index);
