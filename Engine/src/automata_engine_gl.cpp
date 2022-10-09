@@ -193,6 +193,7 @@ namespace automata_engine {
         GLuint createAndSetupVao(uint32_t attribCounts, ...) {
             GLuint vao;
             glGenVertexArrays(1, &vao); glBindVertexArray(vao);
+            PlatformLoggerWarn("called createAndSetupVao with vao=%d", vao);
             GLuint boundVbo = 0;            
             va_list vl;
             va_start(vl, attribCounts);
