@@ -265,13 +265,18 @@ LRESULT CALLBACK Win32WindowProc(HWND window,
             RAWINPUT* raw = (RAWINPUT*)lpb;
             if (raw->header.dwType == RIM_TYPEMOUSE) {
                 if ( !!(raw->data.mouse.usFlags & MOUSE_MOVE_RELATIVE) ) {
-                    globalUserInput.deltaMouseX = raw->data.mouse.lLastX;
-                    globalUserInput.deltaMouseY = raw->data.mouse.lLastY;
+                    globalUserInput.deltaMouseX += raw->data.mouse.lLastX;
+                    globalUserInput.deltaMouseY += raw->data.mouse.lLastY;
                 } else {
-                    globalUserInput.deltaMouseX =
+                    // TODO(Noah): impl.
+                    //PlatformLoggerWarn("handle RAWINPUT for devices that provide absolute motion");
+                    globalUserInput.deltaMouseX += raw->data.mouse.lLastX;
+                    globalUserInput.deltaMouseY += raw->data.mouse.lLastY;
+                    /*globalUserInput.deltaMouseX =
                         raw->data.mouse.lLastX - globalUserInput.rawMouseX;
                     globalUserInput.deltaMouseY =
                         raw->data.mouse.lLastY - globalUserInput.rawMouseY;
+                        */
                 }
             }
         } break;
@@ -695,6 +700,8 @@ int CALLBACK WinMain(HINSTANCE instance,
     // as fast as possible. Then make ae::setVsync() control whether this happens, or no.
 
     while(automata_engine::platform::GLOBAL_RUNNING) {
+        // Reset input
+        globalUserInput.deltaMouseX = 0; globalUserInput.deltaMouseY = 0;
         // Process windows messages
         {
             MSG message;
@@ -730,9 +737,6 @@ int CALLBACK WinMain(HINSTANCE instance,
             ImGui::Render();
             ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 #endif
-
-        // Reset for next frame
-        globalUserInput.deltaMouseX = 0; globalUserInput.deltaMouseY = 0;
 
         {
             LARGE_INTEGER WorkCounter = Win32GetWallClock();
