@@ -39,6 +39,7 @@ namespace automata_engine {
     typedef struct vec4 {
       float x,y,z,w;
       constexpr vec4();
+      vec4 operator-();
       vec4(float, float, float, float);
       vec4(vec3_t, float);
       float &operator[](int index);
