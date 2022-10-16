@@ -85,6 +85,10 @@ namespace automata_engine {
       int height;
       int width;
     } camera_t;
+    typedef struct box {
+      vec3_t pos;
+      vec3_t scale;
+    } box_t;
   }
 }
 

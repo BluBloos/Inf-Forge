@@ -200,5 +200,24 @@ namespace automata_engine {
             scaleMat.matv[1][1] = 1.0f / cam.trans.scale.y;
             return scaleMat * rotMat4 * transMat;
         }
+        bool rayBoxIntersection(
+            vec3_t rayOrigin, vec3_t rayDir, float rayLen, const box_t *candidateBoxes,
+            uint32_t candidateBoxCount, vec3_t *intersectionOut
+        ) {
+            for (uint32_t i = 0; i < candidateBoxCount; i++) {
+                box_t box = candidateBoxes[i];
+                float boxTop = box.pos.y + box.scale.y;
+                vec3_t rayHorizon = (rayOrigin + rayDir * (rayLen)).y;
+                // can reduce ray/box to two 2D problems
+                // consider orthogonal viewpoint of box.
+                // 3D line becomes 2D, and cube becomes square.
+                // now 2D line intersect with square?
+                    // two sample points, at x1 and x2.
+                    // if y1 and y2 are on same "side" of square,
+                    // i.e. both above or below the box top / bottom,
+                    // then there is no intersect.
+            }
+
+        }
     }
 }

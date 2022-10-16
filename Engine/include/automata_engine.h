@@ -194,6 +194,11 @@ namespace automata_engine {
         vec3_t operator*(vec3_t b, float a);
         vec3_t operator+(vec3_t b, vec3_t a);
         
+        // returns true if wrote to intersectionOut
+        bool rayBoxIntersection(
+            vec3_t rayOrigin, vec3_t rayDir, float rayLen, const box_t *candidateBoxes,
+            uint32_t candidateBoxCount, vec3_t *intersectionOut);
+
         mat4_t buildMat4fFromTransform(transform_t trans);
         mat4_t buildProjMat(camera_t cam);
         mat4_t buildViewMat(camera_t cam);
