@@ -207,7 +207,7 @@ namespace automata_engine {
             for (uint32_t i = 0; i < candidateBoxCount; i++) {
                 box_t box = candidateBoxes[i];
                 float boxTop = box.pos.y + box.scale.y;
-                vec3_t rayHorizon = (rayOrigin + rayDir * (rayLen)).y;
+                vec3_t rayHorizon = (rayOrigin + rayDir * (rayLen));
                 // can reduce ray/box to two 2D problems
                 // consider orthogonal viewpoint of box.
                 // 3D line becomes 2D, and cube becomes square.
@@ -217,7 +217,7 @@ namespace automata_engine {
                     // i.e. both above or below the box top / bottom,
                     // then there is no intersect.
             }
-
+            return false;
         }
     }
 }
