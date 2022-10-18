@@ -97,6 +97,10 @@ if "%1"=="CPU_BACKEND" (
     cl %CFLAGS% %INCLUDES% %SOURCES% %LFLAGS% gdi32.lib ^
         user32.lib kernel32.lib Xaudio2.lib ole32.lib
 )
+if "%1"=="VULKAN_BACKEND" (
+    cl %CFLAGS% %INCLUDES% %SOURCES% %LFLAGS% gdi32.lib ^
+        user32.lib kernel32.lib Xaudio2.lib ole32.lib
+)
 
 popd
 
