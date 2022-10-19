@@ -38,6 +38,7 @@ typedef struct game_window_info {
     uint32_t width;
     uint32_t height;
     intptr_t hWnd;
+    intptr_t hInstance;
 } game_window_info_t;
 
 /**
@@ -222,6 +223,7 @@ namespace automata_engine {
         static void updateAndRender(game_memory_t * gameMemory);
     } super_t;
 
+    // TODO(Noah): Add GPU adapter device name in updateApp ImGui idea :)
     typedef struct bifrost {
         static void registerApp(
             const char *appName, 
