@@ -308,4 +308,4 @@ namespace ae = automata_engine;
 #define PlatformLoggerLog(fmt, ...)
 #endif
 
-#define ENGINE_DESIRED_SAMPLES_PER_SECOND 48000
+#define ENGINE_DESIRED_SAMPLES_PER_SECOND 44100
