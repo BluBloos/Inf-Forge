@@ -50,7 +50,7 @@ void ae::platform::freeLoadedFile(loaded_file_t file) {
 
 loaded_file ae::platform::readEntireFile(char *fileName) {
 	void *result = 0;
-	int fileSize32;
+	int fileSize32 = 0;
 	HANDLE fileHandle = CreateFileA(fileName, GENERIC_READ,
 		FILE_SHARE_READ, 0, OPEN_EXISTING, 0, 0);
 	if (fileHandle != INVALID_HANDLE_VALUE) {
