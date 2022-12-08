@@ -38,6 +38,7 @@ typedef struct game_window_info {
     uint32_t width;
     uint32_t height;
     intptr_t hWnd;
+    intptr_t hInstance;
 } game_window_info_t;
 
 /**
@@ -89,16 +90,19 @@ typedef enum game_key {
     GAME_KEY_P, GAME_KEY_Q, GAME_KEY_R, GAME_KEY_S, GAME_KEY_T,
     GAME_KEY_U, GAME_KEY_V, GAME_KEY_W, GAME_KEY_X, GAME_KEY_Y,
     GAME_KEY_Z,
-    GAME_KEY_SHIFT, GAME_KEY_SPACE, 
+    GAME_KEY_SHIFT, GAME_KEY_SPACE, GAME_KEY_ESCAPE, 
     GAME_KEY_COUNT
 } game_key_t;
 
 typedef struct user_input {
     int mouseX = 0;
     int mouseY = 0;
+    int rawMouseX = 0;
+    int rawMouseY = 0;
     int deltaMouseX = 0;
     int deltaMouseY = 0;
     bool mouseLBttnDown = false;
+    bool mouseRBttnDown = false;
     // bool mouseRBttnDown = false;
     // TODO(Noah): We will prolly want to change how we represent keys.
     bool keyDown[(uint32_t)GAME_KEY_COUNT];
@@ -120,8 +124,9 @@ namespace automata_engine {
     
     typedef enum update_model {
         AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC = 0,
-        AUTOMATA_UPDATE_MODEL_FRAME_BUFFERING,
-        AUTOMATA_UPDATE_MODEL_ONE_LATENT_FRAME
+        AUTOMATA_ENGINE_UPDATE_MODEL_FRAME_BUFFERING,
+        AUTOMATA_ENGINE_UPDATE_MODEL_ONE_LATENT_FRAME,
+        AUTOMATA_ENGINE_UPDATE_MODEL_COUNT
     } update_model_t;
 
     extern game_window_profile_t defaultWinProfile;
@@ -140,6 +145,7 @@ namespace automata_engine {
     void setGlobalRunning(bool); // this one enables more of a graceful exit.
     void setFatalExit();
     void setUpdateModel(update_model_t updateModel);
+    const char *updateModelToString(update_model_t updateModel);
     void ImGuiRenderMat4(char *matName, math::mat4_t mat);
     void ImGuiRenderVec3(char *vecName, math::vec3_t vec);
 
@@ -155,26 +161,57 @@ namespace automata_engine {
         bool getGLInitialized();
         void objToVao(raw_model_t rawModel, ibo_t *iboOut, vbo_t *vboOut, GLuint *vaoOut);
         GLuint createShader(char *vertFilePath, char *fragFilePath);
-        GLuint createTexture(unsigned int *pixelPointer, unsigned int width, unsigned int height);
+        // TODO(Noah): There's got to be a nice and clean way to get rid of the duplication
+        // here with the header of the wrapper.
+        GLuint createTextureFromFile(
+            const char *filePath,
+            GLint minFilter = GL_LINEAR, GLint magFilter = GL_LINEAR
+        );
+        GLuint createTexture(
+            unsigned int *pixelPointer, unsigned int width, unsigned int height,
+            GLint minFilter = GL_LINEAR, GLint magFilter = GL_LINEAR
+        );
         GLuint compileShader(uint32_t type, char *shader);
         void setUniformMat4f(GLuint shader, char *uniformName, math::mat4 val);
+        // TODO(Noah): is there any reason that we cannot use templates for our createAndSetupVbo?
+        vbo_t createAndSetupVbo(uint32_t counts, ...);
+        GLuint createAndSetupVao(uint32_t attribCounts, ...);
     }
 #endif
 
     namespace math {
         // TODO(Noah): Understand rvalues. Because, I'm a primitive ape, and,
         // they go right over my head, man.
+        // TODO(Noah): Is there any way to expose member funcs for our math stuff
+        // (declare them here) so that the documentation is there for what is defined?
         vec4_t operator*(mat4_t b, vec4_t a);
         vec4_t operator*=(vec4_t &a, float scalar);
         vec4_t operator+=(vec4_t &, vec4_t);
+        
         mat4_t operator*(mat4_t a, mat4_t b);
+
         vec3_t operator+=(vec3_t &, vec3_t);
         vec3_t operator*(mat3_t b, vec3_t a);
+        vec3_t operator*(vec3_t b, float a);
+        vec3_t operator+(vec3_t b, vec3_t a);
+        
+        // returns true if wrote to intersectionOut
+        bool rayBoxIntersection(
+            vec3_t rayOrigin, vec3_t rayDir, float rayLen, const box_t *candidateBoxes,
+            uint32_t candidateBoxCount, vec3_t *intersectionOut);
+
         mat4_t buildMat4fFromTransform(transform_t trans);
         mat4_t buildProjMat(camera_t cam);
         mat4_t buildViewMat(camera_t cam);
+        mat4_t buildOrthoMat(camera_t cam);
+        mat4_t buildInverseOrthoMat(camera_t cam);
         mat4_t buildRotMat4(vec3_t eulerAngles);
         mat4_t transposeMat4(mat4_t  mat);
+
+        float *value_ptr(vec3_t &);
+        float *value_ptr(vec4_t &);
+        float *value_ptr(mat3_t &);
+        float *value_ptr(mat4_t &);
     }
 
     typedef struct super {
@@ -183,12 +220,17 @@ namespace automata_engine {
         // called by platform
         static void close();
         // called by user
-        static void updateAndRender();
+        static void updateAndRender(game_memory_t * gameMemory);
     } super_t;
 
+    // TODO(Noah): Add GPU adapter device name in updateApp ImGui idea :)
     typedef struct bifrost {
-        static void registerApp(const char *appName, void (*callback)(game_memory_t *));
-        static void updateApp(const char *appName);
+        static void registerApp(
+            const char *appName, 
+            void (*callback)(game_memory_t *),
+            void (*transInto)(game_memory_t *) = nullptr,
+            void (*transOut)(game_memory_t *) = nullptr);
+        static void updateApp(game_memory_t * gameMemory, const char *appName);
         static std::function<void(game_memory_t *)> getCurrentApp();
     } bifrost_t;
 
@@ -200,6 +242,8 @@ namespace automata_engine {
     // function that go here are those that are a layer above the read entire file call
     // these functions do further processing (parse a file format).
     namespace io {
+        void freeWav(loaded_wav wavFile);
+        loaded_wav_t loadWav(char *);
         loaded_image_t loadBMP(char *path);
         raw_model_t loadObj(const char *filePath);
         void freeObj(raw_model_t obj);
@@ -219,9 +263,15 @@ namespace automata_engine {
         loaded_image_t stbImageLoad(char *fileName); 
 
         void getUserInput(struct user_input *userInput);
+        void setMousePos(int xPos, int yPos);
+        void showMouse(bool);
+
+        extern float lastFrameTime;
+        extern float lastFrameTimeTotal;
         extern bool GLOBAL_RUNNING;
+        extern bool GLOBAL_VSYNC;
         extern int GLOBAL_PROGRAM_RESULT;
-        extern update_model_t GLOBAL_UPDATE_MODEL;
+        extern update_model_t GLOBAL_UPDATE_MODEL;        
 
         game_window_info_t getWindowInfo();
         void free(void *memToFree);

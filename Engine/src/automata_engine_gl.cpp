@@ -1,6 +1,8 @@
 #include <automata_engine.h>
 #include <cstdarg>
 
+// TODO(Noah): impl dealloc unfunction for vbo_t
+
 #if defined(GL_BACKEND)
 #include <automata_engine_gl.h>
 namespace automata_engine {
@@ -91,15 +93,36 @@ namespace automata_engine {
             GLuint loc = glGetUniformLocation(shader, uniformName);
             glUniformMatrix4fv(loc, 1, GL_FALSE, (val).matp); 
         }
+        
+        GLuint createTextureFromFile(
+            const char *filePath,
+            GLint minFilter, GLint magFilter
+        ) {
+            loaded_image_t img = ae::platform::stbImageLoad((char *)filePath);
+            GLuint tex = 0;
+            if (img.pixelPointer != nullptr) {
+                tex = createTexture(
+                    img.pixelPointer, img.width, img.height,
+                    minFilter, magFilter
+                );
+                glFlush(); // push all buffered commands to GPU
+                glFinish(); // block until GPU is complete
+                ae::io::freeLoadedImage(img);
+            }
+            return tex;
+        }
 
-        GLuint createTexture(unsigned int *pixelPointer, unsigned int width, unsigned int height) {
+        GLuint createTexture(
+            unsigned int *pixelPointer, unsigned int width, unsigned int height,
+            GLint minFilter, GLint magFilter
+        ) {
             GLuint newTexture;
             glGenTextures(1, &newTexture);
             glBindTexture(GL_TEXTURE_2D, newTexture);
             // TODO(Noah): So, when we go about creating textures in the future, 
             // maybe we actually care about setting some different parameters.
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, minFilter);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, magFilter);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
             glTexImage2D(
@@ -170,6 +193,7 @@ namespace automata_engine {
         GLuint createAndSetupVao(uint32_t attribCounts, ...) {
             GLuint vao;
             glGenVertexArrays(1, &vao); glBindVertexArray(vao);
+            PlatformLoggerWarn("called createAndSetupVao with vao=%d", vao);
             GLuint boundVbo = 0;            
             va_list vl;
             va_start(vl, attribCounts);
@@ -206,8 +230,7 @@ namespace automata_engine {
                             );
                             PlatformLoggerWarn(
                                 "did glVertexAttribPointer(%d, %d, type, GL_FALSE, %d, %d);",
-                                attribIndex, (attribCount > 4) ? 4 : attribCount, 
-                                vbo_GetStride(*pVbo), ptr);
+                                attribIndex, componentCount, vbo_GetStride(*pVbo), ptr);
                             offset += componentCount * GLenumToBytes(attrib.type);
                             glEnableVertexAttribArray(attribIndex);
                             if ( attribDesc.iterInstance ) {

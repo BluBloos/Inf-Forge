@@ -11,6 +11,9 @@
 #include <stdlib.h>
 #include <fcntl.h>     /* for _O_TEXT and _O_BINARY */
 
+// for raw mouse input
+#include <hidusage.h>
+
 #define MAX_CONSOLE_LINES 500
 
 // TODO(Noah): Hot reloading 😎 baby!.
@@ -23,10 +26,23 @@ static void (*GameCleanup)(game_memory_t *) = nullptr;
 
 namespace ae = automata_engine;
 
-// macros should always be in all caps.
+// TODO(Noah): What do we do for the very first frame, where we do not have
+// data about the last frame?
+float ae::platform::lastFrameTime = 1 / 60.0f;
+float ae::platform::lastFrameTimeTotal = 1 / 60.0f;
 bool ae::platform::GLOBAL_RUNNING = true;
-ae::update_model_t ae::platform::GLOBAL_UPDATE_MODEL = 
+ae::update_model_t ae::platform::GLOBAL_UPDATE_MODEL =
     ae::AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC; // default.
+bool ae::platform::GLOBAL_VSYNC = false;
+static LONGLONG g_PerfCountFrequency64;
+
+void ae::platform::setMousePos(int xPos, int yPos) {
+    SetCursorPos(xPos, yPos);
+}
+
+void ae::platform::showMouse(bool show) {
+    ShowCursor(show);
+}
 
 void ae::platform::freeLoadedFile(loaded_file_t file) {
     VirtualFree(file.contents, 0, MEM_RELEASE);
@@ -48,15 +64,15 @@ loaded_file ae::platform::readEntireFile(char *fileName) {
 			result = VirtualAlloc(0, fileSize32, MEM_COMMIT, PAGE_READWRITE);
 			if (result != NULL) {
 				DWORD bytesRead;
-				if (ReadFile(fileHandle, result, fileSize32, &bytesRead, 0) && 
-                    (fileSize32 == (int)bytesRead)) 
+				if (ReadFile(fileHandle, result, fileSize32, &bytesRead, 0) &&
+                    (fileSize32 == (int)bytesRead))
 				{
 					// File read succesfully!
-				}	
+				}
 				else {
 					VirtualFree(result, 0, MEM_RELEASE);
 					result = 0;
-				}		
+				}
 			}
 		}
 		CloseHandle(fileHandle);
@@ -95,9 +111,9 @@ static void InitOpenGL(HWND windowHandle, HDC dc) {
     SetPixelFormat(dc, suggestedPixelFormatIndex, &suggestedPixelFormat);
     glContext = wglCreateContext(dc);
     if(win32_glInitialized = wglMakeCurrent(dc, glContext)) {
-        // setup VSYNC, even though it's on by default :)
+        // setup VSYNC
         wglSwapInterval = (wgl_swap_interval_ext *)wglGetProcAddress("wglSwapIntervalEXT");
-        if(wglSwapInterval) { 
+        if(wglSwapInterval && ae::platform::GLOBAL_VSYNC) {
             wglSwapInterval(1);
         }
         // NOTE(Noah): We are permitted to init glew here and expect this to be fine with our game
@@ -120,11 +136,10 @@ bool automata_engine::GL::getGLInitialized() {
 
 // TODO(Noah): Need to also impl for DirectX, and same goes with update models ...
 void ae::platform::setVsync(bool b) {
+    ae::platform::GLOBAL_VSYNC = b;
 #if defined(GL_BACKEND)
-    if (b) {
-        wglSwapInterval(1);
-    } else {
-        wglSwapInterval(0);
+    if (wglSwapInterval) {
+        (b) ? wglSwapInterval(1) : wglSwapInterval(0);
     }
 #endif
 }
@@ -171,6 +186,20 @@ static void Win32ResizeBackbuffer(win32_backbuffer_t *buffer, int newWidth, int 
     globalGameMemory.backbufferHeight = newHeight;
 }
 
+float Win32GetSecondsElapsed(
+    LARGE_INTEGER Start, LARGE_INTEGER End, LONGLONG PerfCountFrequency64
+) {
+	float Result = 1.0f * (End.QuadPart - Start.QuadPart) / PerfCountFrequency64;
+	return (Result);
+}
+
+LARGE_INTEGER Win32GetWallClock()
+{
+	LARGE_INTEGER Result;
+	QueryPerformanceCounter(&Result);
+	return (Result);
+}
+
 void Win32DisplayBufferWindow(HDC deviceContext, game_window_info_t winInfo) {
     int OffsetX = (winInfo.width - globalBackBuffer.width) / 2;
     int OffsetY = (winInfo.height - globalBackBuffer.height) / 2;
@@ -188,8 +217,8 @@ void Win32DisplayBufferWindow(HDC deviceContext, game_window_info_t winInfo) {
         SRCCOPY);
 }
 
-void automata_engine::platform::getUserInput(user_input_t *userInput) { 
-    *userInput = globalUserInput; 
+void automata_engine::platform::getUserInput(user_input_t *userInput) {
+    *userInput = globalUserInput;
 }
 
 static void ProccessKeyboardMessage(unsigned int vkCode, bool down) {
@@ -197,10 +226,18 @@ static void ProccessKeyboardMessage(unsigned int vkCode, bool down) {
     globalUserInput.keyDown[(uint32_t)GAME_KEY_A + (vkCode - 'A')] = down;
   } else if (vkCode >= '0' && vkCode <= '9') {
     globalUserInput.keyDown[(uint32_t)GAME_KEY_0 + (vkCode - '0')] = down;
-  } else if (vkCode == VK_SPACE) {
-    globalUserInput.keyDown[GAME_KEY_SPACE] = down;
-  } else if (vkCode == VK_SHIFT) {
-    globalUserInput.keyDown[GAME_KEY_SHIFT] = down;
+  } else {
+    switch(vkCode) {
+        case VK_SPACE:
+            globalUserInput.keyDown[GAME_KEY_SPACE] = down;
+            break;
+        case VK_SHIFT:
+            globalUserInput.keyDown[GAME_KEY_SHIFT] = down;
+            break;
+        case VK_ESCAPE:
+            globalUserInput.keyDown[GAME_KEY_ESCAPE] = down;
+            break;
+    }
   }
 }
 
@@ -212,20 +249,40 @@ LRESULT CALLBACK Win32WindowProc(HWND window,
   UINT message,
   WPARAM wParam,
   LPARAM lParam)
-{    
+{
 #if defined(GL_BACKEND)
     if (ImGui_ImplWin32_WndProcHandler(window, message, wParam, lParam))
         return true;
 #endif
 
-    PAINTSTRUCT ps; 
+    PAINTSTRUCT ps;
     LRESULT result = 0;
     switch(message) {
+        case WM_INPUT: {
+            UINT dwSize = sizeof(RAWINPUT);
+            static BYTE lpb[sizeof(RAWINPUT)];
+            GetRawInputData((HRAWINPUT)lParam, RID_INPUT, lpb, &dwSize, sizeof(RAWINPUTHEADER));
+            RAWINPUT* raw = (RAWINPUT*)lpb;
+            if (raw->header.dwType == RIM_TYPEMOUSE) {
+                if ( !!(raw->data.mouse.usFlags & MOUSE_MOVE_RELATIVE) ) {
+                    globalUserInput.deltaMouseX += raw->data.mouse.lLastX;
+                    globalUserInput.deltaMouseY += raw->data.mouse.lLastY;
+                } else {
+                    // TODO(Noah): impl.
+                    //PlatformLoggerWarn("handle RAWINPUT for devices that provide absolute motion");
+                    globalUserInput.deltaMouseX += raw->data.mouse.lLastX;
+                    globalUserInput.deltaMouseY += raw->data.mouse.lLastY;
+                    /*globalUserInput.deltaMouseX =
+                        raw->data.mouse.lLastX - globalUserInput.rawMouseX;
+                    globalUserInput.deltaMouseY =
+                        raw->data.mouse.lLastY - globalUserInput.rawMouseY;
+                        */
+                }
+            }
+        } break;
         case WM_MOUSEMOVE: {
             int x = (int)lParam & 0x0000FFFF;
             int y = ((int)lParam & 0xFFFF0000) >> 16;
-            globalUserInput.deltaMouseX = x - globalUserInput.mouseX;
-            globalUserInput.deltaMouseY = y - globalUserInput.mouseY;
             globalUserInput.mouseX = x;
             globalUserInput.mouseY = y;
         } break;
@@ -235,6 +292,13 @@ LRESULT CALLBACK Win32WindowProc(HWND window,
         } break;
         case WM_LBUTTONUP:{
             globalUserInput.mouseLBttnDown = false;
+        } break;
+        // right mouse button
+        case WM_RBUTTONDOWN: {
+            globalUserInput.mouseRBttnDown = true;
+        } break;
+        case WM_RBUTTONUP:{
+            globalUserInput.mouseRBttnDown = false;
         } break;
         //keyboard messages
         case WM_KEYUP: {
@@ -257,7 +321,7 @@ LRESULT CALLBACK Win32WindowProc(HWND window,
                 } else {
                     PlatformLoggerLog("WARN: GameHandleWindowResize == nullptr");
                 }
-                
+
             }
         } break;
         case WM_SIZE: {
@@ -307,7 +371,7 @@ int automata_engine::platform::GLOBAL_PROGRAM_RESULT = 0;
 
 static XAUDIO2_BUFFER xa2Buffer = {0};
 static IXAudio2SourceVoice* pSourceVoice = nullptr;
-    
+
 // NOTE(Noah): What happens if there is no buffer to play?? -_-
 void automata_engine::platform::playAudioBuffer() {
     if (pSourceVoice != nullptr) {
@@ -333,7 +397,7 @@ void automata_engine::platform::stopAudioBuffer() {
 //
 // the paradigm should be like so. If things fail that should normally
 // work no problem, it means that something is catasrophically wrong.
-// Like idk, the sound card was removed? In these cases, 
+// Like idk, the sound card was removed? In these cases,
 // our engine should handle it entirely. Game, when making requests,
 // will have failures happen silently. This model is fine because
 // it will not be too long after that request failure that the engine
@@ -355,10 +419,12 @@ bool automata_engine::platform::submitAudioBuffer(struct loaded_wav myWav) {
 }
 
 static HWND globalWin32Handle = NULL;
+static HINSTANCE g_hInstance = NULL;
 
 game_window_info_t automata_engine::platform::getWindowInfo() {
     game_window_info_t winInfo;
     winInfo.hWnd = (intptr_t)globalWin32Handle;
+    winInfo.hInstance = (intptr_t)g_hInstance;
     if (globalWin32Handle == NULL) {
         PlatformLoggerError("globalWin32Handle == NULL");
     }
@@ -387,7 +453,7 @@ int CALLBACK WinMain(HINSTANCE instance,
     }
 
     // NOTE(Noah): There is a reason that when you read C code, all the variables are defined
-    // at the top of the function. I'm just guessing here, but maybe back in the day people 
+    // at the top of the function. I'm just guessing here, but maybe back in the day people
     // liked to use "goto" a lot. It's a dangerous play because you might skip over the initialization
     // of a variable. Then the contents are unknown!
     ATOM classAtom = 0;
@@ -425,11 +491,11 @@ int CALLBACK WinMain(HINSTANCE instance,
         GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &coninfo);
         coninfo.dwSize.Y = MAX_CONSOLE_LINES;
         SetConsoleScreenBufferSize(GetStdHandle(STD_OUTPUT_HANDLE), coninfo.dwSize);
-        
+
         // redirect unbuffered STDOUT to the console
         // https://msdn.microsoft.com/en-us/library/bdts1c9x.aspx
         // https://msdn.microsoft.com/en-us/library/88k7d7a7.aspx
-        
+
         // TODO(Noah): Understand what the heck is going on here...and abstract these redirects!
         // redirect stderr
         lStdHandle = (intptr_t)GetStdHandle(STD_ERROR_HANDLE);
@@ -450,16 +516,16 @@ int CALLBACK WinMain(HINSTANCE instance,
         *stdin = *fp;
         freopen_s(&fp, "CONIN$", "r", stdin);
 
-        // set console mode for supporting color escape sequences.    
+        // set console mode for supporting color escape sequences.
         {
             HANDLE stdOutHandle = GetStdHandle(STD_OUTPUT_HANDLE);
             DWORD stdOutMode;
             GetConsoleMode(stdOutHandle, &stdOutMode);
-            // NOTE(Noah): See https://docs.microsoft.com/en-us/windows/console/setconsolemode for 
+            // NOTE(Noah): See https://docs.microsoft.com/en-us/windows/console/setconsolemode for
             // meaning of 0x0004. The macro was not being resolved...
             SetConsoleMode(stdOutHandle, stdOutMode | 0x0004);
         }
-        
+
         PlatformLoggerLog("stdout initialized");
         PlatformLoggerError("testing stderr out");
         //fprintf(stderr, "testing stderr out\n");
@@ -468,6 +534,14 @@ int CALLBACK WinMain(HINSTANCE instance,
     }
     #endif
 
+    // Query performance counter
+    {
+        LARGE_INTEGER PerfCountFrequency;
+        QueryPerformanceFrequency(&PerfCountFrequency);
+        g_PerfCountFrequency64 = PerfCountFrequency.QuadPart;
+    }
+
+
     windowClass.style = CS_VREDRAW | CS_HREDRAW; // Set window to redraw after being resized
     windowClass.lpfnWndProc = Win32WindowProc; // Set callback
     windowClass.hInstance = instance;
@@ -475,7 +549,7 @@ int CALLBACK WinMain(HINSTANCE instance,
     windowClass.lpszClassName = "Automata Engine";
 
     // TODO(Noah): Here would be a nice instance for the defer statement.
-    classAtom = RegisterClassA(&windowClass); 
+    classAtom = RegisterClassA(&windowClass);
     if(classAtom == 0) {
         PlatformLoggerError("Unable to create window class \"%s\"", windowClass.lpszClassName);
         automata_engine::platform::GLOBAL_PROGRAM_RESULT = -1;
@@ -490,18 +564,18 @@ int CALLBACK WinMain(HINSTANCE instance,
 
     windowHandle = CreateWindowExA(
         0, // dwExStyle
-        windowClass.lpszClassName, 
+        windowClass.lpszClassName,
         ae::defaultWindowName,
-        (WS_OVERLAPPEDWINDOW | WS_VISIBLE) & 
-            ((ae::defaultWinProfile == AUTOMATA_ENGINE_WINPROFILE_NORESIZE) ? 
-            (~WS_MAXIMIZEBOX & ~WS_THICKFRAME) : (DWORD)(0xFFFFFFFF)), 
+        (WS_OVERLAPPEDWINDOW | WS_VISIBLE) &
+            ((ae::defaultWinProfile == AUTOMATA_ENGINE_WINPROFILE_NORESIZE) ?
+            (~WS_MAXIMIZEBOX & ~WS_THICKFRAME) : (DWORD)(0xFFFFFFFF)),
         CW_USEDEFAULT, // init X
         CW_USEDEFAULT, // init Y
         ae::defaultWidth,
         ae::defaultHeight,
         NULL, // parent handle
         NULL, // menu
-        instance, 
+        instance,
         NULL // structure to be passed to WM_CREATE message
     );
 
@@ -512,7 +586,7 @@ int CALLBACK WinMain(HINSTANCE instance,
         FormatMessage(
             // FORMAT_MESSAGE_FROM_SYSTEM -> search the system message-table resource(s) for the requested message
             // FORMAT_MESSAGE_ALLOCATE_BUFFER -> allocates buffer, places pointer at the address specified by lpBuffer
-            // FORMAT_MESSAGE_IGNORE_INSERTS -> Insert sequences in the message definition such as %1 are to be 
+            // FORMAT_MESSAGE_IGNORE_INSERTS -> Insert sequences in the message definition such as %1 are to be
             //   ignored and passed through to the output buffer unchanged.
             FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
             NULL,
@@ -530,6 +604,8 @@ int CALLBACK WinMain(HINSTANCE instance,
     }
 
     globalWin32Handle = windowHandle;
+    g_hInstance = instance;
+
     ShowWindow(windowHandle, showCode);
     UpdateWindow(windowHandle);
 
@@ -540,6 +616,14 @@ int CALLBACK WinMain(HINSTANCE instance,
         Win32ResizeBackbuffer(&globalBackBuffer, winInfo.width, winInfo.height);
     }
 #endif
+
+    // Register mouse for raw input capture
+    RAWINPUTDEVICE Rid[1];
+    Rid[0].usUsagePage = HID_USAGE_PAGE_GENERIC;
+    Rid[0].usUsage = HID_USAGE_GENERIC_MOUSE;
+    Rid[0].dwFlags = RIDEV_INPUTSINK;
+    Rid[0].hwndTarget = windowHandle;
+    RegisterRawInputDevices(Rid, 1, sizeof(Rid[0]));
 
     // Initialize XAudio2 !!!
     // NOTE(Noah): When we free the xAudio2 object, that frees all subordinate objects.
@@ -563,13 +647,13 @@ int CALLBACK WinMain(HINSTANCE instance,
             automata_engine::platform::GLOBAL_PROGRAM_RESULT = -1;
             goto WinMainEnd;
         }
-          
+
         WAVEFORMATEX  waveFormat = {0};
 
         waveFormat.wFormatTag = WAVE_FORMAT_PCM; // going with 2-channel PCM data.
         waveFormat.nChannels = 2;
         waveFormat.nSamplesPerSec = ENGINE_DESIRED_SAMPLES_PER_SECOND; // 48 kHz
-        waveFormat.wBitsPerSample = sizeof(short) * 8; 
+        waveFormat.wBitsPerSample = sizeof(short) * 8;
         waveFormat.nBlockAlign = waveFormat.nChannels * waveFormat.wBitsPerSample / 8;
         waveFormat.nAvgBytesPerSec = waveFormat.nBlockAlign * waveFormat.nSamplesPerSec;
         waveFormat.cbSize = 0;
@@ -613,11 +697,15 @@ int CALLBACK WinMain(HINSTANCE instance,
     isImGuiInitialized = true;
 #endif
 
+    LARGE_INTEGER LastCounter = Win32GetWallClock();
+
     // TODO(Noah):
     // add stalling in the CPU model (i.e. the engine does not call game update)
     // as fast as possible. Then make ae::setVsync() control whether this happens, or no.
 
     while(automata_engine::platform::GLOBAL_RUNNING) {
+        // Reset input
+        globalUserInput.deltaMouseX = 0; globalUserInput.deltaMouseY = 0;
         // Process windows messages
         {
             MSG message;
@@ -654,8 +742,12 @@ int CALLBACK WinMain(HINSTANCE instance,
             ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 #endif
 
-        // Reset for next frame
-        globalUserInput.deltaMouseX = 0; globalUserInput.deltaMouseY = 0;
+        {
+            LARGE_INTEGER WorkCounter = Win32GetWallClock();
+            float WorkSecondsElapsed =
+                Win32GetSecondsElapsed(LastCounter, WorkCounter, g_PerfCountFrequency64);
+            ae::platform::lastFrameTime = WorkSecondsElapsed;
+        }
 
 #if defined(GL_BACKEND)
         if (ae::platform::GLOBAL_UPDATE_MODEL == ae::AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC) {
@@ -665,14 +757,24 @@ int CALLBACK WinMain(HINSTANCE instance,
         SwapBuffers(gHdc);
 #endif
 
+        // TODO(Noah): for CPU backend, add sleep if vsync = ON.
+        // and I suppose figure out how to sync with the monitor?
 #if defined(CPU_BACKEND)
-        // NOTE(Noah): Here we are going to call our custom windows platform layer function that 
+        // NOTE(Noah): Here we are going to call our custom windows platform layer function that
         // will write our custom buffer to the screen.
         HDC deviceContext = GetDC(windowHandle);
         game_window_info_t winInfo = automata_engine::platform::getWindowInfo();
         Win32DisplayBufferWindow(deviceContext, winInfo);
         ReleaseDC(windowHandle, deviceContext);
 #endif
+
+        {
+            LARGE_INTEGER EndCounter = Win32GetWallClock();
+            float TotalFrameTime =
+                (Win32GetSecondsElapsed(LastCounter, EndCounter, g_PerfCountFrequency64));
+            ae::platform::lastFrameTimeTotal = TotalFrameTime;
+            LastCounter = EndCounter;
+        }
 
     }
 
@@ -699,8 +801,8 @@ int CALLBACK WinMain(HINSTANCE instance,
         } else {
             PlatformLoggerLog("WARN: GameCleanup == nullptr");
         }
-        
-        if (globalGameMemory.data != nullptr) { 
+
+        if (globalGameMemory.data != nullptr) {
             automata_engine::platform::free(globalGameMemory.data);
         }
 

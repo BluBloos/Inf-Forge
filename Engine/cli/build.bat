@@ -70,10 +70,11 @@ if "%2"=="" (
     :: noop 
     break
 ) else (
-    :: TODO(Noah): For right now, we are doing this grossness ...
-    FOR /F "tokens=1,2 delims=:" %%B in (%2) do (
+    :: TODO(Noah): does this even work for just one token? just two?
+    FOR /F "tokens=1,2,3 delims=:" %%B in (%2) do (
         echo %%B && FOR %%A IN ("%APP_ROOT%\%%B\*.cpp") DO call set "SOURCES="%%A" %%SOURCES%%"
         echo %%C && FOR %%A IN ("%APP_ROOT%\%%C\*.cpp") DO call set "SOURCES="%%A" %%SOURCES%%"
+        echo %%D && FOR %%A IN ("%APP_ROOT%\%%D\*.cpp") DO call set "SOURCES="%%A" %%SOURCES%%"
     )
 )
 
@@ -97,6 +98,10 @@ if "%1"=="GL_BACKEND" (
         opengl32.lib user32.lib glew32s.lib kernel32.lib Xaudio2.lib ole32.lib
 )
 if "%1"=="CPU_BACKEND" (
+    cl %CFLAGS% %INCLUDES% %SOURCES% %LFLAGS% gdi32.lib ^
+        user32.lib kernel32.lib Xaudio2.lib ole32.lib
+)
+if "%1"=="VULKAN_BACKEND" (
     cl %CFLAGS% %INCLUDES% %SOURCES% %LFLAGS% gdi32.lib ^
         user32.lib kernel32.lib Xaudio2.lib ole32.lib
 )
