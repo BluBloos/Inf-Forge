@@ -19,6 +19,10 @@ if "%1"=="" goto bad2
 :: Install game resources into the bin dir.
 @xcopy "%APP_ROOT%\res" bin\res /E /Y /I
 
+:: Install optional game res
+:: NOTE: the ~ removes the already present double quotes from %3
+if NOT "%~3"=="" @xcopy "%APP_ROOT%\%~3" bin\res /E /Y /I
+
 @set INCLUDES=/I "%ENGINE_ROOT%\src" /I "%ENGINE_ROOT%\include" ^
     /I "%APP_ROOT%\include" /I "%ENGINE_ROOT%" /I "%APP_ROOT%" /I "%ENGINE_EXTERNAL%" ^
     /I "%ENGINE_EXTERNAL%\imgui-1.87"
