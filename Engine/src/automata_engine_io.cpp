@@ -50,7 +50,7 @@ namespace automata_engine {
     }
     // TODO(Noah): Use stb_vorbis for .ogg file parsing. Prob going to be better (compressed?)
     // TODO(Noah): Think about failure cases for load file err.
-    loaded_wav_t loadWav(char *fileName) {
+    loaded_wav_t loadWav(const char *fileName) {
       loaded_wav wavFile = {};
       loaded_file fileResult = ae::platform::readEntireFile(fileName);
       wavFile.parentFile = fileResult;
@@ -98,7 +98,7 @@ namespace automata_engine {
       return wavFile;
     }
 
-    loaded_image_t loadBMP(char *path) {
+    loaded_image_t loadBMP(const char *path) {
       loaded_image_t bitmap = {};
       // bitmap.scale = 1;
       loaded_file_t fileResult = ae::platform::readEntireFile(path);
@@ -149,7 +149,7 @@ namespace automata_engine {
     // TODO(Noah): It's prob the case that we could parse OBJ files better. But, I just wanted
     // to get something working ...
     raw_model_t loadObj(const char *filePath) {
-      loaded_file_t loadedFile = ae::platform::readEntireFile((char *)filePath);
+      loaded_file_t loadedFile = ae::platform::readEntireFile(filePath);
       // NOTE(Noah): init the rawModel to null is important because we are
       // depending on the modelName to have null-terminating char.
       raw_model_t rawModel = {};

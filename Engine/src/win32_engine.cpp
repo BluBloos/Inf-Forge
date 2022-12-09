@@ -48,7 +48,7 @@ void ae::platform::freeLoadedFile(loaded_file_t file) {
     VirtualFree(file.contents, 0, MEM_RELEASE);
 }
 
-loaded_file ae::platform::readEntireFile(char *fileName) {
+loaded_file ae::platform::readEntireFile(const char *fileName) {
 	void *result = 0;
 	int fileSize32 = 0;
 	HANDLE fileHandle = CreateFileA(fileName, GENERIC_READ,
@@ -80,6 +80,7 @@ loaded_file ae::platform::readEntireFile(char *fileName) {
 	loaded_file fileResult = {};
 	fileResult.contents = result;
 	fileResult.contentSize = fileSize32;
+    fileResult.fileName = fileName;
 	return fileResult;
 }
 

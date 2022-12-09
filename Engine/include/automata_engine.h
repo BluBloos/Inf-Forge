@@ -56,6 +56,7 @@ typedef struct loaded_image {
  * @param contents pointer to unparsed binary data of the loaded file
  */
 typedef struct loaded_file {
+    const char *fileName;
     void *contents;
 	int contentSize;
 } loaded_file_t;
@@ -160,7 +161,7 @@ namespace automata_engine {
         void initGlew();
         bool getGLInitialized();
         void objToVao(raw_model_t rawModel, ibo_t *iboOut, vbo_t *vboOut, GLuint *vaoOut);
-        GLuint createShader(char *vertFilePath, char *fragFilePath);
+        GLuint createShader(const char *vertFilePath, const char *fragFilePath);
         // TODO(Noah): There's got to be a nice and clean way to get rid of the duplication
         // here with the header of the wrapper.
         GLuint createTextureFromFile(
@@ -243,8 +244,8 @@ namespace automata_engine {
     // these functions do further processing (parse a file format).
     namespace io {
         void freeWav(loaded_wav wavFile);
-        loaded_wav_t loadWav(char *);
-        loaded_image_t loadBMP(char *path);
+        loaded_wav_t loadWav(const char *);
+        loaded_image_t loadBMP(const char *path);
         raw_model_t loadObj(const char *filePath);
         void freeObj(raw_model_t obj);
         void freeLoadedImage(loaded_image_t img);
@@ -276,7 +277,7 @@ namespace automata_engine {
         game_window_info_t getWindowInfo();
         void free(void *memToFree);
         void *alloc(uint32_t bytes);
-        loaded_file readEntireFile(char *fileName);
+        loaded_file readEntireFile(const char *fileName);
         void freeLoadedFile(loaded_file_t file);
         // TODO(Noah): we will either replace these with a different
         // paradigm, OR, it will make sense to have whatever the other

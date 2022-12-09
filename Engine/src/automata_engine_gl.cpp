@@ -52,7 +52,7 @@ namespace automata_engine {
             return id;
         }
         // failure mode for this function is -1
-        GLuint createShader(char *vertFilePath, char *fragFilePath) {
+        GLuint createShader(const char *vertFilePath, const char *fragFilePath) {
             uint32_t program;
             // Step 1: Setup our vertex and fragment GLSL shaders!
             loaded_file f1 = automata_engine::platform::readEntireFile(vertFilePath);
