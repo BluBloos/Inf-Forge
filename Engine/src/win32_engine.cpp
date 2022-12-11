@@ -4,6 +4,7 @@
 #include <windows.h>
 #include <io.h> // TODO(Noah): What is this used for again?
 #include <xaudio2.h>
+#include <xapobase.h>
 #include <mmreg.h> // TODO(Noah): What is this used for again?
 
 // TODO(Noah): Remove dependency on all this crazy
@@ -437,6 +438,7 @@ game_window_info_t automata_engine::platform::getWindowInfo() {
     return winInfo;
 }
 
+// Xaudio2 callbacks.
 namespace automata_engine {
     class IXAudio2VoiceCallback : public ::IXAudio2VoiceCallback  {
         void OnLoopEnd(void *pBufferContext) {
@@ -463,6 +465,100 @@ namespace automata_engine {
             //PlatformLoggerLog("OnVoiceProcessingPassStart");
         }
     };
+
+/*
+    static const XAPO_REGISTRATION_PROPERTIES g_regProp = {
+        __uuidof(IXAPO),
+        L"automata_engine::XAPO",
+        L"Copyright (c) 2022 Hmnxty Studios. All rights reserved.",
+        0, 0, XAPOBASE_DEFAULT_FLAG, 1, 1, 1, 1
+    };
+
+    // TODO(Noah): Do something safer with the ref to global mem here.
+    // i.e. what if global mem goes out of scope whilst this object is
+    // still alive?
+    class XAPO : public ::CXAPOBase {    
+    public:
+        XAPO() = delete; // no default constructor.
+        XAPO(void *pContext) : m_pContext(pContext), CXAPOBase(&g_regProp) {}
+        HRESULT LockForProcess(
+            UINT32                               InputLockedParameterCount,
+            const XAPO_LOCKFORPROCESS_PARAMETERS *pInputLockedParameters,
+            UINT32                               OutputLockedParameterCount,
+            const XAPO_LOCKFORPROCESS_PARAMETERS *pOutputLockedParameters
+        ) override {
+            assert(!IsLocked());
+            assert(InputLockedParameterCount == 1);
+            assert(OutputLockedParameterCount == 1);
+            assert(pInputLockedParameters != NULL);
+            assert(pOutputLockedParameters != NULL);
+            assert(pInputLockedParameters[0].pFormat != NULL);
+            assert(pOutputLockedParameters[0].pFormat != NULL);
+            m_uChannels = pInputLockedParameters[0].pFormat->nChannels;
+            m_uBytesPerSample = (pInputLockedParameters[0].pFormat->wBitsPerSample >> 3);
+            return CXAPOBase::LockForProcess(
+                InputLockedParameterCount,
+                pInputLockedParameters,
+                OutputLockedParameterCount,
+                pOutputLockedParameters);
+        }
+        // NOTE(Noah): it is important to note XAudio2 audio data is interleaved.
+        void Process(
+            UINT32 InputProcessParameterCount,
+            const XAPO_PROCESS_BUFFER_PARAMETERS *pInputProcessParameters,
+            UINT32 OutputProcessParameterCount,
+            XAPO_PROCESS_BUFFER_PARAMETERS *pOutputProcessParameters,
+            BOOL IsEnabled
+        ) {
+            assert(IsLocked());
+            assert(InputProcessParameterCount == 1);
+            assert(OutputProcessParameterCount == 1);
+            assert(NULL != pInputProcessParameters);
+            assert(NULL != pOutputProcessParameters);
+
+            XAPO_BUFFER_FLAGS inFlags = pInputProcessParameters[0].BufferFlags;
+            XAPO_BUFFER_FLAGS outFlags = pOutputProcessParameters[0].BufferFlags;
+            
+            // assert buffer flags are legitimate
+            assert((inFlags == XAPO_BUFFER_VALID) || (inFlags == XAPO_BUFFER_SILENT));
+            assert((outFlags == XAPO_BUFFER_VALID) || (outFlags == XAPO_BUFFER_SILENT));
+            
+            // check input APO_BUFFER_FLAGS
+            switch (inFlags)
+            {
+            case XAPO_BUFFER_VALID:
+                {
+                    void* pvSrc = pInputProcessParameters[0].pBuffer;
+                    assert(pvSrc != NULL);
+
+                    void* pvDst = pOutputProcessParameters[0].pBuffer;
+                    assert(pvDst != NULL);
+
+                    memcpy(pvDst, pvSrc, 
+                        pInputProcessParameters[0].ValidFrameCount * m_uChannels * m_uBytesPerSample);
+                    break;
+                }
+
+            case XAPO_BUFFER_SILENT:
+                {
+                    // All that needs to be done for this case is setting the
+                    // output buffer flag to XAPO_BUFFER_SILENT which is done below.
+                    break;
+                }
+            }
+            
+            // set destination valid frame count, and buffer flags
+            pOutputProcessParameters[0].ValidFrameCount = 
+                pInputProcessParameters[0].ValidFrameCount; // set destination frame count same as source
+            pOutputProcessParameters[0].BufferFlags     = 
+                pInputProcessParameters[0].BufferFlags;     // set destination buffer flags same as source
+        }
+    private:
+        WORD m_uChannels;
+        WORD m_uBytesPerSample;
+        void *m_pContext;
+    };
+    */
 }
 
 int CALLBACK WinMain(HINSTANCE instance,
@@ -500,8 +596,11 @@ int CALLBACK WinMain(HINSTANCE instance,
         automata_engine::platform::alloc(globalGameMemory.dataBytes); // will allocate 64 MB
     if (globalGameMemory.data == nullptr) {
         automata_engine::platform::GLOBAL_PROGRAM_RESULT = -1;
-        goto WinMainEnd;
+        return -1;
     }
+
+    //auto pXAPO = new automata_engine::XAPO(&globalGameMemory);
+    //defer(delete pXAPO);
 
     // Create a console and redirect stdout to the console.
     #ifndef RELEASE
@@ -695,13 +794,20 @@ int CALLBACK WinMain(HINSTANCE instance,
         xa2Buffer.PlayLength = 0; // play entire buffer
         xa2Buffer.LoopBegin = 0;
         xa2Buffer.LoopLength = 0; // entire sample should be looped.
-        xa2Buffer.LoopCount = XAUDIO2_MAX_LOOP_COUNT;
+        xa2Buffer.LoopCount = 1; // Sneaky trick to get loop callback but don't play buffer after :)
         xa2Buffer.pContext = (void *)&globalGameMemory;
 
         // NOTE(Noah): Again, we do not need to be concerned with freeing the source voice
         // as once we free the master xaudio2 object, we are good.
         pXAudio2->CreateSourceVoice(&pSourceVoice, (WAVEFORMATEX*)&waveFormat, 0, 
             XAUDIO2_MAX_FREQ_RATIO, &voiceCallback, NULL, NULL);
+
+        // create effect chain for DSP on voice.
+        /*XAUDIO2_EFFECT_DESCRIPTOR xapoDesc;
+        xapoDesc.pEffect = pXAPO;
+        xapoDesc.InitialState = true;
+        xapoDesc.OutputChannels = 1;
+        */
     }
 
     if (GameInit != nullptr) {
@@ -814,6 +920,12 @@ int CALLBACK WinMain(HINSTANCE instance,
 
     // TODO(Noah): Can we leverage our new nc_defer.h to replace this code below?
     {
+        // before kill Xaudio2, stop all audio and flush.
+        if (pSourceVoice != nullptr) {
+            if (FAILED(pSourceVoice->Stop(0))) { return false; }
+            if (FAILED(pSourceVoice->FlushSourceBuffers())) { return false; }
+        }
+
         // Free XAudio2 resources.
         if (pXAudio2 != nullptr) { pXAudio2->Release(); }
         if (!FAILED(comResult)) { CoUninitialize(); }
