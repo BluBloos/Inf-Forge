@@ -613,10 +613,9 @@ int CALLBACK WinMain(HINSTANCE instance,
         return -1;
     }
 
-    auto pXAPO = new automata_engine::XAPO(&globalGameMemory);
-    defer(delete pXAPO);
+    auto atoXAPO = automata_engine::XAPO(&globalGameMemory);
 
-    // Create a console and redirect stdout to the console.
+    // Create a console.
     #ifndef RELEASE
     {
         int hConHandle;
@@ -794,14 +793,14 @@ int CALLBACK WinMain(HINSTANCE instance,
         if (pSourceVoice) {
             // create effect chain for DSP on voice.
             XAUDIO2_EFFECT_DESCRIPTOR xapoDesc;
-            xapoDesc.pEffect = pXAPO;
+            xapoDesc.pEffect = &atoXAPO;
             xapoDesc.InitialState = true;
             xapoDesc.OutputChannels = 1;
             XAUDIO2_EFFECT_CHAIN chain;
             chain.EffectCount = 1;
             chain.pEffectDescriptors = &xapoDesc;
             pSourceVoice->SetEffectChain(&chain);
-            pXAPO->Release();
+            atoXAPO.Release();
             pSourceVoice->EnableEffect(0);
         }
     }
@@ -918,8 +917,8 @@ int CALLBACK WinMain(HINSTANCE instance,
     {
         // before kill Xaudio2, stop all audio and flush.
         if (pSourceVoice != nullptr) {
-            pSourceVoice->Stop(0);
-            pSourceVoice->FlushSourceBuffers();
+            // wait for audio thread to finish.
+            pSourceVoice->DestroyVoice();
         }
 
         // Free XAudio2 resources.
@@ -952,8 +951,8 @@ int CALLBACK WinMain(HINSTANCE instance,
         automata_engine::super::close();
 
         // stall program to allow user to see err.
-        printf("Press ENTER exit\n");
-        fgetc(stdin);
+        // printf("Press ENTER exit\n");
+        // fgetc(stdin);
     }
 
     return automata_engine::platform::GLOBAL_PROGRAM_RESULT;
