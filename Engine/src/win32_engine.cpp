@@ -373,7 +373,7 @@ int automata_engine::platform::GLOBAL_PROGRAM_RESULT = 0;
 static XAUDIO2_BUFFER xa2Buffer = {0};
 static IXAudio2SourceVoice* pSourceVoice = nullptr;
 
-// NOTE(Noah): What happens if there is no buffer to play?? -_-
+// TODO(Noah): What happens if there is no buffer to play?? -_-
 void automata_engine::platform::playAudioBuffer() {
     if (pSourceVoice != nullptr) {
         pSourceVoice->Start( 0 );
@@ -437,12 +437,41 @@ game_window_info_t automata_engine::platform::getWindowInfo() {
     return winInfo;
 }
 
+namespace automata_engine {
+    class IXAudio2VoiceCallback : public ::IXAudio2VoiceCallback  {
+        void OnLoopEnd(void *pBufferContext) {
+            PlatformLoggerLog("OnLoopEnd");
+            OnBufferLoopEnd((game_memory_t *)pBufferContext);
+        }
+        void OnBufferEnd(void *pBufferContext) {
+            PlatformLoggerLog("OnBufferEnd");
+        }
+        void OnBufferStart(void *pBufferContext) {
+            PlatformLoggerLog("OnBufferStart");
+        }
+        void OnStreamEnd() {
+            PlatformLoggerLog("OnStreamEnd");
+        }
+        void OnVoiceError(void    *pBufferContext, HRESULT Error) {
+            PlatformLoggerLog("OnVoiceError");
+        }
+        // these ones exec like each frame.
+        void OnVoiceProcessingPassEnd() {
+            //PlatformLoggerLog("OnVoiceProcessingPassEnd");
+        }
+        void OnVoiceProcessingPassStart(UINT32 BytesRequired) {
+            //PlatformLoggerLog("OnVoiceProcessingPassStart");
+        }
+    };
+}
+
 int CALLBACK WinMain(HINSTANCE instance,
   HINSTANCE prevInstance,
   LPSTR cmdLine,
   int showCode)
 {
     CheckSanePlatform();
+    auto voiceCallback = automata_engine::IXAudio2VoiceCallback();
     automata_engine::super::init();
 
     // TODO: Do some hot reloading stuff! Game is a DLL to the engine :)
@@ -667,11 +696,12 @@ int CALLBACK WinMain(HINSTANCE instance,
         xa2Buffer.LoopBegin = 0;
         xa2Buffer.LoopLength = 0; // entire sample should be looped.
         xa2Buffer.LoopCount = XAUDIO2_MAX_LOOP_COUNT;
-        xa2Buffer.pContext = NULL;
+        xa2Buffer.pContext = (void *)&globalGameMemory;
 
         // NOTE(Noah): Again, we do not need to be concerned with freeing the source voice
         // as once we free the master xaudio2 object, we are good.
-        pXAudio2->CreateSourceVoice(&pSourceVoice, (WAVEFORMATEX*)&waveFormat);
+        pXAudio2->CreateSourceVoice(&pSourceVoice, (WAVEFORMATEX*)&waveFormat, 0, 
+            XAUDIO2_MAX_FREQ_RATIO, &voiceCallback, NULL, NULL);
     }
 
     if (GameInit != nullptr) {

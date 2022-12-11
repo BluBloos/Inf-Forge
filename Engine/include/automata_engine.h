@@ -141,6 +141,10 @@ namespace automata_engine {
     void Close(game_memory_t *gameMemory);
     void HandleWindowResize(struct game_memory *gameMemory, int newWdith, int newHeight);
     
+    // TODO(Noah): We could provide information also about what particular
+    // voice 
+    void OnBufferLoopEnd(game_memory_t *gameMemory);
+    
     // engine helper funcs.
     game_state_t *getGameState(game_memory_t *gameMemory);
     void setGlobalRunning(bool); // this one enables more of a graceful exit.

@@ -118,7 +118,7 @@ namespace automata_engine {
         int item_current = _currentApp;
         ImGui::Combo("App", &item_current, appTable_name, StretchyBufferCount(appTable_name));
         if (item_current != _currentApp) { bifrost::updateApp(gameMemory, appTable_name[item_current]); }
-        ImGui::Text("lastFrameTime: %.3f ms", 1000.0f * platform::lastFrameTime);
+        ImGui::Text("lastFrameTimeCPU: %.3f ms", 1000.0f * platform::lastFrameTime);
         ImGui::Text("lastFrameTimeTotal: %.3f ms (%.1f FPS)",
             1000.0f * platform::lastFrameTimeTotal, 1.0f / platform::lastFrameTimeTotal);
         ImGui::Text("updateModel: %s", updateModelToString(platform::GLOBAL_UPDATE_MODEL));
