@@ -530,8 +530,8 @@ namespace automata_engine {
                     void* pvDst = pOutputProcessParameters[0].pBuffer;
                     assert(pvDst != NULL);
 
-                    memcpy(pvDst, pvSrc, 
-                        pInputProcessParameters[0].ValidFrameCount * m_uChannels * m_uBytesPerSample);
+                    ae::OnBufferProcess((game_memory_t *)m_pContext,
+                        pvDst, pvSrc, pInputProcessParameters[0].ValidFrameCount, m_uChannels, m_uBytesPerSample);
                     break;
                 }
 

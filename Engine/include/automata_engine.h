@@ -141,9 +141,10 @@ namespace automata_engine {
     void Close(game_memory_t *gameMemory);
     void HandleWindowResize(struct game_memory *gameMemory, int newWdith, int newHeight);
     
-    // TODO(Noah): We could provide information also about what particular
-    // voice 
+    // TODO(Noah): Move towards a multi-voice system.
     void OnBufferLoopEnd(game_memory_t *gameMemory);
+    void OnBufferProcess(game_memory_t *gameMemory, void *dst, void *src, 
+        uint32_t samplesToWrite, int channels, int bytesPerSample);
     
     // engine helper funcs.
     game_state_t *getGameState(game_memory_t *gameMemory);
