@@ -261,6 +261,8 @@ namespace automata_engine {
     // was initially retrieved by OS API, this too is a platform func. This case can
     // be classified as being temporally dependent: Ex) user input.
     namespace platform {
+        
+        void fprintf_proxy(int handle, const char *fmt, ...);
 
         // NOTE(Noah): Does not sit ontop of readEntireFile, so it's actually
         // a platform thing. BUT, thankfully, we have the impl within the
@@ -301,16 +303,23 @@ namespace automata_engine {
 
 namespace ae = automata_engine;
 
+#define AE_STDERR 0
+#define AE_STDOUT 1
+
 // TODO(Noah): All Platform functions must have their impl in file <platform>_engine.h
 // NOTE(Noah): See this page for color code guide: 
 // https://stackoverflow.com/questions/4842424/list-of-ansi-color-escape-sequences
 #ifndef RELEASE
-#define PlatformLoggerError(fmt, ...) (fprintf(stderr, "\033[0;31m" "[Error on line=%d in file:%s]:\n", __LINE__, __FILE__), fprintf(stderr, fmt, __VA_ARGS__), fprintf(stderr, "\n" "\033[0m"))
-#define PlatformLoggerLog(fmt, ...) (printf("[Log from line=%d in file:%s]:\n", __LINE__, __FILE__), printf(fmt, __VA_ARGS__), printf("\n"))
-#define PlatformLoggerWarn(fmt, ...) (printf("\033[0;93m" "[Warn on line=%d in file:%s]:\n", __LINE__, __FILE__), printf(fmt, __VA_ARGS__), fprintf(stderr, "\n" "\033[0m"))
+#define PlatformLoggerError(fmt, ...) \
+    (ae::platform::fprintf_proxy(AE_STDERR, "\033[0;31m" "[Error on line=%d in file:%s]:\n", __LINE__, __FILE__), ae::platform::fprintf_proxy(AE_STDERR, fmt, __VA_ARGS__), ae::platform::fprintf_proxy(AE_STDERR, "\n" "\033[0m"))
+#define PlatformLoggerLog(fmt, ...) \
+    (ae::platform::fprintf_proxy(AE_STDOUT, "[Log from line=%d in file:%s]:\n", __LINE__, __FILE__), ae::platform::fprintf_proxy(AE_STDOUT, fmt, __VA_ARGS__), ae::platform::fprintf_proxy(AE_STDOUT, "\n"))
+#define PlatformLoggerWarn(fmt, ...) \
+    (ae::platform::fprintf_proxy(AE_STDOUT, "\033[0;93m" "[Warn on line=%d in file:%s]:\n", __LINE__, __FILE__), ae::platform::fprintf_proxy(AE_STDOUT, fmt, __VA_ARGS__), ae::platform::fprintf_proxy(AE_STDOUT, "\n" "\033[0m"))
 #else
 #define PlatformLoggerError(fmt, ...)
 #define PlatformLoggerLog(fmt, ...)
+#define PlatformLoggerWarn(fmt, ...)
 #endif
 
 #define ENGINE_DESIRED_SAMPLES_PER_SECOND 44100

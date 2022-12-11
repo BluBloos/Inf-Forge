@@ -466,7 +466,6 @@ namespace automata_engine {
         }
     };
 
-/*
     static const XAPO_REGISTRATION_PROPERTIES g_regProp = {
         __uuidof(IXAPO),
         L"automata_engine::XAPO",
@@ -496,11 +495,8 @@ namespace automata_engine {
             assert(pOutputLockedParameters[0].pFormat != NULL);
             m_uChannels = pInputLockedParameters[0].pFormat->nChannels;
             m_uBytesPerSample = (pInputLockedParameters[0].pFormat->wBitsPerSample >> 3);
-            return CXAPOBase::LockForProcess(
-                InputLockedParameterCount,
-                pInputLockedParameters,
-                OutputLockedParameterCount,
-                pOutputLockedParameters);
+            return CXAPOBase::LockForProcess(InputLockedParameterCount,
+                pInputLockedParameters, OutputLockedParameterCount, pOutputLockedParameters);
         }
         // NOTE(Noah): it is important to note XAudio2 audio data is interleaved.
         void Process(
@@ -558,7 +554,25 @@ namespace automata_engine {
         WORD m_uBytesPerSample;
         void *m_pContext;
     };
-    */
+}
+
+void automata_engine::platform::fprintf_proxy(int h, const char *fmt, ...) {
+    
+    char _buf[4096];
+    
+    va_list args;
+    va_start (args, fmt);
+    vsprintf(_buf, fmt, args);
+    va_end (args);
+
+    HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
+    switch(h) {
+        case AE_STDERR: handle = GetStdHandle(STD_ERROR_HANDLE); break;
+        case AE_STDOUT: handle = GetStdHandle(STD_OUTPUT_HANDLE); break;
+        default: handle = GetStdHandle(STD_OUTPUT_HANDLE);
+    }
+
+    WriteConsoleA(handle, (void *)_buf, strlen(_buf), NULL, NULL);
 }
 
 int CALLBACK WinMain(HINSTANCE instance,
@@ -599,8 +613,8 @@ int CALLBACK WinMain(HINSTANCE instance,
         return -1;
     }
 
-    //auto pXAPO = new automata_engine::XAPO(&globalGameMemory);
-    //defer(delete pXAPO);
+    auto pXAPO = new automata_engine::XAPO(&globalGameMemory);
+    defer(delete pXAPO);
 
     // Create a console and redirect stdout to the console.
     #ifndef RELEASE
@@ -621,31 +635,7 @@ int CALLBACK WinMain(HINSTANCE instance,
         coninfo.dwSize.Y = MAX_CONSOLE_LINES;
         SetConsoleScreenBufferSize(GetStdHandle(STD_OUTPUT_HANDLE), coninfo.dwSize);
 
-        // redirect unbuffered STDOUT to the console
-        // https://msdn.microsoft.com/en-us/library/bdts1c9x.aspx
-        // https://msdn.microsoft.com/en-us/library/88k7d7a7.aspx
-
-        // TODO(Noah): Understand what the heck is going on here...and abstract these redirects!
-        // redirect stderr
-        lStdHandle = (intptr_t)GetStdHandle(STD_ERROR_HANDLE);
-        hConHandle = _open_osfhandle(lStdHandle, _O_TEXT); // convert windows handle to c runtime handle
-        fp = _fdopen( hConHandle, "w");
-        *stderr = *fp;
-        freopen_s(&fp, "CONOUT$", "w", stderr);
-        // redirect stdout
-        lStdHandle = (intptr_t)GetStdHandle(STD_OUTPUT_HANDLE);
-        hConHandle = _open_osfhandle(lStdHandle, _O_TEXT); // convert windows handle to c runtime handle
-        fp = _fdopen( hConHandle, "w");
-        *stdout = *fp;
-        freopen_s(&fp, "CONOUT$", "w", stdout);
-        // redirect stdin
-        lStdHandle = (intptr_t)GetStdHandle(STD_INPUT_HANDLE);
-        hConHandle = _open_osfhandle(lStdHandle, _O_TEXT); // convert windows handle to c runtime handle
-        fp = _fdopen( hConHandle, "r");
-        *stdin = *fp;
-        freopen_s(&fp, "CONIN$", "r", stdin);
-
-        // set console mode for supporting color escape sequences.
+        // Set console mode for supporting color escape sequences.
         {
             HANDLE stdOutHandle = GetStdHandle(STD_OUTPUT_HANDLE);
             DWORD stdOutMode;
@@ -657,9 +647,8 @@ int CALLBACK WinMain(HINSTANCE instance,
 
         PlatformLoggerLog("stdout initialized");
         PlatformLoggerError("testing stderr out");
-        //fprintf(stderr, "testing stderr out\n");
-        // TODO(Noah): Make this print pull version from a manifest or something...
-        PlatformLoggerLog("\"Hello, World!\" from Automata Engine %s", "Alpha v0.1.0");
+        // TODO(Noah): Make this print version from a manifest or something...
+        PlatformLoggerLog("\"Hello, World!\" from Automata Engine %s", "Alpha v0.2.0");
     }
     #endif
 
@@ -802,12 +791,19 @@ int CALLBACK WinMain(HINSTANCE instance,
         pXAudio2->CreateSourceVoice(&pSourceVoice, (WAVEFORMATEX*)&waveFormat, 0, 
             XAUDIO2_MAX_FREQ_RATIO, &voiceCallback, NULL, NULL);
 
-        // create effect chain for DSP on voice.
-        /*XAUDIO2_EFFECT_DESCRIPTOR xapoDesc;
-        xapoDesc.pEffect = pXAPO;
-        xapoDesc.InitialState = true;
-        xapoDesc.OutputChannels = 1;
-        */
+        if (pSourceVoice) {
+            // create effect chain for DSP on voice.
+            XAUDIO2_EFFECT_DESCRIPTOR xapoDesc;
+            xapoDesc.pEffect = pXAPO;
+            xapoDesc.InitialState = true;
+            xapoDesc.OutputChannels = 1;
+            XAUDIO2_EFFECT_CHAIN chain;
+            chain.EffectCount = 1;
+            chain.pEffectDescriptors = &xapoDesc;
+            pSourceVoice->SetEffectChain(&chain);
+            pXAPO->Release();
+            pSourceVoice->EnableEffect(0);
+        }
     }
 
     if (GameInit != nullptr) {

@@ -91,19 +91,19 @@ call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build
 
 if "%1"=="DX12_BACKEND" (
     cl %CFLAGS% %INCLUDES% %SOURCES% gdi32.lib ^
-        user32.lib kernel32.lib Xaudio2.lib ole32.lib D3D12.lib DXGI.lib D3DCompiler.lib
+        user32.lib kernel32.lib Xaudio2.lib XAPOBase.lib ole32.lib D3D12.lib DXGI.lib D3DCompiler.lib
 )
 if "%1"=="GL_BACKEND" (
     cl %CFLAGS% %INCLUDES% %SOURCES% %LFLAGS% gdi32.lib ^
-        opengl32.lib user32.lib glew32s.lib kernel32.lib Xaudio2.lib ole32.lib
+        opengl32.lib user32.lib glew32s.lib kernel32.lib Xaudio2.lib XAPOBase.lib ole32.lib
 )
 if "%1"=="CPU_BACKEND" (
     cl %CFLAGS% %INCLUDES% %SOURCES% %LFLAGS% gdi32.lib ^
-        user32.lib kernel32.lib Xaudio2.lib ole32.lib
+        user32.lib kernel32.lib Xaudio2.lib XAPOBase.lib ole32.lib
 )
 if "%1"=="VULKAN_BACKEND" (
     cl %CFLAGS% %INCLUDES% %SOURCES% %LFLAGS% gdi32.lib ^
-        user32.lib kernel32.lib Xaudio2.lib ole32.lib
+        user32.lib kernel32.lib Xaudio2.lib XAPOBase.lib ole32.lib
 )
 
 popd
