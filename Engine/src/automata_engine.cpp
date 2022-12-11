@@ -50,6 +50,10 @@ namespace automata_engine {
     loaded_image_t platform::stbImageLoad(char *fileName) {
         loaded_image myImage = {};
         int x, y, n;
+        // NOTE(Noah): For now, let's avoid .jpg.
+        // seems stb image loader has troubles with a subset of .jpg,
+        // and I would rather not put any effort into determining precisely
+        // which .jpg I have.
         unsigned char *data = stbi_load(fileName, &x, &y, &n, 0);
         if (data != NULL) {
             myImage.pixelPointer = (uint32_t *)data;
