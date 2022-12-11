@@ -918,8 +918,8 @@ int CALLBACK WinMain(HINSTANCE instance,
     {
         // before kill Xaudio2, stop all audio and flush.
         if (pSourceVoice != nullptr) {
-            if (FAILED(pSourceVoice->Stop(0))) { return false; }
-            if (FAILED(pSourceVoice->FlushSourceBuffers())) { return false; }
+            pSourceVoice->Stop(0);
+            pSourceVoice->FlushSourceBuffers();
         }
 
         // Free XAudio2 resources.
