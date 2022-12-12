@@ -951,8 +951,12 @@ int CALLBACK WinMain(HINSTANCE instance,
         automata_engine::super::close();
 
         // stall program to allow user to see err.
-        // printf("Press ENTER exit\n");
-        // fgetc(stdin);
+        PlatformLogger("Press any key to exit\n");
+        INPUT_RECORD record;
+        DWORD inputsRead;
+        HANDLE inputHandle = GetStdHandle(STD_INPUT_HANDLE);
+        FlushConsoleInputBuffer(inputHandle);
+        ReadConsoleInput(inputHandle, &record, 1, &inputsRead);
     }
 
     return automata_engine::platform::GLOBAL_PROGRAM_RESULT;

@@ -306,6 +306,7 @@ namespace ae = automata_engine;
 
 #define AE_STDERR 0
 #define AE_STDOUT 1
+#define AE_STDIN  2
 
 // TODO(Noah): All Platform functions must have their impl in file <platform>_engine.h
 // NOTE(Noah): See this page for color code guide: 
@@ -317,10 +318,12 @@ namespace ae = automata_engine;
     (ae::platform::fprintf_proxy(AE_STDOUT, "[Log from line=%d in file:%s]:\n", __LINE__, __FILE__), ae::platform::fprintf_proxy(AE_STDOUT, fmt, __VA_ARGS__), ae::platform::fprintf_proxy(AE_STDOUT, "\n"))
 #define PlatformLoggerWarn(fmt, ...) \
     (ae::platform::fprintf_proxy(AE_STDOUT, "\033[0;93m" "[Warn on line=%d in file:%s]:\n", __LINE__, __FILE__), ae::platform::fprintf_proxy(AE_STDOUT, fmt, __VA_ARGS__), ae::platform::fprintf_proxy(AE_STDOUT, "\n" "\033[0m"))
+#define PlatformLogger(fmt, ...) (ae::platform::fprintf_proxy(AE_STDOUT, fmt, __VA_ARGS__))
 #else
 #define PlatformLoggerError(fmt, ...)
 #define PlatformLoggerLog(fmt, ...)
 #define PlatformLoggerWarn(fmt, ...)
+#define PlatformLogger(fmt, ...)
 #endif
 
 #define ENGINE_DESIRED_SAMPLES_PER_SECOND 44100
