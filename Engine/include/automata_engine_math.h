@@ -12,7 +12,7 @@
 #define AUTOMATA_ENGINE_MATH
 
 // TODO: Remove dependency on math.h and do transcendentals ourselves.
-// We want SPEED.
+// From a learning perspective, this is a good idea.
 #include <math.h>
 #include <initializer_list>
 

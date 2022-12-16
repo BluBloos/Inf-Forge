@@ -5,8 +5,7 @@
 #include <gl/gl.h>
 #include <initializer_list>
 
-// TODO(Noah): I think this macro is only going to work in ae::GL namespacee.
-#define GL_CALL(code) GLClearError(); code; assert(GLCheckError(#code, __FILE__, __LINE__));
+#define GL_CALL(code) ae::GL::GLClearError(); code; assert(ae::GL::GLCheckError(#code, __FILE_RELATIVE__, __LINE__));
 
 namespace automata_engine {
     namespace GL {

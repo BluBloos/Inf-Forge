@@ -11,6 +11,7 @@
 #include <tuple>
 #include <iterator>
 #include <imgui.h>
+#include <string.h>
 
 #include <automata_engine_math.h>
 
@@ -161,7 +162,7 @@ namespace automata_engine {
     namespace GL {
         // state that the engine exposes
         void GLClearError();
-        bool GLCheckError(char *, char *, int);
+        bool GLCheckError(char *, const char *, int);
         extern bool glewIsInit;
         void initGlew();
         bool getGLInitialized();
@@ -213,6 +214,10 @@ namespace automata_engine {
         mat4_t buildInverseOrthoMat(camera_t cam);
         mat4_t buildRotMat4(vec3_t eulerAngles);
         mat4_t transposeMat4(mat4_t  mat);
+
+        float dist(vec3_t a, vec3_t b);
+        float sqrt(float a);
+        float square(float a);
 
         float *value_ptr(vec3_t &);
         float *value_ptr(vec4_t &);
@@ -308,16 +313,18 @@ namespace ae = automata_engine;
 #define AE_STDOUT 1
 #define AE_STDIN  2
 
+#define __FILE_RELATIVE__ (strrchr("\\" __FILE__, '\\') + 1)
+
 // TODO(Noah): All Platform functions must have their impl in file <platform>_engine.h
 // NOTE(Noah): See this page for color code guide: 
 // https://stackoverflow.com/questions/4842424/list-of-ansi-color-escape-sequences
 #ifndef RELEASE
 #define PlatformLoggerError(fmt, ...) \
-    (ae::platform::fprintf_proxy(AE_STDERR, "\033[0;31m" "[Error on line=%d in file:%s]:\n", __LINE__, __FILE__), ae::platform::fprintf_proxy(AE_STDERR, fmt, __VA_ARGS__), ae::platform::fprintf_proxy(AE_STDERR, "\n" "\033[0m"))
+    (ae::platform::fprintf_proxy(AE_STDERR, "\033[0;31m" "[Error on line=%d in file:%s]:\n", __LINE__, __FILE_RELATIVE__), ae::platform::fprintf_proxy(AE_STDERR, fmt, __VA_ARGS__), ae::platform::fprintf_proxy(AE_STDERR, "\n" "\033[0m"))
 #define PlatformLoggerLog(fmt, ...) \
-    (ae::platform::fprintf_proxy(AE_STDOUT, "[Log from line=%d in file:%s]:\n", __LINE__, __FILE__), ae::platform::fprintf_proxy(AE_STDOUT, fmt, __VA_ARGS__), ae::platform::fprintf_proxy(AE_STDOUT, "\n"))
+    (ae::platform::fprintf_proxy(AE_STDOUT, "[Log from line=%d in file:%s]:\n", __LINE__, __FILE_RELATIVE__), ae::platform::fprintf_proxy(AE_STDOUT, fmt, __VA_ARGS__), ae::platform::fprintf_proxy(AE_STDOUT, "\n"))
 #define PlatformLoggerWarn(fmt, ...) \
-    (ae::platform::fprintf_proxy(AE_STDOUT, "\033[0;93m" "[Warn on line=%d in file:%s]:\n", __LINE__, __FILE__), ae::platform::fprintf_proxy(AE_STDOUT, fmt, __VA_ARGS__), ae::platform::fprintf_proxy(AE_STDOUT, "\n" "\033[0m"))
+    (ae::platform::fprintf_proxy(AE_STDOUT, "\033[0;93m" "[Warn on line=%d in file:%s]:\n", __LINE__, __FILE_RELATIVE__), ae::platform::fprintf_proxy(AE_STDOUT, fmt, __VA_ARGS__), ae::platform::fprintf_proxy(AE_STDOUT, "\n" "\033[0m"))
 #define PlatformLogger(fmt, ...) (ae::platform::fprintf_proxy(AE_STDOUT, fmt, __VA_ARGS__))
 #else
 #define PlatformLoggerError(fmt, ...)

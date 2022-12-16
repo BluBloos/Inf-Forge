@@ -200,6 +200,17 @@ namespace automata_engine {
             scaleMat.matv[1][1] = 1.0f / cam.trans.scale.y;
             return scaleMat * rotMat4 * transMat;
         }
+        float sqrt(float a) {
+            // TODO(Noah): replace with our own intrinsic.
+            return ::sqrtf(a);
+        }
+        float square(float a) {
+            // TODO(Noah): replace with our own intrinsic.
+            return a * a;
+        }
+        float dist(vec3_t a, vec3_t b) {
+            return sqrt(square(a.x - b.x) + square(a.y - b.y) + square(a.z - b.z));
+        }
         bool rayBoxIntersection(
             vec3_t rayOrigin, vec3_t rayDir, float rayLen, const box_t *candidateBoxes,
             uint32_t candidateBoxCount, vec3_t *intersectionOut

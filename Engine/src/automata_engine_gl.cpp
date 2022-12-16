@@ -8,7 +8,7 @@
 namespace automata_engine {
     namespace GL {
         void GLClearError() { while(glGetError() != GL_NO_ERROR); }
-        bool GLCheckError(char *function, char *file, int line) {
+        bool GLCheckError(char *function, const char *file, int line) {
             bool result = true;
             while(GLenum error = glGetError()) {
                 PlatformLoggerLog("GL_ERROR: %d\nFUNCTION: %s\nFILE: %s\nLINE: %d", 
@@ -193,7 +193,7 @@ namespace automata_engine {
         GLuint createAndSetupVao(uint32_t attribCounts, ...) {
             GLuint vao;
             glGenVertexArrays(1, &vao); glBindVertexArray(vao);
-            PlatformLoggerWarn("called createAndSetupVao with vao=%d", vao);
+            PlatformLoggerLog("called createAndSetupVao with vao=%d", vao);
             GLuint boundVbo = 0;            
             va_list vl;
             va_start(vl, attribCounts);
@@ -228,7 +228,7 @@ namespace automata_engine {
                                 vbo_GetStride(*pVbo),
                                 (const void *)(ptr = (intptr_t)offset + vbo_GetOffset(*pVbo, k))
                             );
-                            PlatformLoggerWarn(
+                            PlatformLoggerLog(
                                 "did glVertexAttribPointer(%d, %d, type, GL_FALSE, %d, %d);",
                                 attribIndex, componentCount, vbo_GetStride(*pVbo), ptr);
                             offset += componentCount * GLenumToBytes(attrib.type);
