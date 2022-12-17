@@ -3,6 +3,7 @@
 
 #include <windows.h>
 #include <io.h> // TODO(Noah): What is this used for again?
+#define XAUDIO2_HELPER_FUNCTIONS
 #include <xaudio2.h>
 #include <xapobase.h>
 #include <mmreg.h> // TODO(Noah): What is this used for again?
@@ -391,6 +392,10 @@ void automata_engine::platform::setAudioBufferVolume(float volume) {
     if (pSourceVoice != nullptr) {
         pSourceVoice->SetVolume( volume );
     }
+}
+
+float automata_engine::platform::decibelsToAmplitudeRatio(float db) {
+    return XAudio2DecibelsToAmplitudeRatio(db);
 }
 
 // TODO(Noah): Make our platform audio things more low-level.
@@ -865,6 +870,8 @@ int CALLBACK WinMain(HINSTANCE instance,
                 PlatformLoggerError("pSourceVoice->SetEffectChain() returned with code (0x%x)", hResult);
             }
             
+            float amplitude = XAudio2DecibelsToAmplitudeRatio(0.f);
+            assert(amplitude == 1.f);
         }
     }
 

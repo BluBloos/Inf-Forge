@@ -302,6 +302,7 @@ namespace automata_engine {
         void playAudioBuffer();
         void stopAudioBuffer();
         void setAudioBufferVolume(float volume);
+        float decibelsToAmplitudeRatio(float db);
 
         // NOTE(Noah): setVsync is in platform layer because Vsync is an OS state
         // and we must make a call to OS to set it.
