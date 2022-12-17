@@ -831,7 +831,7 @@ int CALLBACK WinMain(HINSTANCE instance,
             XAUDIO2_EFFECT_DESCRIPTOR xapoDesc[1];
             xapoDesc[0].pEffect = static_cast<IXAPO *>(atoXAPO);
             xapoDesc[0].InitialState = true;  // default enable.
-            xapoDesc[0].OutputChannels = 1;
+            xapoDesc[0].OutputChannels = 2;
             XAUDIO2_EFFECT_CHAIN chain;
             chain.EffectCount = 1;
             chain.pEffectDescriptors = xapoDesc;
