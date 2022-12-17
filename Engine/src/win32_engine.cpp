@@ -445,6 +445,115 @@ game_window_info_t automata_engine::platform::getWindowInfo() {
 }
 
 // Xaudio2 callbacks.
+
+// TODO(Noah): Do something safer with the ref to global mem here.
+// i.e. what if global mem goes out of scope whilst this object is
+// still alive?
+class __declspec( uuid("{F5948348-445A-442C-BD86-27DD99A431B5}"))
+AutomataXAPO : public ::CXAPOBase {    
+public:
+    AutomataXAPO() = delete; // no default constructor.
+    AutomataXAPO(void *pContext) : m_pContext(pContext), CXAPOBase(&m_regProps) {}
+    STDMETHOD(LockForProcess) (
+        UINT32 InputLockedParameterCount,
+        _In_reads_opt_(InputLockedParameterCount) const XAPO_LOCKFORPROCESS_BUFFER_PARAMETERS *pInputLockedParameters,
+        UINT32 OutputLockedParameterCount,
+        _In_reads_opt_(OutputLockedParameterCount) const XAPO_LOCKFORPROCESS_BUFFER_PARAMETERS *pOutputLockedParameters
+    ) override {
+        assert(!IsLocked());
+        assert(InputLockedParameterCount == 1);
+        assert(OutputLockedParameterCount == 1);
+        assert(pInputLockedParameters != NULL);
+        assert(pOutputLockedParameters != NULL);
+        assert(pInputLockedParameters[0].pFormat != NULL);
+        assert(pOutputLockedParameters[0].pFormat != NULL);
+        HRESULT hr = CXAPOBase::LockForProcess(
+            InputLockedParameterCount,
+            pInputLockedParameters,
+            OutputLockedParameterCount,
+            pOutputLockedParameters );
+        if( SUCCEEDED( hr ) )
+        {
+            if ( !pInputLockedParameters )
+                return E_POINTER;
+            memcpy( &m_wfx, pInputLockedParameters[0].pFormat, sizeof( WAVEFORMATEX ) );
+            //m_uChannels = pInputLockedParameters[0].pFormat->nChannels;
+            //m_uBytesPerSample = (pInputLockedParameters[0].pFormat->wBitsPerSample >> 3);
+        }
+        return hr;
+        //return CXAPOBase::LockForProcess(InputLockedParameterCount,
+         //   pInputLockedParameters, OutputLockedParameterCount, pOutputLockedParameters);
+    }
+    // NOTE(Noah): it is important to note XAudio2 audio data is interleaved.
+    STDMETHOD_(void, Process) (
+        UINT32 InputProcessParameterCount,
+        _In_reads_opt_(InputProcessParameterCount) const XAPO_PROCESS_BUFFER_PARAMETERS *pInputProcessParameters,
+        UINT32 OutputProcessParameterCount,
+        _Inout_updates_opt_(OutputProcessParameterCount) XAPO_PROCESS_BUFFER_PARAMETERS *pOutputProcessParameters,
+        BOOL IsEnabled
+    ) override {
+        
+        // NOTE(Noah): For a lot of this stuff I have stolen from the direct-x-samples from Chuck Walbourn.
+        // thanks, Chuck.
+        _ASSERT( IsLocked() );
+        _ASSERT( InputProcessParameterCount == 1 );
+        _ASSERT( OutputProcessParameterCount == 1 );
+        _ASSERT( pInputProcessParameters != nullptr && pOutputProcessParameters != nullptr);
+        _Analysis_assume_( pInputProcessParameters != nullptr && pOutputProcessParameters != nullptr);
+        _ASSERT( pInputProcessParameters[0].pBuffer == pOutputProcessParameters[0].pBuffer );
+
+        UNREFERENCED_PARAMETER( OutputProcessParameterCount );
+        UNREFERENCED_PARAMETER( InputProcessParameterCount );
+        UNREFERENCED_PARAMETER( pOutputProcessParameters );
+        UNREFERENCED_PARAMETER( IsEnabled );
+
+        //ParameterClass* pParams;
+        //pParams = (ParameterClass*)BeginProcess();
+        
+        if ( pInputProcessParameters[0].BufferFlags == XAPO_BUFFER_SILENT )
+        {
+            memset( pInputProcessParameters[0].pBuffer, 0,
+                    pInputProcessParameters[0].ValidFrameCount * m_wfx.nChannels * sizeof(FLOAT32) );
+
+            /*DoProcess(
+                *pParams,
+                (FLOAT32* __restrict)pInputProcessParameters[0].pBuffer,
+                pInputProcessParameters[0].ValidFrameCount,
+                m_wfx.nChannels );*/
+        }
+        else if( pInputProcessParameters[0].BufferFlags == XAPO_BUFFER_VALID )
+        {
+            /*DoProcess(
+                *pParams,
+                (FLOAT32* __restrict)pInputProcessParameters[0].pBuffer,
+                pInputProcessParameters[0].ValidFrameCount,
+                m_wfx.nChannels );*/
+        }
+        
+        //EndProcess();
+    }
+private:
+    // Registration properties defining this xAPO class.
+    static XAPO_REGISTRATION_PROPERTIES m_regProps;
+    WORD m_uChannels;
+    WORD m_uBytesPerSample;
+    // Format of the audio we're processing
+    WAVEFORMATEX    m_wfx;
+    void *m_pContext;
+};
+
+__declspec(selectany) XAPO_REGISTRATION_PROPERTIES AutomataXAPO::m_regProps = {
+    __uuidof(AutomataXAPO),
+    L"automata_engine::XAPO",
+    L"Copyright (c) 2022 Hmnxty Studios. All rights reserved.",
+    1, 0, XAPO_FLAG_INPLACE_REQUIRED
+        | XAPO_FLAG_CHANNELS_MUST_MATCH
+        | XAPO_FLAG_FRAMERATE_MUST_MATCH
+        | XAPO_FLAG_BITSPERSAMPLE_MUST_MATCH
+        | XAPO_FLAG_BUFFERCOUNT_MUST_MATCH
+        | XAPO_FLAG_INPLACE_SUPPORTED, 1, 1, 1, 1
+};
+
 namespace automata_engine {
     class IXAudio2VoiceCallback : public ::IXAudio2VoiceCallback  {
         void OnLoopEnd(void *pBufferContext) {
@@ -470,103 +579,6 @@ namespace automata_engine {
         void OnVoiceProcessingPassStart(UINT32 BytesRequired) {
             //PlatformLoggerLog("OnVoiceProcessingPassStart");
         }
-    };
-
-    class __declspec( uuid("{F5948348-445A-442C-BD86-27DD99A431B5}")) XAPO;
-
-    static const XAPO_REGISTRATION_PROPERTIES g_regProp = {
-        __uuidof(XAPO),
-        L"automata_engine::XAPO",
-        L"Copyright (c) 2022 Hmnxty Studios. All rights reserved.",
-        1, 0, XAPO_FLAG_INPLACE_REQUIRED
-            | XAPO_FLAG_CHANNELS_MUST_MATCH
-            | XAPO_FLAG_FRAMERATE_MUST_MATCH
-            | XAPO_FLAG_BITSPERSAMPLE_MUST_MATCH
-            | XAPO_FLAG_BUFFERCOUNT_MUST_MATCH
-            | XAPO_FLAG_INPLACE_SUPPORTED, 1, 1, 1, 1
-    };
-
-    // TODO(Noah): Do something safer with the ref to global mem here.
-    // i.e. what if global mem goes out of scope whilst this object is
-    // still alive?
-    class __declspec( uuid("{F5948348-445A-442C-BD86-27DD99A431B5}"))
-    XAPO : public ::CXAPOBase {    
-    public:
-        XAPO() = delete; // no default constructor.
-        XAPO(void *pContext) : m_pContext(pContext), CXAPOBase(&g_regProp) {}
-        STDMETHOD(LockForProcess) (
-            UINT32 InputLockedParameterCount,
-            _In_reads_opt_(InputLockedParameterCount) const XAPO_LOCKFORPROCESS_BUFFER_PARAMETERS *pInputLockedParameters,
-            UINT32 OutputLockedParameterCount,
-            _In_reads_opt_(OutputLockedParameterCount) const XAPO_LOCKFORPROCESS_BUFFER_PARAMETERS *pOutputLockedParameters
-        ) override {
-            assert(!IsLocked());
-            assert(InputLockedParameterCount == 1);
-            assert(OutputLockedParameterCount == 1);
-            assert(pInputLockedParameters != NULL);
-            assert(pOutputLockedParameters != NULL);
-            assert(pInputLockedParameters[0].pFormat != NULL);
-            assert(pOutputLockedParameters[0].pFormat != NULL);
-            m_uChannels = pInputLockedParameters[0].pFormat->nChannels;
-            m_uBytesPerSample = (pInputLockedParameters[0].pFormat->wBitsPerSample >> 3);
-            return CXAPOBase::LockForProcess(InputLockedParameterCount,
-                pInputLockedParameters, OutputLockedParameterCount, pOutputLockedParameters);
-        }
-        // NOTE(Noah): it is important to note XAudio2 audio data is interleaved.
-        STDMETHOD_(void, Process) (
-            UINT32 InputProcessParameterCount,
-            _In_reads_opt_(InputProcessParameterCount) const XAPO_PROCESS_BUFFER_PARAMETERS *pInputProcessParameters,
-            UINT32 OutputProcessParameterCount,
-            _Inout_updates_opt_(OutputProcessParameterCount) XAPO_PROCESS_BUFFER_PARAMETERS *pOutputProcessParameters,
-            BOOL IsEnabled
-        ) override {
-            assert(IsLocked());
-            assert(InputProcessParameterCount == 1);
-            assert(OutputProcessParameterCount == 1);
-            assert(NULL != pInputProcessParameters);
-            assert(NULL != pOutputProcessParameters);
-
-            XAPO_BUFFER_FLAGS inFlags = pInputProcessParameters[0].BufferFlags;
-            XAPO_BUFFER_FLAGS outFlags = pOutputProcessParameters[0].BufferFlags;
-            
-            // assert buffer flags are legitimate
-            assert((inFlags == XAPO_BUFFER_VALID) || (inFlags == XAPO_BUFFER_SILENT));
-            assert((outFlags == XAPO_BUFFER_VALID) || (outFlags == XAPO_BUFFER_SILENT));
-            
-            // check input APO_BUFFER_FLAGS
-            switch (inFlags)
-            {
-            case XAPO_BUFFER_VALID:
-                {
-                    void* pvSrc = pInputProcessParameters[0].pBuffer;
-                    assert(pvSrc != NULL);
-
-                    void* pvDst = pOutputProcessParameters[0].pBuffer;
-                    assert(pvDst != NULL);
-
-                    ae::OnBufferProcess((game_memory_t *)m_pContext,
-                        pvDst, pvSrc, pInputProcessParameters[0].ValidFrameCount, m_uChannels, m_uBytesPerSample);
-                    break;
-                }
-
-            case XAPO_BUFFER_SILENT:
-                {
-                    // All that needs to be done for this case is setting the
-                    // output buffer flag to XAPO_BUFFER_SILENT which is done below.
-                    break;
-                }
-            }
-            
-            // set destination valid frame count, and buffer flags
-            pOutputProcessParameters[0].ValidFrameCount = 
-                pInputProcessParameters[0].ValidFrameCount; // set destination frame count same as source
-            pOutputProcessParameters[0].BufferFlags     = 
-                pInputProcessParameters[0].BufferFlags;     // set destination buffer flags same as source
-        }
-    private:
-        WORD m_uChannels;
-        WORD m_uBytesPerSample;
-        void *m_pContext;
     };
 }
 
@@ -627,8 +639,13 @@ int CALLBACK WinMain(HINSTANCE instance,
         return -1;
     }
 
-    IUnknown *atoXAPO = new automata_engine::XAPO(&globalGameMemory);
+    auto atoXAPO = new AutomataXAPO(&globalGameMemory);
+    HRESULT hr = atoXAPO->Initialize(nullptr, 0);
     defer(delete atoXAPO);
+
+    if (FAILED(hr)) {
+        return - 1;
+    }
 
     // Create a console.
     #ifndef RELEASE
@@ -828,11 +845,11 @@ int CALLBACK WinMain(HINSTANCE instance,
         if (pSourceVoice) {
             PlatformLoggerLog("pSourceVoice successfully created.");
             // create effect chain for DSP on voice.
-            XAUDIO2_EFFECT_DESCRIPTOR xapoDesc[1];
+            XAUDIO2_EFFECT_DESCRIPTOR xapoDesc[1] = {};
             xapoDesc[0].pEffect = static_cast<IXAPO *>(atoXAPO);
             xapoDesc[0].InitialState = true;  // default enable.
             xapoDesc[0].OutputChannels = 2;
-            XAUDIO2_EFFECT_CHAIN chain;
+            XAUDIO2_EFFECT_CHAIN chain = {};
             chain.EffectCount = 1;
             chain.pEffectDescriptors = xapoDesc;
             
