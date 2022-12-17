@@ -93,4 +93,4 @@ message(STATUS "found ProjectResources=${ProjectResources};${ProjectResourcesExt
 add_custom_command(
     TARGET ${ProjectName} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:${ProjectName}>/res
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${ProjectResources} ${ProjectResourcesExtra} $<TARGET_FILE_DIR:${ProjectName}>/res)
+    COMMAND ${CMAKE_COMMAND} -E copy ${ProjectResources} ${ProjectResourcesExtra} $<TARGET_FILE_DIR:${ProjectName}>/res)
