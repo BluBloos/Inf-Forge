@@ -387,6 +387,12 @@ void automata_engine::platform::stopAudioBuffer() {
     }
 }
 
+void automata_engine::platform::setAudioBufferVolume(float volume) {
+    if (pSourceVoice != nullptr) {
+        pSourceVoice->SetVolume( volume );
+    }
+}
+
 // TODO(Noah): Make our platform audio things more low-level.
 // I don't like the fact that we are using loaded_wav here.
 // What if I want to submit a full-blown buffer? maybe I generated
