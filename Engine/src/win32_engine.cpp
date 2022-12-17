@@ -523,6 +523,11 @@ public:
         }
         else if( pInputProcessParameters[0].BufferFlags == XAPO_BUFFER_VALID )
         {
+            ae::OnBufferProcess((game_memory_t *)m_pContext,
+                pInputProcessParameters[0].pBuffer,
+                pOutputProcessParameters[0].pBuffer,
+                pInputProcessParameters[0].ValidFrameCount,
+                m_wfx.nChannels, m_wfx.wBitsPerSample >> 3);
             /*DoProcess(
                 *pParams,
                 (FLOAT32* __restrict)pInputProcessParameters[0].pBuffer,
@@ -855,7 +860,7 @@ int CALLBACK WinMain(HINSTANCE instance,
             
             HRESULT hResult;
             if (S_OK == (hResult = pSourceVoice->SetEffectChain(&chain))) {
-                atoXAPO->Release();
+                //atoXAPO->Release();
             } else {
                 PlatformLoggerError("pSourceVoice->SetEffectChain() returned with code (0x%x)", hResult);
             }
