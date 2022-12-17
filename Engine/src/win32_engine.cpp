@@ -472,25 +472,33 @@ namespace automata_engine {
         }
     };
 
+    class __declspec( uuid("{F5948348-445A-442C-BD86-27DD99A431B5}")) XAPO;
+
     static const XAPO_REGISTRATION_PROPERTIES g_regProp = {
-        __uuidof(IXAPO),
+        __uuidof(XAPO),
         L"automata_engine::XAPO",
         L"Copyright (c) 2022 Hmnxty Studios. All rights reserved.",
-        0, 0, XAPOBASE_DEFAULT_FLAG, 1, 1, 1, 1
+        1, 0, XAPO_FLAG_INPLACE_REQUIRED
+            | XAPO_FLAG_CHANNELS_MUST_MATCH
+            | XAPO_FLAG_FRAMERATE_MUST_MATCH
+            | XAPO_FLAG_BITSPERSAMPLE_MUST_MATCH
+            | XAPO_FLAG_BUFFERCOUNT_MUST_MATCH
+            | XAPO_FLAG_INPLACE_SUPPORTED, 1, 1, 1, 1
     };
 
     // TODO(Noah): Do something safer with the ref to global mem here.
     // i.e. what if global mem goes out of scope whilst this object is
     // still alive?
-    class XAPO : public ::CXAPOBase {    
+    class __declspec( uuid("{F5948348-445A-442C-BD86-27DD99A431B5}"))
+    XAPO : public ::CXAPOBase {    
     public:
         XAPO() = delete; // no default constructor.
         XAPO(void *pContext) : m_pContext(pContext), CXAPOBase(&g_regProp) {}
-        HRESULT LockForProcess(
-            UINT32                               InputLockedParameterCount,
-            const XAPO_LOCKFORPROCESS_PARAMETERS *pInputLockedParameters,
-            UINT32                               OutputLockedParameterCount,
-            const XAPO_LOCKFORPROCESS_PARAMETERS *pOutputLockedParameters
+        STDMETHOD(LockForProcess) (
+            UINT32 InputLockedParameterCount,
+            _In_reads_opt_(InputLockedParameterCount) const XAPO_LOCKFORPROCESS_BUFFER_PARAMETERS *pInputLockedParameters,
+            UINT32 OutputLockedParameterCount,
+            _In_reads_opt_(OutputLockedParameterCount) const XAPO_LOCKFORPROCESS_BUFFER_PARAMETERS *pOutputLockedParameters
         ) override {
             assert(!IsLocked());
             assert(InputLockedParameterCount == 1);
@@ -505,13 +513,13 @@ namespace automata_engine {
                 pInputLockedParameters, OutputLockedParameterCount, pOutputLockedParameters);
         }
         // NOTE(Noah): it is important to note XAudio2 audio data is interleaved.
-        void Process(
+        STDMETHOD_(void, Process) (
             UINT32 InputProcessParameterCount,
-            const XAPO_PROCESS_BUFFER_PARAMETERS *pInputProcessParameters,
+            _In_reads_opt_(InputProcessParameterCount) const XAPO_PROCESS_BUFFER_PARAMETERS *pInputProcessParameters,
             UINT32 OutputProcessParameterCount,
-            XAPO_PROCESS_BUFFER_PARAMETERS *pOutputProcessParameters,
+            _Inout_updates_opt_(OutputProcessParameterCount) XAPO_PROCESS_BUFFER_PARAMETERS *pOutputProcessParameters,
             BOOL IsEnabled
-        ) {
+        ) override {
             assert(IsLocked());
             assert(InputProcessParameterCount == 1);
             assert(OutputProcessParameterCount == 1);
@@ -619,7 +627,8 @@ int CALLBACK WinMain(HINSTANCE instance,
         return -1;
     }
 
-    auto atoXAPO = automata_engine::XAPO(&globalGameMemory);
+    IUnknown *atoXAPO = new automata_engine::XAPO(&globalGameMemory);
+    defer(delete atoXAPO);
 
     // Create a console.
     #ifndef RELEASE
@@ -759,11 +768,31 @@ int CALLBACK WinMain(HINSTANCE instance,
             goto WinMainEnd;
         }
 
-        if (FAILED(XAudio2Create(&pXAudio2, 0, XAUDIO2_DEFAULT_PROCESSOR))) {
+        UINT32 flags = 0;
+ #if defined(USING_XAUDIO2_7_DIRECTX) && !defined(RELEASE)
+        flags |= XAUDIO2_DEBUG_ENGINE;
+ #endif
+        if (FAILED(XAudio2Create(&pXAudio2, 0, flags))) {
             PlatformLoggerError("Unable to to create an instance of the XAudio2 engine");
             automata_engine::platform::GLOBAL_PROGRAM_RESULT = -1;
             goto WinMainEnd;
         }
+
+#if !defined(USING_XAUDIO2_7_DIRECTX) && !defined(RELEASE)
+        // NOTE(Noah): This logging seems useless, empirically after trying to see if
+        // it would help to debug some issue.
+        //
+        // To see the trace output, you need to view ETW logs for this application:
+        //    Go to Control Panel, Administrative Tools, Event Viewer.
+        //    View->Show Analytic and Debug Logs.
+        //    Applications and Services Logs / Microsoft / Windows / XAudio2. 
+        //    Right click on Microsoft Windows XAudio2 debug logging, Properties, then Enable Logging, and hit OK 
+        XAUDIO2_DEBUG_CONFIGURATION debug = {};
+        debug.TraceMask =
+            XAUDIO2_LOG_ERRORS | XAUDIO2_LOG_WARNINGS;
+        debug.BreakMask = XAUDIO2_LOG_ERRORS;
+        pXAudio2->SetDebugConfiguration( &debug, 0 );
+#endif
 
         if (FAILED(pXAudio2->CreateMasteringVoice(&pMasterVoice))) {
             PlatformLoggerError("Unable to create a mastering voice (XAudio2)");
@@ -794,20 +823,26 @@ int CALLBACK WinMain(HINSTANCE instance,
         // NOTE(Noah): Again, we do not need to be concerned with freeing the source voice
         // as once we free the master xaudio2 object, we are good.
         pXAudio2->CreateSourceVoice(&pSourceVoice, (WAVEFORMATEX*)&waveFormat, 0, 
-            XAUDIO2_MAX_FREQ_RATIO, &voiceCallback, NULL, NULL);
+            XAUDIO2_DEFAULT_FREQ_RATIO, &voiceCallback, NULL, NULL);
 
         if (pSourceVoice) {
+            PlatformLoggerLog("pSourceVoice successfully created.");
             // create effect chain for DSP on voice.
-            XAUDIO2_EFFECT_DESCRIPTOR xapoDesc;
-            xapoDesc.pEffect = &atoXAPO;
-            xapoDesc.InitialState = true;
-            xapoDesc.OutputChannels = 1;
+            XAUDIO2_EFFECT_DESCRIPTOR xapoDesc[1];
+            xapoDesc[0].pEffect = static_cast<IXAPO *>(atoXAPO);
+            xapoDesc[0].InitialState = true;  // default enable.
+            xapoDesc[0].OutputChannels = 1;
             XAUDIO2_EFFECT_CHAIN chain;
             chain.EffectCount = 1;
-            chain.pEffectDescriptors = &xapoDesc;
-            pSourceVoice->SetEffectChain(&chain);
-            atoXAPO.Release();
-            pSourceVoice->EnableEffect(0);
+            chain.pEffectDescriptors = xapoDesc;
+            
+            HRESULT hResult;
+            if (S_OK == (hResult = pSourceVoice->SetEffectChain(&chain))) {
+                atoXAPO->Release();
+            } else {
+                PlatformLoggerError("pSourceVoice->SetEffectChain() returned with code (0x%x)", hResult);
+            }
+            
         }
     }
 
