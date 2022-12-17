@@ -10,8 +10,9 @@
 #include <cassert>
 #include <tuple>
 #include <iterator>
+#include <string>
 #include <imgui.h>
-#include <string.h>
+
 
 #include <automata_engine_math.h>
 
@@ -313,7 +314,20 @@ namespace ae = automata_engine;
 #define AE_STDOUT 1
 #define AE_STDIN  2
 
-#define __FILE_RELATIVE__ (strrchr("\\" __FILE__, '\\') + 1)
+// Returns pos of last chr in str.
+static constexpr const char *__find_last_in_str(const char str[], const char chr) {
+    const char *lastPos = str;
+    // strlen can be a compile time thing depending on optimization level
+    // of compiler.
+    // https://stackoverflow.com/questions/67571803/how-to-get-string-length-in-the-array-at-compile-time
+    for (uint32_t i = 0; i < std::char_traits<char>::length(str); i++) {
+        if (str[i] == chr)
+            lastPos = &(str[i]);
+    }
+    return lastPos;
+}
+
+#define __FILE_RELATIVE__ (__find_last_in_str("\\" __FILE__, '\\') + 1)
 
 // TODO(Noah): All Platform functions must have their impl in file <platform>_engine.h
 // NOTE(Noah): See this page for color code guide: 
