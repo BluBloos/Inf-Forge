@@ -202,6 +202,11 @@ namespace automata_engine {
         vec3_t operator*(mat3_t b, vec3_t a);
         vec3_t operator*(vec3_t b, float a);
         vec3_t operator+(vec3_t b, vec3_t a);
+        vec3_t operator-(vec3_t b, vec3_t a);
+
+        float magnitude(vec3_t a);
+        float dist(vec3_t a, vec3_t b);
+        float dot(vec3_t a, vec3_t b);
         
         // returns true if wrote to intersectionOut
         bool rayBoxIntersection(
@@ -216,9 +221,13 @@ namespace automata_engine {
         mat4_t buildRotMat4(vec3_t eulerAngles);
         mat4_t transposeMat4(mat4_t  mat);
 
-        float dist(vec3_t a, vec3_t b);
+        // TODO(Noah): Probably make these constexpr, inline, templates and FAST intrinsics.
         float sqrt(float a);
         float square(float a);
+        float log10(float a);
+        float max(float a, float b);
+        float min(float a, float b);
+        float abs(float a);
 
         float *value_ptr(vec3_t &);
         float *value_ptr(vec4_t &);

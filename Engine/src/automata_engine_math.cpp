@@ -1,9 +1,15 @@
 #include <automata_engine.h>
 #include <automata_engine_math.h>
+
+// TODO(Noah): roll out our own intrinsics for these things below.
+// we want to remove dependency on std:: and math.h.
+
 // TODO(Noah): Write unit tests for this math code. Getting this stuff wrong would
 // likely be really annoying from a debugging perspective.
+
 // NOTE(Noah): Matrices are being stored in column-major form ...
 // the math below is representative of this.
+
 namespace automata_engine {
     namespace math {
         float *value_ptr(vec3_t &a) {
@@ -12,6 +18,7 @@ namespace automata_engine {
         // NOTE(Noah): we are making a presumption that all matrices are square.
         // NxN matrices!
         static void initMat(float *mat, uint32_t N, std::initializer_list<float> initList) {
+            // TODO(Noah): this fun in particular is slow.
             for (uint32_t i = 0; i < initList.size() && i < N * N; i++) {
                 mat[i] = std::data(initList)[i];
             }
@@ -58,6 +65,9 @@ namespace automata_engine {
         }
         vec3_t operator+(vec3_t b, vec3_t a) {
             return vec3(b.x + a.x, b.y + a.y, b.z + a.z);
+        }
+        vec3_t operator-(vec3_t b, vec3_t a) {
+            return b + (-a);
         }
         float &vec3_t::operator[](int index) {
             return (&this->x)[index];
@@ -126,7 +136,7 @@ namespace automata_engine {
             return result;
         }
         // NOTE(Noah): I spent more time than I would like to admit formatting the code
-        // below ...
+        // above ...
         mat4_t buildMat4fFromTransform(transform_t transform) {
             mat4_t mat = {}; // identity.
             mat4_t rotMat = buildRotMat4(transform.eulerAngles);
@@ -205,11 +215,28 @@ namespace automata_engine {
             return ::sqrtf(a);
         }
         float square(float a) {
-            // TODO(Noah): replace with our own intrinsic.
             return a * a;
         }
         float dist(vec3_t a, vec3_t b) {
             return sqrt(square(a.x - b.x) + square(a.y - b.y) + square(a.z - b.z));
+        }
+        float magnitude(vec3_t a) {
+            return dist(a, vec3_t());
+        }
+        float dot(vec3_t a, vec3_t b) {
+            return a.x * b.x + a.y * b.y + a.z * b.z;
+        }
+        float log10(float a) {
+            return std::log10(a);
+        }
+        float max(float a, float b) {
+            return std::max(a, b);
+        }
+        float min(float a, float b) {
+            return std::min(a, b);
+        }
+        float abs(float a) {
+            return std::abs(a);
         }
         bool rayBoxIntersection(
             vec3_t rayOrigin, vec3_t rayDir, float rayLen, const box_t *candidateBoxes,
