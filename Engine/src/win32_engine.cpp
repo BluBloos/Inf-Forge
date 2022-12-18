@@ -1025,7 +1025,17 @@ int CALLBACK WinMain(HINSTANCE instance,
         automata_engine::super::close();
 
         // stall program to allow user to see err.
-        PlatformLogger("Press any key to exit\n");
+        
+        // TODO(Noah): Sometimes this does not print?
+        PlatformLogger(
+            "\033[0;93m"
+            "\n\nPress any key to exit\n"
+            "\033[0m"
+        );
+
+        //HANDLE outputHdl = GetStdHandle(STD_OUTPUT_HANDLE);
+        //FlushConsoleOutputBuffer(outputHdl);
+
         INPUT_RECORD record;
         DWORD inputsRead;
         HANDLE inputHandle = GetStdHandle(STD_INPUT_HANDLE);
