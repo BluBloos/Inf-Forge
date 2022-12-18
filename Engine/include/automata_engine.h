@@ -230,6 +230,9 @@ namespace automata_engine {
         float min(float a, float b);
         float abs(float a);
 
+        float ceil(float a);
+        float floor(float a);
+
         float *value_ptr(vec3_t &);
         float *value_ptr(vec4_t &);
         float *value_ptr(mat3_t &);

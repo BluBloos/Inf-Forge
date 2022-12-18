@@ -241,6 +241,12 @@ namespace automata_engine {
         float abs(float a) {
             return std::abs(a);
         }
+        float ceil(float a) {
+            return std::ceil(a);
+        }
+        float floor(float a) {
+            return int64_t(a);
+        }
         bool rayBoxIntersection(
             vec3_t rayOrigin, vec3_t rayDir, float rayLen, const box_t *candidateBoxes,
             uint32_t candidateBoxCount, vec3_t *intersectionOut
