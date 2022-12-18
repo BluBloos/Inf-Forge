@@ -226,6 +226,7 @@ namespace automata_engine {
         float square(float a);
         float log10(float a);
         float max(float a, float b);
+        int32_t max(int32_t a, int32_t b);
         float min(float a, float b);
         float abs(float a);
 

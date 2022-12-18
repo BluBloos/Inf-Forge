@@ -232,6 +232,9 @@ namespace automata_engine {
         float max(float a, float b) {
             return std::max(a, b);
         }
+        int32_t max(int32_t a, int32_t b) {
+            return std::max(a, b);
+        }
         float min(float a, float b) {
             return std::min(a, b);
         }
