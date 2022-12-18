@@ -304,6 +304,8 @@ namespace automata_engine {
         void setAudioBufferVolume(float volume);
         float decibelsToAmplitudeRatio(float db);
 
+        void showWindowAlert(const char *windowTitle, const char *windowMessage);
+
         // NOTE(Noah): setVsync is in platform layer because Vsync is an OS state
         // and we must make a call to OS to set it.
         void setVsync(bool);

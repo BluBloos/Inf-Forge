@@ -434,6 +434,10 @@ bool automata_engine::platform::submitAudioBuffer(struct loaded_wav myWav) {
 static HWND globalWin32Handle = NULL;
 static HINSTANCE g_hInstance = NULL;
 
+void ae::platform::showWindowAlert(const char *windowTitle, const char *windowMessage) {
+    MessageBoxA(globalWin32Handle, windowMessage, windowTitle, MB_OK);
+}
+
 game_window_info_t automata_engine::platform::getWindowInfo() {
     game_window_info_t winInfo;
     winInfo.hWnd = (intptr_t)globalWin32Handle;
