@@ -227,7 +227,12 @@ namespace automata_engine {
         float log10(float a);
         float max(float a, float b);
         int32_t max(int32_t a, int32_t b);
-        float min(float a, float b);
+        
+        template <typename T>
+        T min(T a, T b) {
+            return std::min(a, b);
+        }
+        
         float abs(float a);
 
         float ceil(float a);
