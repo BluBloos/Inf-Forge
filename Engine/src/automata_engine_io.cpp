@@ -146,6 +146,11 @@ namespace automata_engine {
       ae::platform::free(img.pixelPointer);
     }
 
+    // TODO(Noah): We probably even want unit tests for this sort of thing.
+    //
+    // TODO(Noah): currently this does not work for any sort of OBJ that has no tex coords.
+    // for example the face format might look like: 375//363, and we cannot parse this.
+    //
     // TODO(Noah): It's prob the case that we could parse OBJ files better. But, I just wanted
     // to get something working ...
     raw_model_t loadObj(const char *filePath) {
@@ -268,7 +273,7 @@ namespace automata_engine {
             PlatformLoggerWarn("uvX out of bounds: %f", uvX);
           }
           if (uvY < 0.0f || uvY > 1.0f) {
-            PlatformLoggerWarn("uvX out of bounds: %f", uvY);
+            PlatformLoggerWarn("uvY out of bounds: %f", uvY);
           }
         }
 #endif
