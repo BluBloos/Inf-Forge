@@ -226,6 +226,16 @@ namespace automata_engine {
         float dot(vec3_t a, vec3_t b) {
             return a.x * b.x + a.y * b.y + a.z * b.z;
         }
+        vec3_t normalize(vec3_t a) {
+            float mag = magnitude(a);
+            if (mag == 0.f)
+                return vec3_t();
+            return vec3_t(a.x / mag, a.y / mag, a.z / mag);
+        }
+        float project(vec3_t a, vec3_t b) {
+            b = normalize(b);
+            return (dot(a, b) / dot(b, b)); // * b;
+        }
         float log10(float a) {
             return std::log10(a);
         }

@@ -207,7 +207,9 @@ namespace automata_engine {
         float magnitude(vec3_t a);
         float dist(vec3_t a, vec3_t b);
         float dot(vec3_t a, vec3_t b);
-        
+        float project(vec3_t a, vec3_t b);
+        vec3_t normalize(vec3_t a);
+
         // returns true if wrote to intersectionOut
         bool rayBoxIntersection(
             vec3_t rayOrigin, vec3_t rayDir, float rayLen, const box_t *candidateBoxes,
