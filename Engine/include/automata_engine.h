@@ -204,6 +204,7 @@ namespace automata_engine {
         vec3_t operator+(vec3_t b, vec3_t a);
         vec3_t operator-(vec3_t b, vec3_t a);
 
+        float round(float a);
         float magnitude(vec3_t a);
         float dist(vec3_t a, vec3_t b);
         float dot(vec3_t a, vec3_t b);

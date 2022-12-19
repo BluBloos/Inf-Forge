@@ -226,6 +226,9 @@ namespace automata_engine {
         float dot(vec3_t a, vec3_t b) {
             return a.x * b.x + a.y * b.y + a.z * b.z;
         }
+        float round(float a) {
+            return std::round(a);
+        }
         vec3_t normalize(vec3_t a) {
             float mag = magnitude(a);
             if (mag == 0.f)
