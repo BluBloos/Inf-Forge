@@ -87,10 +87,12 @@ if( NOT "${ProjectResourcesExtraPath}"  EQUAL "" )
         LIST_DIRECTORIES false
         "${ProjectResourcesExtraPath}/*")        
 endif()
+set( ProjectResourcesList ${ProjectResources} ${ProjectResourcesExtra} )
+list( FILTER ProjectResourcesList EXCLUDE REGEX "\\.ini" )
 
-message(STATUS "found ProjectResources=${ProjectResources};${ProjectResourcesExtra}")
+message(STATUS "found ProjectResourcesList=${ProjectResourcesList}")
 
 add_custom_command(
     TARGET ${ProjectName} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:${ProjectName}>/res
-    COMMAND ${CMAKE_COMMAND} -E copy ${ProjectResources} ${ProjectResourcesExtra} $<TARGET_FILE_DIR:${ProjectName}>/res)
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${ProjectResourcesList} $<TARGET_FILE_DIR:${ProjectName}>/res)
