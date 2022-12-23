@@ -257,6 +257,15 @@ namespace automata_engine {
         float floor(float a) {
             return int64_t(a);
         }
+        float deg2rad(float deg) {
+            return deg * DEGREES_TO_RADIANS;
+        }
+        float sin(float a) {
+            return std::sin(a);
+        }
+        float cos(float a) {
+            return std::cos(a);
+        }
         bool rayBoxIntersection(
             vec3_t rayOrigin, vec3_t rayDir, float rayLen, const box_t *candidateBoxes,
             uint32_t candidateBoxCount, vec3_t *intersectionOut
