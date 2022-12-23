@@ -8,11 +8,13 @@
 namespace automata_engine {
     namespace GL {
         void GLClearError() { while(glGetError() != GL_NO_ERROR); }
-        bool GLCheckError(char *function, const char *file, int line) {
+        bool GLCheckError(char *expr, const char *file, int line) {
             bool result = true;
             while(GLenum error = glGetError()) {
-                PlatformLoggerLog("GL_ERROR: %d\nFUNCTION: %s\nFILE: %s\nLINE: %d", 
-                    error, function, file, line);
+                static_assert(sizeof(GLubyte)==sizeof(char), "platform is odd");
+                const char *errorString = (const char*)gluErrorString(error);
+                PlatformLoggerLog("GL_ERROR: (%d, 0x%x) %s \nEXPR: %s\nFILE: %s\nLINE: %d", 
+                    error, error, errorString, expr, file, line);
                 result = false;
             }
             return result;
@@ -60,15 +62,39 @@ namespace automata_engine {
             GL_CALL(program = glCreateProgram());
             uint32_t vs = compileShader(GL_VERTEX_SHADER, (char *)f1.contents);
             uint32_t fs = compileShader(GL_FRAGMENT_SHADER, (char *)f2.contents);
+            auto findAndlogError = [=]() {
+                GLsizei length;
+                GLint logLength;
+                glGetProgramiv(program, GL_INFO_LOG_LENGTH, &logLength);
+                const char *logMsg = new char[logLength + 1];
+                defer(delete[] logMsg);
+                static_assert(sizeof(GLchar) == sizeof(char), "odd platform");
+                glGetProgramInfoLog(program, logLength, &length, (GLchar *)logMsg);
+                PlatformLoggerError("Program link or validation failure:\n%s", logMsg);
+            };
             if ((int)vs == -1 || (int)fs == -1) {
-                // we failed.
-                glDeleteProgram(program);
-                return -1;
+                goto createShader_Fail;
             }
             glAttachShader(program, vs);
             glAttachShader(program, fs);
             glLinkProgram(program);
+            GLint result;
+            glGetProgramiv(program, GL_LINK_STATUS, &result);
+            if (result == GL_FALSE) {
+                findAndlogError();
+                goto createShader_Fail;
+            }
             glValidateProgram(program);
+            glGetProgramiv(program, GL_LINK_STATUS, &result);
+            if (result == GL_FALSE) {
+                findAndlogError();
+                goto createShader_Fail;
+            }
+            goto createShader_end;
+            createShader_Fail:
+            glDeleteProgram(program);
+            return -1;
+            createShader_end:
             // Cleanup
             glDeleteShader(vs);
             glDeleteShader(fs);

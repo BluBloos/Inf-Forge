@@ -3,6 +3,7 @@
 // #include <automata_engine.h>
 #include <glew.h>
 #include <gl/gl.h>
+#include <gl/Glu.h>
 #include <initializer_list>
 
 #define GL_CALL(code) ae::GL::GLClearError(); code; assert(ae::GL::GLCheckError(#code, __FILE_RELATIVE__, __LINE__));

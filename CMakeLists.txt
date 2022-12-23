@@ -52,7 +52,7 @@ set(COMMON_LIB gdi32 user32 kernel32 Xaudio2 XAPOBase ole32)
 if ( ${ProjectBackend} MATCHES "GL_BACKEND" )
     target_link_libraries(${ProjectName}
         ${COMMON_LIB}
-        opengl32
+        opengl32 Glu32
         "${ENGINE_EXTERNAL}/glew-2.2.0/lib/Release/x64/glew32s.lib")
     target_compile_definitions(${ProjectName}
         PRIVATE -DGL_BACKEND -DGLEW_STATIC)
