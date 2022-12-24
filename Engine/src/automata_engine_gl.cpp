@@ -116,8 +116,9 @@ namespace automata_engine {
         }
         // TODO(Noah): Are there performance concerns with always calling GetUniformLocation?
         void setUniformMat4f(GLuint shader, char *uniformName, ae::math::mat4 val) {
-            GLuint loc = glGetUniformLocation(shader, uniformName);
-            glUniformMatrix4fv(loc, 1, GL_FALSE, (val).matp); 
+            GLuint loc;
+            GL_CALL(loc = glGetUniformLocation(shader, uniformName));
+            GL_CALL(glUniformMatrix4fv(loc, 1, GL_FALSE, (val).matp));
         }
         
         GLuint createTextureFromFile(

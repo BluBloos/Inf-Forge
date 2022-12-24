@@ -6,7 +6,7 @@
 #include <gl/Glu.h>
 #include <initializer_list>
 
-#define GL_CALL(code) ae::GL::GLClearError(); code; assert(ae::GL::GLCheckError(#code, __FILE_RELATIVE__, __LINE__));
+#define GL_CALL(code) (ae::GL::GLClearError(), code, assert(ae::GL::GLCheckError(#code, __FILE_RELATIVE__, __LINE__)))
 
 namespace automata_engine {
     namespace GL {
