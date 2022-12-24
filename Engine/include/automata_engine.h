@@ -343,12 +343,15 @@ namespace ae = automata_engine;
 #define AE_STDIN  2
 
 // Returns pos of last chr in str.
-static constexpr const char *__find_last_in_str(const char str[], const char chr) {
+// https://stackoverflow.com/questions/69121423/could-not-deduce-template-argument-for-const-char-n-from-const-char-6
+// ^ need (&str) to ensure param does not decay and still have type information.
+template <std::size_t strLen>
+static constexpr const char *__find_last_in_str(const char (&str)[strLen], const char chr) {
     const char *lastPos = str;
     // strlen can be a compile time thing depending on optimization level
     // of compiler.
     // https://stackoverflow.com/questions/67571803/how-to-get-string-length-in-the-array-at-compile-time
-    for (uint32_t i = 0; i < std::char_traits<char>::length(str); i++) {
+    for (uint32_t i = 0; (i < (strLen - 1)) && (str[i]); i++) {
         if (str[i] == chr)
             lastPos = &(str[i]);
     }
