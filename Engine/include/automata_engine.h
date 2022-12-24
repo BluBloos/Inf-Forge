@@ -210,6 +210,7 @@ namespace automata_engine {
         float dot(vec3_t a, vec3_t b);
         float project(vec3_t a, vec3_t b);
         vec3_t normalize(vec3_t a);
+        vec3_t lookAt(vec3_t origin, vec3_t target);
 
         // returns true if wrote to intersectionOut
         bool rayBoxIntersection(
@@ -224,12 +225,12 @@ namespace automata_engine {
         mat4_t buildRotMat4(vec3_t eulerAngles);
         mat4_t transposeMat4(mat4_t  mat);
 
+
         // TODO(Noah): Probably make these constexpr, inline, templates and FAST intrinsics.
         float sqrt(float a);
+        float atan2(float a, float b);
         float square(float a);
-        float log10(float a);
-        float max(float a, float b);
-        int32_t max(int32_t a, int32_t b);
+        float log10(float a); 
         float deg2rad(float deg);
         float sin(float a);
         float cos(float a);
@@ -237,6 +238,11 @@ namespace automata_engine {
         template <typename T>
         T min(T a, T b) {
             return std::min(a, b);
+        }
+
+        template <typename T>
+        T max(T a, T b) {
+            return std::max(a, b);
         }
         
         float abs(float a);

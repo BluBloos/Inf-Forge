@@ -135,6 +135,15 @@ namespace automata_engine {
             result = result * rotationMatrixX;
             return result;
         }
+        vec3_t lookAt(vec3_t origin, vec3_t target) {
+            // return the eulerAngles such that a body at origin is looking at target
+            vec3_t direction = target - origin;
+            float pitch =
+                atan2(direction.y, sqrt(direction.x * direction.x + direction.z * direction.z));
+            float yaw =
+                atan2(direction.x, direction.z);
+            return vec3_t(pitch, yaw, 0.0f);
+        }
         // NOTE(Noah): I spent more time than I would like to admit formatting the code
         // above ...
         mat4_t buildMat4fFromTransform(transform_t transform) {
@@ -210,6 +219,9 @@ namespace automata_engine {
             scaleMat.matv[1][1] = 1.0f / cam.trans.scale.y;
             return scaleMat * rotMat4 * transMat;
         }
+        float atan2(float a, float b) {
+            return std::atan2f(a, b);
+        }
         float sqrt(float a) {
             // TODO(Noah): replace with our own intrinsic.
             return ::sqrtf(a);
@@ -241,12 +253,6 @@ namespace automata_engine {
         }
         float log10(float a) {
             return std::log10(a);
-        }
-        float max(float a, float b) {
-            return std::max(a, b);
-        }
-        int32_t max(int32_t a, int32_t b) {
-            return std::max(a, b);
         }
         float abs(float a) {
             return std::abs(a);
