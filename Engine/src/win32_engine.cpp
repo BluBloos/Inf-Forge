@@ -94,11 +94,40 @@ static bool isImGuiInitialized = false;
 // NOTE(Noah): Pretty sure glew and gl must be after imgui headers here.
 #include <glew.h>
 #include <gl/gl.h>
+#include <gl/wglext.h>
 static HDC gHdc;
 typedef BOOL WINAPI wgl_swap_interval_ext(int interval);
 static wgl_swap_interval_ext *wglSwapInterval;
 HGLRC glContext;
 static bool win32_glInitialized = false;
+static bool CreateContext(HWND windowHandle, HDC dc) {
+    HGLRC tempContext = wglCreateContext(dc);
+    if(wglMakeCurrent(dc, tempContext)) {
+
+        // Load the extension function pointers
+        PFNWGLCREATECONTEXTATTRIBSARBPROC wglCreateContextAttribsARB = (PFNWGLCREATECONTEXTATTRIBSARBPROC)wglGetProcAddress("wglCreateContextAttribsARB");
+        
+        // Destroy the temporary context
+        wglDeleteContext(tempContext);
+
+        // Create the new OpenGL context with version 3.3
+        int attribs[] = {
+            WGL_CONTEXT_MAJOR_VERSION_ARB, 3,
+            WGL_CONTEXT_MINOR_VERSION_ARB, 3,
+            0
+        };
+        if (wglCreateContextAttribsARB)
+        {
+            glContext = wglCreateContextAttribsARB(dc, 0, attribs);
+            if (glContext)
+            {
+                return wglMakeCurrent(dc, glContext);
+            }
+        }
+    }
+
+    return false;
+}
 static void InitOpenGL(HWND windowHandle, HDC dc) {
     PIXELFORMATDESCRIPTOR desiredPixelFormat = {};
     desiredPixelFormat.nSize = sizeof(desiredPixelFormat);
@@ -112,8 +141,8 @@ static void InitOpenGL(HWND windowHandle, HDC dc) {
     DescribePixelFormat(dc, suggestedPixelFormatIndex,
         sizeof(suggestedPixelFormat), &suggestedPixelFormat);
     SetPixelFormat(dc, suggestedPixelFormatIndex, &suggestedPixelFormat);
-    glContext = wglCreateContext(dc);
-    if(win32_glInitialized = wglMakeCurrent(dc, glContext)) {
+    win32_glInitialized = CreateContext(windowHandle, dc);
+    if(win32_glInitialized) {
         // setup VSYNC
         wglSwapInterval = (wgl_swap_interval_ext *)wglGetProcAddress("wglSwapIntervalEXT");
         if(wglSwapInterval && ae::platform::GLOBAL_VSYNC) {
