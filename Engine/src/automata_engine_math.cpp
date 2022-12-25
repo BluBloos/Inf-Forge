@@ -141,7 +141,7 @@ namespace automata_engine {
             float pitch =
                 atan2(direction.y, sqrt(direction.x * direction.x + direction.z * direction.z));
             float yaw =
-                atan2(direction.x, direction.z);
+                atan2(direction.x, -direction.z);
             return vec3_t(pitch, yaw, 0.0f);
         }
         // NOTE(Noah): I spent more time than I would like to admit formatting the code
