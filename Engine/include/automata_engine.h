@@ -168,7 +168,7 @@ namespace automata_engine {
         void initGlew();
         bool getGLInitialized();
         void objToVao(raw_model_t rawModel, ibo_t *iboOut, vbo_t *vboOut, GLuint *vaoOut);
-        GLuint createShader(const char *vertFilePath, const char *fragFilePath);
+        GLuint createShader(const char *vertFilePath, const char *fragFilePath, const char *geoFilePath = "\0");
         // TODO(Noah): There's got to be a nice and clean way to get rid of the duplication
         // here with the header of the wrapper.
         GLuint createTextureFromFile(

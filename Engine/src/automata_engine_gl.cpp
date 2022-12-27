@@ -54,7 +54,9 @@ namespace automata_engine {
             return id;
         }
         // failure mode for this function is -1
-        GLuint createShader(const char *vertFilePath, const char *fragFilePath) {
+        GLuint createShader(const char *vertFilePath, const char *fragFilePath,
+            const char *geoFilePath
+        ) {
             uint32_t program;
             // Step 1: Setup our vertex and fragment GLSL shaders!
             loaded_file f1 = automata_engine::platform::readEntireFile(vertFilePath);
@@ -62,6 +64,16 @@ namespace automata_engine {
             GL_CALL(program = glCreateProgram());
             uint32_t vs = compileShader(GL_VERTEX_SHADER, (char *)f1.contents);
             uint32_t fs = compileShader(GL_FRAGMENT_SHADER, (char *)f2.contents);
+            uint32_t gs = 1;
+            if (geoFilePath[0]) {
+                loaded_file f3 = automata_engine::platform::readEntireFile(geoFilePath);
+                defer(automata_engine::platform::freeLoadedFile(f3));
+                gs = compileShader(GL_GEOMETRY_SHADER, (char *)f3.contents);
+                if ((int)gs == -1) {
+                    goto createShader_Fail;
+                }
+                glAttachShader(program, gs);
+            }
             auto findAndlogError = [=]() {
                 GLsizei length;
                 GLint logLength;
@@ -98,6 +110,9 @@ namespace automata_engine {
             // Cleanup
             glDeleteShader(vs);
             glDeleteShader(fs);
+            if (gs != -1) {
+                glDeleteShader(gs);
+            }
             automata_engine::platform::freeLoadedFile(f1);
             automata_engine::platform::freeLoadedFile(f2);
             return program;
