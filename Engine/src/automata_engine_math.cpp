@@ -66,6 +66,12 @@ namespace automata_engine {
         vec3_t operator+(vec3_t b, vec3_t a) {
             return vec3(b.x + a.x, b.y + a.y, b.z + a.z);
         }
+        vec4_t operator+(vec4_t b, vec4_t a) {
+            return vec4(b.x + a.x, b.y + a.y, b.z + a.z, b.w + a.w);
+        }
+        vec4_t operator*(vec4_t b, float a) {
+            return vec4(b.x * a, b.y * a, b.z * a, b.w * a);
+        }
         vec3_t operator-(vec3_t b, vec3_t a) {
             return b + (-a);
         }

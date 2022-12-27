@@ -195,6 +195,8 @@ namespace automata_engine {
         vec4_t operator*(mat4_t b, vec4_t a);
         vec4_t operator*=(vec4_t &a, float scalar);
         vec4_t operator+=(vec4_t &, vec4_t);
+        vec4_t operator+(vec4_t b, vec4_t a);
+        vec4_t operator*(vec4_t b, float a);
         
         mat4_t operator*(mat4_t a, mat4_t b);
 
