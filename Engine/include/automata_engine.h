@@ -93,7 +93,7 @@ typedef enum game_key {
     GAME_KEY_P, GAME_KEY_Q, GAME_KEY_R, GAME_KEY_S, GAME_KEY_T,
     GAME_KEY_U, GAME_KEY_V, GAME_KEY_W, GAME_KEY_X, GAME_KEY_Y,
     GAME_KEY_Z,
-    GAME_KEY_SHIFT, GAME_KEY_SPACE, GAME_KEY_ESCAPE, 
+    GAME_KEY_SHIFT, GAME_KEY_SPACE, GAME_KEY_ESCAPE, GAME_KEY_F5,
     GAME_KEY_COUNT
 } game_key_t;
 
@@ -261,14 +261,15 @@ namespace automata_engine {
         float *value_ptr(mat4_t &);
     }
 
-    typedef struct super {
+    namespace super {
         // called by platform
-        static void init();
+        void init();
         // called by platform
-        static void close();
+        void close();
         // called by user
-        static void updateAndRender(game_memory_t * gameMemory);
-    } super_t;
+        void updateAndRender(game_memory_t * gameMemory);
+        extern bool g_renderImGui;
+    }
 
     // TODO(Noah): Add GPU adapter device name in updateApp ImGui idea :)
     typedef struct bifrost {

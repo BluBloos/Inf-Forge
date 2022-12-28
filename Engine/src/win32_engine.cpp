@@ -269,6 +269,9 @@ static void ProccessKeyboardMessage(unsigned int vkCode, bool down) {
         case VK_ESCAPE:
             globalUserInput.keyDown[GAME_KEY_ESCAPE] = down;
             break;
+        case VK_F5:
+            globalUserInput.keyDown[GAME_KEY_F5] = down;
+            break;
     }
   }
 }

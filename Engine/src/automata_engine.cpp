@@ -10,6 +10,8 @@
 #include "imgui.h"
 
 namespace automata_engine {
+
+    bool super::g_renderImGui = true;
     
     int32_t defaultWidth = 1280;
     int32_t defaultHeight = 720;
@@ -117,7 +119,8 @@ namespace automata_engine {
     }
     void super::updateAndRender(game_memory_t * gameMemory) {
         // Present the ImGui stuff to allow user to switch apps.
-#ifndef RELEASE
+#if defined(_DEBUG)
+    if (super::g_renderImGui) {
         ImGui::Begin("AutomataEngine");
         int item_current = _currentApp;
         ImGui::Combo("App", &item_current, appTable_name, StretchyBufferCount(appTable_name));
@@ -132,6 +135,7 @@ namespace automata_engine {
             platform::setVsync(vsync);
         }
         ImGui::End();
+    }
 #endif
     }
     void super::close() {
