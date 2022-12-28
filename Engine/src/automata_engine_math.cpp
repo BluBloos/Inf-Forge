@@ -260,6 +260,9 @@ namespace automata_engine {
         float log10(float a) {
             return std::log10(a);
         }
+        float log2(float a) {
+            return std::log2(a);
+        }
         float abs(float a) {
             return std::abs(a);
         }

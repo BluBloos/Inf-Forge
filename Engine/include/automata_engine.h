@@ -173,11 +173,13 @@ namespace automata_engine {
         // here with the header of the wrapper.
         GLuint createTextureFromFile(
             const char *filePath,
-            GLint minFilter = GL_LINEAR, GLint magFilter = GL_LINEAR
+            GLint minFilter = GL_LINEAR, GLint magFilter = GL_LINEAR,
+            bool generateMips = true
         );
         GLuint createTexture(
             unsigned int *pixelPointer, unsigned int width, unsigned int height,
-            GLint minFilter = GL_LINEAR, GLint magFilter = GL_LINEAR
+            GLint minFilter = GL_LINEAR, GLint magFilter = GL_LINEAR,
+            bool generateMips = true
         );
         GLuint compileShader(uint32_t type, char *shader);
         void setUniformMat4f(GLuint shader, char *uniformName, math::mat4 val);
@@ -233,6 +235,7 @@ namespace automata_engine {
         float atan2(float a, float b);
         float square(float a);
         float log10(float a); 
+        float log2(float a); // base 2
         float deg2rad(float deg);
         float sin(float a);
         float cos(float a);
