@@ -20,8 +20,10 @@
 
 // TODO(Noah): Hot reloading 😎 baby!.
 
-// on the Windows platform, when a WM_SIZE message is recieved, this callback is invoked.
+/// On the Windows platform, when a WM_SIZE message is recieved, this callback is invoked.
+/// the provided width and height are the client dimensions of the window.
 static void (*GameHandleWindowResize)(game_memory_t *, int, int) = nullptr;
+
 static void (*GameInit)(game_memory_t *) = nullptr;
 static void (*GamePreInit)(game_memory_t *) = nullptr;
 static void (*GameCleanup)(game_memory_t *) = nullptr;
@@ -347,7 +349,7 @@ LRESULT CALLBACK Win32WindowProc(HWND window,
             gHdc = GetDC(window);
             InitOpenGL(window, gHdc);
 #endif
-            CREATESTRUCTA *cstra = (CREATESTRUCTA *)lParam;
+            /*CREATESTRUCTA *cstra = (CREATESTRUCTA *)lParam;
             if(cstra != NULL) {
                 // TODO(Noah): There's this pattern here where we are checking
                 // if the fptr is non-null. Can we abstract this?
@@ -357,9 +359,10 @@ LRESULT CALLBACK Win32WindowProc(HWND window,
                     PlatformLoggerLog("WARN: GameHandleWindowResize == nullptr");
                 }
 
-            }
+            }*/
         } break;
         case WM_SIZE: {
+            // NOTE: these widths are client area. Good!
             int width = (int)lParam & 0x0000FFFF;
             int height = ((int)lParam & 0xFFFF0000) >> 16;
             if (GameHandleWindowResize != nullptr) {
