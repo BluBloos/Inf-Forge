@@ -35,6 +35,8 @@ set(SOURCES ${PROJ_SOURCES} ${ENGINE_SOURCES} ${IMGUI_SOURCES})
 # WIN32 for WinMain
 add_executable(${ProjectName} WIN32 ${SOURCES})
 
+set_property(TARGET ${ProjectName} PROPERTY VS_DPI_AWARE "PerMonitor")
+
 source_group(TREE "${ENGINE_ROOT}/src/" PREFIX "engine/" FILES ${ENGINE_SOURCES})
 source_group(TREE "${ProjectRoot}/src/" PREFIX "app/" FILES ${PROJ_SOURCES})
 source_group(TREE "${ENGINE_EXTERNAL}/" PREFIX "external/" FILES ${IMGUI_SOURCES})
