@@ -74,9 +74,12 @@ elseif( ${ProjectBackend} MATCHES "VULKAN_BACKEND" )
     target_compile_definitions(${ProjectName} -DVULKAN_BACKEND)
 endif()
 
+#set(output_directory "${CMAKE_BINARY_DIR}/res")
+
 # Setup pre-build step of Python hook.
 add_custom_command(
     TARGET ${ProjectName} PRE_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:${ProjectName}>/res"
     COMMAND python "${ENGINE_ROOT}/cli/build.py" "${ENGINE_ROOT}"
     COMMAND python "${ENGINE_ROOT}/cli/build.py" "${ProjectRoot}")
 
@@ -89,12 +92,39 @@ if( NOT "${ProjectResourcesExtraPath}"  EQUAL "" )
         LIST_DIRECTORIES false
         "${ProjectResourcesExtraPath}/*")        
 endif()
+
 set( ProjectResourcesList ${ProjectResources} ${ProjectResourcesExtra} )
 list( FILTER ProjectResourcesList EXCLUDE REGEX "\\.ini" )
 
 message(STATUS "found ProjectResourcesList=${ProjectResourcesList}")
 
-add_custom_command(
-    TARGET ${ProjectName} POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:${ProjectName}>/res
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${ProjectResourcesList} $<TARGET_FILE_DIR:${ProjectName}>/res)
+# TODO: add other platforms
+if ( WIN32 )
+    list( TRANSFORM ProjectResourcesList REPLACE "/" "\\\\" )
+    add_custom_command(
+        TARGET ${ProjectName} POST_BUILD
+        COMMAND "${ENGINE_ROOT}/cli/copy.bat" "$<TARGET_FILE_DIR:${ProjectName}>/res/" ${ProjectResourcesList}
+    )
+endif()
+
+# Use a foreach loop to iterate over the list of files
+#foreach(file IN LISTS ProjectResourcesList)
+#    get_filename_component(fileName ${file} NAME)
+    # Use add_custom_command to create a custom target for each file
+#    add_custom_command(
+#        TARGET ${ProjectName} PRE_BUILD
+#        COMMAND ${CMAKE_COMMAND} -E copy_if_different "${file}" "$<TARGET_FILE_DIR:${ProjectName}>/res/${fileName}"
+#        DEPENDS "${file}"
+#    )
+#endforeach()
+
+#target_sources(${ProjectName}
+#  PRIVATE ${ProjectResourcesList}
+#)
+
+#set_target_properties(${ProjectName} PROPERTIES WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
+
+#add_custom_command(
+#    TARGET ${ProjectName} POST_BUILD
+#    COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:${ProjectName}>/res
+#    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${ProjectResourcesList} $<TARGET_FILE_DIR:${ProjectName}>/res)
