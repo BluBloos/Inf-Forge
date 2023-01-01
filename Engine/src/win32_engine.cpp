@@ -765,17 +765,30 @@ int CALLBACK WinMain(HINSTANCE instance,
         PlatformLoggerWarn("GamePreInit == nullptr");
     }
 
+    DWORD windowStyle = (WS_OVERLAPPEDWINDOW | WS_VISIBLE) &
+            ((ae::defaultWinProfile == AUTOMATA_ENGINE_WINPROFILE_NORESIZE) ?
+            (~WS_MAXIMIZEBOX & ~WS_THICKFRAME) : (DWORD)(0xFFFFFFFF));
+    
+    const bool beginMaximized = (ae::defaultWidth == UINT32_MAX) &&
+        (ae::defaultHeight == UINT32_MAX);
+
+    // query work area.
+    if (beginMaximized) {
+        RECT workArea;
+        SystemParametersInfo(SPI_GETWORKAREA, 0, &workArea, 0);
+        ae::defaultWidth = workArea.right - workArea.left;
+        ae::defaultHeight = workArea.bottom - workArea.top;
+    }
+
     windowHandle = CreateWindowExA(
         0, // dwExStyle
         windowClass.lpszClassName,
         ae::defaultWindowName,
-        (WS_OVERLAPPEDWINDOW | WS_VISIBLE) &
-            ((ae::defaultWinProfile == AUTOMATA_ENGINE_WINPROFILE_NORESIZE) ?
-            (~WS_MAXIMIZEBOX & ~WS_THICKFRAME) : (DWORD)(0xFFFFFFFF)),
+        windowStyle,
         CW_USEDEFAULT, // init X
         CW_USEDEFAULT, // init Y
-        ae::defaultWidth,
-        ae::defaultHeight,
+        (ae::defaultWidth == UINT32_MAX) ? CW_USEDEFAULT : ae::defaultWidth,
+        (ae::defaultHeight == UINT32_MAX) ? CW_USEDEFAULT : ae::defaultHeight,
         NULL, // parent handle
         NULL, // menu
         instance,
@@ -809,7 +822,7 @@ int CALLBACK WinMain(HINSTANCE instance,
     globalWin32Handle = windowHandle;
     g_hInstance = instance;
 
-    ShowWindow(windowHandle, showCode);
+    ShowWindow(windowHandle, (beginMaximized) ? SW_MAXIMIZE : showCode);
     UpdateWindow(windowHandle);
 
     // Create the globalBackBuffer

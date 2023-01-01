@@ -12,9 +12,12 @@
 namespace automata_engine {
 
     bool super::g_renderImGui = true;
-    
-    int32_t defaultWidth = 1280;
-    int32_t defaultHeight = 720;
+
+    // if both are UINT32_MAX, window maximizes. else it uses the OS defined default
+    // dim if UINT32_MAX.
+    int32_t defaultWidth = UINT32_MAX;
+    int32_t defaultHeight = UINT32_MAX;
+
     game_window_profile_t defaultWinProfile = AUTOMATA_ENGINE_WINPROFILE_RESIZE;
     const char *defaultWindowName = "Automata Engine";
 
