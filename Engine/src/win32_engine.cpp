@@ -773,12 +773,12 @@ int CALLBACK WinMain(HINSTANCE instance,
         (ae::defaultHeight == UINT32_MAX);
 
     // query work area.
-    if (beginMaximized) {
+    /*if (beginMaximized) {
         RECT workArea;
         SystemParametersInfo(SPI_GETWORKAREA, 0, &workArea, 0);
         ae::defaultWidth = workArea.right - workArea.left;
         ae::defaultHeight = workArea.bottom - workArea.top;
-    }
+    }*/
 
     windowHandle = CreateWindowExA(
         0, // dwExStyle
