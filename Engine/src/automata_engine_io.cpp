@@ -77,6 +77,7 @@ namespace automata_engine {
         //
         // It's interesting how this happened, too. We started with a top down approach. We abstracted first.
         // If we just did the bottom up approach we might have came out with a faster algo, from the get go ...
+        uint32_t linesProcessed = 0;
         while(nc::str::getLine(&line, &lineLen) != nc::str::NC_EOF) {
           switch(line[0]) {
             case 'o': {
@@ -166,7 +167,9 @@ namespace automata_engine {
             break;
           }
           line += lineLen;
+          linesProcessed++;
         }
+        PlatformLoggerLog("loadObj: %d lines processed", linesProcessed);
         StretchyBufferFree(uvData);
         StretchyBufferFree(normalData);
         stbds_hmfree(vertex_uv_pair_map);
