@@ -49,7 +49,7 @@ target_compile_features(${ProjectName} PRIVATE cxx_std_17)
 set_target_properties(${ProjectName}
     PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY $<TARGET_FILE_DIR:${ProjectName}>)
 
-set(COMMON_LIB gdi32 user32 kernel32 Xaudio2 XAPOBase ole32) 
+set(COMMON_LIB gdi32 user32 kernel32 Xaudio2 XAPOBase ole32 Shcore) 
 
 if ( ${ProjectBackend} MATCHES "GL_BACKEND" )
     target_link_libraries(${ProjectName}

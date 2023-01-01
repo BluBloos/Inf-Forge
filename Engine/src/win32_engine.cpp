@@ -16,6 +16,11 @@
 // for raw mouse input
 #include <hidusage.h>
 
+// for scaling factor (DPI stuff)
+#include <winuser.h>
+#include <shellscalingapi.h>
+#include <shtypes.h>
+
 #define MAX_CONSOLE_LINES 500
 
 // TODO(Noah): Hot reloading 😎 baby!.
@@ -933,6 +938,17 @@ int CALLBACK WinMain(HINSTANCE instance,
         // Setup Platform/Renderer backends
         ImGui_ImplWin32_Init(windowHandle);
         ImGui_ImplOpenGL3_Init(glsl_version);
+
+        // TODO(Noah): Make ImGui font sizing dynamic if lets say we drag the game
+        // to another monitor or we change the settings in Windows.
+        HMONITOR hMonitor = MonitorFromWindow(globalWin32Handle, MONITOR_DEFAULTTONEAREST);
+        DEVICE_SCALE_FACTOR scaleFactor;
+        if ( SUCCEEDED(GetScaleFactorForMonitor(hMonitor, &scaleFactor))) {
+            float SCALE = (int)scaleFactor / 100.f;
+            ImFontConfig cfg;
+            cfg.SizePixels = 13 * SCALE;
+            ImGui::GetIO().Fonts->AddFontDefault(&cfg); // ->DisplayOffset.y = SCALE;
+        }
     }
     // TODO(Noah): Look into what the imGUI functions are going to return on failure!
     isImGuiInitialized = true;
