@@ -313,7 +313,12 @@ namespace automata_engine {
         loaded_image_t stbImageLoad(char *fileName); 
 
         void getUserInput(struct user_input *userInput);
+
+        /// set the mouse position in client pixel coords.
+        /// @param yPos y pos in client pixel coords.
+        /// @param xPos x pos in client pixel coords. 
         void setMousePos(int xPos, int yPos);
+
         void showMouse(bool);
 
         extern float lastFrameTime;

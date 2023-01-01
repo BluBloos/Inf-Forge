@@ -23,6 +23,8 @@
 
 #define MAX_CONSOLE_LINES 500
 
+static HWND globalWin32Handle = NULL;
+
 // TODO(Noah): Hot reloading 😎 baby!.
 
 /// On the Windows platform, when a WM_SIZE message is recieved, this callback is invoked.
@@ -46,7 +48,9 @@ bool ae::platform::GLOBAL_VSYNC = false;
 static LONGLONG g_PerfCountFrequency64;
 
 void ae::platform::setMousePos(int xPos, int yPos) {
-    SetCursorPos(xPos, yPos);
+    POINT pt = {xPos, yPos};
+    ClientToScreen(globalWin32Handle, &pt);
+    SetCursorPos(pt.x, pt.y);
 }
 
 void ae::platform::showMouse(bool show) {
@@ -471,7 +475,6 @@ bool automata_engine::platform::submitAudioBuffer(struct loaded_wav myWav) {
     return !FAILED(pSourceVoice->SubmitSourceBuffer(&xa2Buffer));
 }
 
-static HWND globalWin32Handle = NULL;
 static HINSTANCE g_hInstance = NULL;
 
 void ae::platform::showWindowAlert(const char *windowTitle, const char *windowMessage) {
