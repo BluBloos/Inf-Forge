@@ -1,14 +1,24 @@
 #include <automata_engine.h>
 #include <automata_engine_math.h>
+
+// TODO(Noah): roll out our own intrinsics for these things below.
+// we want to remove dependency on std:: and math.h.
+
 // TODO(Noah): Write unit tests for this math code. Getting this stuff wrong would
 // likely be really annoying from a debugging perspective.
+
 // NOTE(Noah): Matrices are being stored in column-major form ...
 // the math below is representative of this.
+
 namespace automata_engine {
     namespace math {
+        float *value_ptr(vec3_t &a) {
+            return &a.x;
+        }
         // NOTE(Noah): we are making a presumption that all matrices are square.
         // NxN matrices!
         static void initMat(float *mat, uint32_t N, std::initializer_list<float> initList) {
+            // TODO(Noah): this fun in particular is slow.
             for (uint32_t i = 0; i < initList.size() && i < N * N; i++) {
                 mat[i] = std::data(initList)[i];
             }
@@ -39,13 +49,37 @@ namespace automata_engine {
         vec3::vec3(vec4_t a) : x(a.x), y(a.y), z(a.z) {}
         vec3::vec3(float a, float b, float c) :
             x(a), y(b), z(c) {}
-        vec3::vec3() : x(0), y(0), z(0) {}
-        vec4::vec4() : x(0), y(0), z(0), w(0) {}
+        vec4_t vec4::operator-() {
+            return vec4_t(-this->x, -this->y, -this->z, -this->w);
+        }
+        constexpr vec3::vec3() : x(0), y(0), z(0) {}
+        constexpr vec4::vec4() : x(0), y(0), z(0), w(0) {}
         vec4::vec4(float a, float b, float c, float d) :
             x(a), y(b), z(c), w(d) {}
         vec4::vec4(vec3_t a, float b) : x(a.x), y(a.y), z(a.z), w(b) {}
         vec3_t operator+=(vec3_t &a, vec3_t b) {
             return a = vec3_t(a.x + b.x, a.y + b.y, a.z + b.z);
+        }
+        vec3_t operator*(vec3_t b, float a) {
+            return vec3(b.x * a, b.y * a, b.z * a);
+        }
+        vec3_t operator+(vec3_t b, vec3_t a) {
+            return vec3(b.x + a.x, b.y + a.y, b.z + a.z);
+        }
+        vec4_t operator+(vec4_t b, vec4_t a) {
+            return vec4(b.x + a.x, b.y + a.y, b.z + a.z, b.w + a.w);
+        }
+        vec4_t operator*(vec4_t b, float a) {
+            return vec4(b.x * a, b.y * a, b.z * a, b.w * a);
+        }
+        vec3_t operator-(vec3_t b, vec3_t a) {
+            return b + (-a);
+        }
+        float &vec3_t::operator[](int index) {
+            return (&this->x)[index];
+        }
+        float &vec4_t::operator[](int index) {
+            return (&this->x)[index];
         }
         vec4_t operator+=(vec4_t &a, vec4_t b) {
             return a = vec4_t(a.x + b.x, a.y + b.y, a.z + b.z, a.w + b.w);
@@ -85,42 +119,39 @@ namespace automata_engine {
         mat4_t buildRotMat4(vec3_t eulerAngles) {
             mat4_t result = {}; // start with identity.
             mat4_t rotationMatrixZ = {
-                cosf(eulerAngles.z * 
-                    DEGREES_TO_RADIANS),        -sinf(eulerAngles.z *
-                                                    DEGREES_TO_RADIANS),        0, 0,
-                sinf(eulerAngles.z *
-                    DEGREES_TO_RADIANS),        cosf(eulerAngles.z *
-                                                    DEGREES_TO_RADIANS),        0, 0,
+                cosf(eulerAngles.z),           -sinf(eulerAngles.z),          0, 0,
+                sinf(eulerAngles.z),            cosf(eulerAngles.z),            0, 0,
                 0,                              0,                              1, 0,
                 0,                              0,                              0, 1
             };
             result = result * rotationMatrixZ;
             mat4_t rotationMatrixY = {
-                cosf(eulerAngles.y * 
-                    DEGREES_TO_RADIANS),        0, sinf(eulerAngles.y * 
-                                                        DEGREES_TO_RADIANS),       0,
+                cosf(eulerAngles.y),            0, sinf(eulerAngles.y),            0,
                 0,                              1, 0,                              0,
-               -sinf(eulerAngles.y * 
-                    DEGREES_TO_RADIANS),        0, cosf(eulerAngles.y * 
-                                                        DEGREES_TO_RADIANS),       0,
+               -sinf(eulerAngles.y),            0, cosf(eulerAngles.y),            0,
                 0,                              0, 0,                              1
             };
             result = result * rotationMatrixY;
             mat4_t rotationMatrixX = {
                 1,  0,                              0,                              0,
-                0,  cosf(eulerAngles.x * 
-                        DEGREES_TO_RADIANS),        sinf(eulerAngles.x * 
-                                                        DEGREES_TO_RADIANS),        0,
-                0, -sinf(eulerAngles.x * 
-                        DEGREES_TO_RADIANS),        cosf(eulerAngles.x * 
-                                                        DEGREES_TO_RADIANS),        0,
+                0,  cosf(eulerAngles.x),            sinf(eulerAngles.x),            0,
+                0, -sinf(eulerAngles.x),            cosf(eulerAngles.x),            0,
                 0,  0,                              0,                              1
             };
             result = result * rotationMatrixX;
             return result;
         }
+        vec3_t lookAt(vec3_t origin, vec3_t target) {
+            // return the eulerAngles such that a body at origin is looking at target
+            vec3_t direction = target - origin;
+            float pitch =
+                atan2(direction.y, sqrt(direction.x * direction.x + direction.z * direction.z));
+            float yaw =
+                atan2(direction.x, -direction.z);
+            return vec3_t(pitch, yaw, 0.0f);
+        }
         // NOTE(Noah): I spent more time than I would like to admit formatting the code
-        // below ...
+        // above ...
         mat4_t buildMat4fFromTransform(transform_t transform) {
             mat4_t mat = {}; // identity.
             mat4_t rotMat = buildRotMat4(transform.eulerAngles);
@@ -131,12 +162,35 @@ namespace automata_engine {
             mat.matv[3] = vec4_t(transform.pos, 1.0f);
             return mat;
         }
+        // TODO(Noah): Implement a general matrix inverse function using
+        // adjugate matrix. For now, we do whatever ...
+        mat4_t buildInverseOrthoMat(camera_t cam) {
+            ae::math::mat4_t transToCenter = {};
+            transToCenter.matv[3] = vec4_t(0.0f, 0.0f, 
+                -((cam.farPlane - cam.nearPlane) / 2.0f + cam.nearPlane), 1.0f);
+            ae::math::mat4_t scaleAndFlip = {};
+            scaleAndFlip.matv[0][0] = cam.width / 2.0f;
+            scaleAndFlip.matv[1][1] = cam.height / 2.0f;
+            scaleAndFlip.matv[2][2] = (cam.farPlane - cam.nearPlane) / -2.0f;
+            return transToCenter * scaleAndFlip;
+        }
+        // TODO(Noah): Handle the case where farPlan == nearPlane. Will get a divide by
+        // zero error here.
+        mat4_t buildOrthoMat(camera_t cam) {
+            ae::math::mat4_t transToCenter = {};
+            transToCenter.matv[3] = vec4_t(0.0f, 0.0f, 
+                (cam.farPlane - cam.nearPlane) / 2.0f + cam.nearPlane, 1.0f);
+            ae::math::mat4_t scaleAndFlip = {};
+            scaleAndFlip.matv[0][0] = 2.0f / cam.width;
+            scaleAndFlip.matv[1][1] = 2.0f / cam.height;
+            scaleAndFlip.matv[2][2] = -2.0f / (cam.farPlane - cam.nearPlane);
+            return scaleAndFlip * transToCenter;
+        }
         // TODO(Noah): Review why this works ...
         mat4_t buildProjMat(camera_t cam) {
             float n = cam.nearPlane;
             float f = cam.farPlane;
-            game_window_info_t winInfo = ae::platform::getWindowInfo();
-            float aspectRatio = (float)winInfo.height / (float)winInfo.width;
+            float aspectRatio = (float)cam.height / (float)cam.width;
             float r = tanf(cam.fov * DEGREES_TO_RADIANS / 2.0f) * n;
             float l = -r;
             float t = r * aspectRatio;
@@ -166,7 +220,85 @@ namespace automata_engine {
             rotMat4 = transposeMat4(rotMat4);
             mat4_t transMat = {};
             transMat.matv[3] = vec4(-cam.trans.pos, 1.0f);
-            return rotMat4 * transMat;
+            mat4_t scaleMat = {};
+            scaleMat.matv[0][0] = 1.0f / cam.trans.scale.x;
+            scaleMat.matv[1][1] = 1.0f / cam.trans.scale.y;
+            return scaleMat * rotMat4 * transMat;
+        }
+        float atan2(float a, float b) {
+            return std::atan2f(a, b);
+        }
+        float sqrt(float a) {
+            // TODO(Noah): replace with our own intrinsic.
+            return ::sqrtf(a);
+        }
+        float square(float a) {
+            return a * a;
+        }
+        float dist(vec3_t a, vec3_t b) {
+            return sqrt(square(a.x - b.x) + square(a.y - b.y) + square(a.z - b.z));
+        }
+        float magnitude(vec3_t a) {
+            return dist(a, vec3_t());
+        }
+        float dot(vec3_t a, vec3_t b) {
+            return a.x * b.x + a.y * b.y + a.z * b.z;
+        }
+        float round(float a) {
+            return std::round(a);
+        }
+        vec3_t normalize(vec3_t a) {
+            float mag = magnitude(a);
+            if (mag == 0.f)
+                return vec3_t();
+            return vec3_t(a.x / mag, a.y / mag, a.z / mag);
+        }
+        float project(vec3_t a, vec3_t b) {
+            b = normalize(b);
+            return (dot(a, b) / dot(b, b)); // * b;
+        }
+        float log10(float a) {
+            return std::log10(a);
+        }
+        float log2(float a) {
+            return std::log2(a);
+        }
+        float abs(float a) {
+            return std::abs(a);
+        }
+        float ceil(float a) {
+            return std::ceil(a);
+        }
+        float floor(float a) {
+            return int64_t(a);
+        }
+        float deg2rad(float deg) {
+            return deg * DEGREES_TO_RADIANS;
+        }
+        float sin(float a) {
+            return std::sin(a);
+        }
+        float cos(float a) {
+            return std::cos(a);
+        }
+        bool rayBoxIntersection(
+            vec3_t rayOrigin, vec3_t rayDir, float rayLen, const box_t *candidateBoxes,
+            uint32_t candidateBoxCount, vec3_t *intersectionOut
+        ) {
+            for (uint32_t i = 0; i < candidateBoxCount; i++) {
+                box_t box = candidateBoxes[i];
+                float boxTop = box.pos.y + box.scale.y;
+                vec3_t rayHorizon = (rayOrigin + rayDir * (rayLen));
+                // can reduce ray/box to two 2D problems
+                // consider orthogonal viewpoint of box.
+                // 3D line becomes 2D, and cube becomes square.
+                // now 2D line intersect with square?
+                    // two sample points, at x1 and x2.
+                    // if y1 and y2 are on same "side" of square,
+                    // i.e. both above or below the box top / bottom,
+                    // then there is no intersect.
+            }
+            return false;
         }
     }
 }

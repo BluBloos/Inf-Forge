@@ -1,16 +1,20 @@
 #include <automata_engine.h>
 #include <cstdarg>
 
+// TODO(Noah): impl dealloc unfunction for vbo_t
+
 #if defined(GL_BACKEND)
 #include <automata_engine_gl.h>
 namespace automata_engine {
     namespace GL {
         void GLClearError() { while(glGetError() != GL_NO_ERROR); }
-        bool GLCheckError(char *function, char *file, int line) {
+        bool GLCheckError(char *expr, const char *file, int line) {
             bool result = true;
             while(GLenum error = glGetError()) {
-                PlatformLoggerLog("GL_ERROR: %d\nFUNCTION: %s\nFILE: %s\nLINE: %d", 
-                    error, function, file, line);
+                static_assert(sizeof(GLubyte)==sizeof(char), "platform is odd");
+                const char *errorString = (const char*)gluErrorString(error);
+                PlatformLoggerLog("GL_ERROR: (%d, 0x%x) %s \nEXPR: %s\nFILE: %s\nLINE: %d", 
+                    error, error, errorString, expr, file, line);
                 result = false;
             }
             return result;
@@ -50,7 +54,9 @@ namespace automata_engine {
             return id;
         }
         // failure mode for this function is -1
-        GLuint createShader(char *vertFilePath, char *fragFilePath) {
+        GLuint createShader(const char *vertFilePath, const char *fragFilePath,
+            const char *geoFilePath
+        ) {
             uint32_t program;
             // Step 1: Setup our vertex and fragment GLSL shaders!
             loaded_file f1 = automata_engine::platform::readEntireFile(vertFilePath);
@@ -58,18 +64,55 @@ namespace automata_engine {
             GL_CALL(program = glCreateProgram());
             uint32_t vs = compileShader(GL_VERTEX_SHADER, (char *)f1.contents);
             uint32_t fs = compileShader(GL_FRAGMENT_SHADER, (char *)f2.contents);
+            uint32_t gs = 1;
+            if (geoFilePath[0]) {
+                loaded_file f3 = automata_engine::platform::readEntireFile(geoFilePath);
+                defer(automata_engine::platform::freeLoadedFile(f3));
+                gs = compileShader(GL_GEOMETRY_SHADER, (char *)f3.contents);
+                if ((int)gs == -1) {
+                    goto createShader_Fail;
+                }
+                glAttachShader(program, gs);
+            }
+            auto findAndlogError = [=]() {
+                GLsizei length;
+                GLint logLength;
+                glGetProgramiv(program, GL_INFO_LOG_LENGTH, &logLength);
+                const char *logMsg = new char[logLength + 1];
+                defer(delete[] logMsg);
+                static_assert(sizeof(GLchar) == sizeof(char), "odd platform");
+                glGetProgramInfoLog(program, logLength, &length, (GLchar *)logMsg);
+                PlatformLoggerError("Program link or validation failure:\n%s", logMsg);
+            };
             if ((int)vs == -1 || (int)fs == -1) {
-                // we failed.
-                glDeleteProgram(program);
-                return -1;
+                goto createShader_Fail;
             }
             glAttachShader(program, vs);
             glAttachShader(program, fs);
             glLinkProgram(program);
+            GLint result;
+            glGetProgramiv(program, GL_LINK_STATUS, &result);
+            if (result == GL_FALSE) {
+                findAndlogError();
+                goto createShader_Fail;
+            }
             glValidateProgram(program);
+            glGetProgramiv(program, GL_LINK_STATUS, &result);
+            if (result == GL_FALSE) {
+                findAndlogError();
+                goto createShader_Fail;
+            }
+            goto createShader_end;
+            createShader_Fail:
+            glDeleteProgram(program);
+            return -1;
+            createShader_end:
             // Cleanup
             glDeleteShader(vs);
             glDeleteShader(fs);
+            if (gs != -1) {
+                glDeleteShader(gs);
+            }
             automata_engine::platform::freeLoadedFile(f1);
             automata_engine::platform::freeLoadedFile(f2);
             return program;
@@ -88,22 +131,46 @@ namespace automata_engine {
         }
         // TODO(Noah): Are there performance concerns with always calling GetUniformLocation?
         void setUniformMat4f(GLuint shader, char *uniformName, ae::math::mat4 val) {
-            GLuint loc = glGetUniformLocation(shader, uniformName);
-            glUniformMatrix4fv(loc, 1, GL_FALSE, (val).matp); 
+            GLuint loc;
+            GL_CALL(loc = glGetUniformLocation(shader, uniformName));
+            GL_CALL(glUniformMatrix4fv(loc, 1, GL_FALSE, (val).matp));
+        }
+        
+        GLuint createTextureFromFile(
+            const char *filePath,
+            GLint minFilter, GLint magFilter, bool generateMips
+        ) {
+            loaded_image_t img = ae::platform::stbImageLoad((char *)filePath);
+            GLuint tex = 0;
+            if (img.pixelPointer != nullptr) {
+                tex = createTexture(
+                    img.pixelPointer, img.width, img.height,
+                    minFilter, magFilter, generateMips
+                );
+                glFlush(); // push all buffered commands to GPU
+                glFinish(); // block until GPU is complete
+                ae::io::freeLoadedImage(img);
+            }
+            return tex;
         }
 
-        GLuint createTexture(unsigned int *pixelPointer, unsigned int width, unsigned int height) {
+        GLuint createTexture(
+            unsigned int *pixelPointer, unsigned int width, unsigned int height,
+            GLint minFilter, GLint magFilter, bool generateMips
+        ) {
             GLuint newTexture;
             glGenTextures(1, &newTexture);
             glBindTexture(GL_TEXTURE_2D, newTexture);
             // TODO(Noah): So, when we go about creating textures in the future, 
             // maybe we actually care about setting some different parameters.
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, minFilter);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, magFilter);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
             glTexImage2D(
                 GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixelPointer);
+            if (generateMips)
+                glGenerateMipmap(GL_TEXTURE_2D);
             glBindTexture(GL_TEXTURE_2D, 0);
             return newTexture;
         }
@@ -170,6 +237,7 @@ namespace automata_engine {
         GLuint createAndSetupVao(uint32_t attribCounts, ...) {
             GLuint vao;
             glGenVertexArrays(1, &vao); glBindVertexArray(vao);
+            PlatformLoggerLog("called createAndSetupVao with vao=%d", vao);
             GLuint boundVbo = 0;            
             va_list vl;
             va_start(vl, attribCounts);
@@ -204,10 +272,9 @@ namespace automata_engine {
                                 vbo_GetStride(*pVbo),
                                 (const void *)(ptr = (intptr_t)offset + vbo_GetOffset(*pVbo, k))
                             );
-                            PlatformLoggerWarn(
+                            PlatformLoggerLog(
                                 "did glVertexAttribPointer(%d, %d, type, GL_FALSE, %d, %d);",
-                                attribIndex, (attribCount > 4) ? 4 : attribCount, 
-                                vbo_GetStride(*pVbo), ptr);
+                                attribIndex, componentCount, vbo_GetStride(*pVbo), ptr);
                             offset += componentCount * GLenumToBytes(attrib.type);
                             glEnableVertexAttribArray(attribIndex);
                             if ( attribDesc.iterInstance ) {

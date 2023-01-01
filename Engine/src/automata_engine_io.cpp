@@ -11,7 +11,94 @@ namespace ae = automata_engine;
 
 namespace automata_engine {
   namespace io {
-    loaded_image_t loadBMP(char *path) {
+    void freeWav(loaded_wav wavFile) {
+      ae::platform::freeLoadedFile(wavFile.parentFile);
+    }
+    static wav_file_cursor LoadWav_ParseChunkAt(void *bytePointer, void *endOfFile) {
+      wav_file_cursor result;
+      result.cursor = (char *)bytePointer;
+      result.endOfFile = (char *)endOfFile;
+      return result;
+    }
+    // NOTE(Noah): Again. Consistent naming convention. Here, we have the master function
+    // LoadWav. All these other functions are "sub" functions. They exist literally to make
+    // the code more readable. But these "sub" functions only exist FOR the master function.
+    static bool LoadWav_IsFileCursorValid(wav_file_cursor fileCursor) {
+      return fileCursor.cursor < fileCursor.endOfFile;
+    }
+    static void *LoadWav_GetChunkData(wav_file_cursor fileCursor) {
+      void *result = fileCursor.cursor + sizeof(wav_chunk_header);
+      return result;
+    }
+    static int LoadWav_GetChunkSize(wav_file_cursor fileCursor) {
+      wav_chunk_header *wavChunkHeader = (wav_chunk_header *)fileCursor.cursor;
+      return wavChunkHeader->chunkSize;	
+    }
+    static wav_file_cursor LoadWav_NextChunk(wav_file_cursor fileCursor) {
+      wav_chunk_header_t *wavChunkHeader = (wav_chunk_header *)fileCursor.cursor;
+      int chunkSize = wavChunkHeader->chunkSize;
+      if(chunkSize & 1) {
+        chunkSize +=1 ;
+      }
+      fileCursor.cursor += sizeof(wav_chunk_header) + chunkSize;
+      return fileCursor;
+    }
+    static int LoadWav_GetType(wav_file_cursor fileCursor) {
+      wav_chunk_header_t *wavChunkHeader = (wav_chunk_header *)fileCursor.cursor;
+      int result = wavChunkHeader->chunkID;
+      return result;
+    }
+    // TODO(Noah): Use stb_vorbis for .ogg file parsing. Prob going to be better (compressed?)
+    // TODO(Noah): Think about failure cases for load file err.
+    loaded_wav_t loadWav(const char *fileName) {
+      loaded_wav wavFile = {};
+      loaded_file fileResult = ae::platform::readEntireFile(fileName);
+      wavFile.parentFile = fileResult;
+      if (fileResult.contentSize != 0 ) {
+        wav_header *wavHeader = (wav_header *)fileResult.contents;
+        assert(wavHeader->chunkID == Wav_ChunkID_RIFF);
+        assert(wavHeader->waveID == Wav_ChunkID_WAVE);
+        // NOTE(Noah): The end of file computation explained: We go ahead by the initial header size, 
+        // then add wavHeader->fileSize, which excludes the 4-byte value after it, so we subtract 4 bytes.
+        short *samples = 0;
+        int channels = 0;
+        int sampleDataSize = 0;
+        for(    
+          wav_file_cursor fileCursor = LoadWav_ParseChunkAt(wavHeader + 1, 
+            (char *)(wavHeader + 1) + wavHeader->fileSize - 4);
+          LoadWav_IsFileCursorValid(fileCursor);
+          fileCursor = LoadWav_NextChunk(fileCursor) 
+        ) {
+          switch(LoadWav_GetType(fileCursor)) {
+            case Wav_ChunkID_fmt: {
+              wav_fmt *wavfmt = (wav_fmt *)LoadWav_GetChunkData(fileCursor);
+              assert(wavfmt->wFormatTag == 1);
+              assert(wavfmt->nSamplesPerSec == ENGINE_DESIRED_SAMPLES_PER_SECOND);
+              assert(wavfmt->wBitsPerSample == 16);
+              channels = wavfmt->nChannels;
+            } break;
+            case Wav_ChunkID_data: {
+              samples = (short *)LoadWav_GetChunkData(fileCursor);
+              sampleDataSize = LoadWav_GetChunkSize(fileCursor);
+            } break;
+            default:
+            // do nothing I guess, lol.
+            break;
+          }
+        }
+        assert((channels && samples && sampleDataSize));
+        wavFile.sampleCount = sampleDataSize / (channels * sizeof(short));
+        wavFile.channels = channels;
+        if (channels != 2) {
+            assert(!"Unsupported Channel type!");
+        } else {
+          wavFile.sampleData = samples;
+        }
+      }
+      return wavFile;
+    }
+
+    loaded_image_t loadBMP(const char *path) {
       loaded_image_t bitmap = {};
       // bitmap.scale = 1;
       loaded_file_t fileResult = ae::platform::readEntireFile(path);
@@ -49,18 +136,25 @@ namespace automata_engine {
       }
       return bitmap;
     }
+
     void freeObj(raw_model_t obj) {
       StretchyBufferFree(obj.vertexData);
       StretchyBufferFree(obj.indexData);
     }
+    
     void freeLoadedImage(loaded_image_t img) {
       ae::platform::free(img.pixelPointer);
     }
 
+    // TODO(Noah): We probably even want unit tests for this sort of thing.
+    //
+    // TODO(Noah): currently this does not work for any sort of OBJ that has no tex coords.
+    // for example the face format might look like: 375//363, and we cannot parse this.
+    //
     // TODO(Noah): It's prob the case that we could parse OBJ files better. But, I just wanted
     // to get something working ...
     raw_model_t loadObj(const char *filePath) {
-      loaded_file_t loadedFile = ae::platform::readEntireFile((char *)filePath);
+      loaded_file_t loadedFile = ae::platform::readEntireFile(filePath);
       // NOTE(Noah): init the rawModel to null is important because we are
       // depending on the modelName to have null-terminating char.
       raw_model_t rawModel = {};
@@ -182,7 +276,7 @@ namespace automata_engine {
             PlatformLoggerWarn("uvX out of bounds: %f", uvX);
           }
           if (uvY < 0.0f || uvY > 1.0f) {
-            PlatformLoggerWarn("uvX out of bounds: %f", uvY);
+            PlatformLoggerWarn("uvY out of bounds: %f", uvY);
           }
         }
 #endif

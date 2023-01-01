@@ -1,3 +1,6 @@
+:: NOTE(Noah): There is an expectation that this file is called
+:: from within the root dir of the game proj.
+
 :: TODO(Noah): actually utilize the format_files.bat facility that we have created. The reason that
 :: we are not currently using this is that we are not yet satisfied with the formatting rules in all cases.
 :: And I feel that getting to the correct format rules is a tedious process.
@@ -7,8 +10,13 @@ SETLOCAL
 
 if "%1"=="" goto bad2
 
-@echo creating bin dir/
-@mkdir bin
+@set BUILD_DIR=bin
+
+:: use optional build directory.
+if NOT "%~4"=="" set BUILD_DIR="%~4"
+
+@echo creating %BUILD_DIR% dir/
+@mkdir "%BUILD_DIR%"
 
 :: the use of the @ symbol here makes the command processor show only the output of the command
 :: without actually showing the execution of the command.
@@ -17,7 +25,11 @@ if "%1"=="" goto bad2
 @set ENGINE_EXTERNAL=%ENGINE_ROOT%\..\external
 
 :: Install game resources into the bin dir.
-@xcopy "%APP_ROOT%\res" bin\res /E /Y /I
+@xcopy "%APP_ROOT%\res" "%BUILD_DIR%\res" /E /Y /I
+
+:: Install optional game res
+:: NOTE: the ~ removes the already present double quotes from %3
+if NOT "%~3"=="" @xcopy "%APP_ROOT%\%~3" "%BUILD_DIR%\res" /E /Y /I
 
 @set INCLUDES=/I "%ENGINE_ROOT%\src" /I "%ENGINE_ROOT%\include" ^
     /I "%APP_ROOT%\include" /I "%ENGINE_ROOT%" /I "%APP_ROOT%" /I "%ENGINE_EXTERNAL%" ^
@@ -66,10 +78,11 @@ if "%2"=="" (
     :: noop 
     break
 ) else (
-    :: TODO(Noah): For right now, we are doing this grossness ...
-    FOR /F "tokens=1,2 delims=:" %%B in (%2) do (
+    :: TODO(Noah): does this even work for just one token? just two?
+    FOR /F "tokens=1,2,3 delims=:" %%B in (%2) do (
         echo %%B && FOR %%A IN ("%APP_ROOT%\%%B\*.cpp") DO call set "SOURCES="%%A" %%SOURCES%%"
         echo %%C && FOR %%A IN ("%APP_ROOT%\%%C\*.cpp") DO call set "SOURCES="%%A" %%SOURCES%%"
+        echo %%D && FOR %%A IN ("%APP_ROOT%\%%D\*.cpp") DO call set "SOURCES="%%A" %%SOURCES%%"
     )
 )
 
@@ -78,7 +91,7 @@ if "%2"=="" (
 python "%ENGINE_ROOT%\cli\build.py" "%ENGINE_ROOT%"
 python "%ENGINE_ROOT%\cli\build.py" "%APP_ROOT%"
 
-pushd bin
+pushd "%BUILD_DIR%"
 
 :: TODO: Make non-specific to my host machine.
 @echo setting up MSVC compiler
@@ -86,15 +99,19 @@ call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build
 
 if "%1"=="DX12_BACKEND" (
     cl %CFLAGS% %INCLUDES% %SOURCES% gdi32.lib ^
-        user32.lib kernel32.lib Xaudio2.lib ole32.lib D3D12.lib DXGI.lib D3DCompiler.lib
+        user32.lib kernel32.lib Xaudio2.lib XAPOBase.lib ole32.lib D3D12.lib DXGI.lib D3DCompiler.lib
 )
 if "%1"=="GL_BACKEND" (
     cl %CFLAGS% %INCLUDES% %SOURCES% %LFLAGS% gdi32.lib ^
-        opengl32.lib user32.lib glew32s.lib kernel32.lib Xaudio2.lib ole32.lib
+        opengl32.lib user32.lib glew32s.lib kernel32.lib Xaudio2.lib XAPOBase.lib ole32.lib
 )
 if "%1"=="CPU_BACKEND" (
     cl %CFLAGS% %INCLUDES% %SOURCES% %LFLAGS% gdi32.lib ^
-        user32.lib kernel32.lib Xaudio2.lib ole32.lib
+        user32.lib kernel32.lib Xaudio2.lib XAPOBase.lib ole32.lib
+)
+if "%1"=="VULKAN_BACKEND" (
+    cl %CFLAGS% %INCLUDES% %SOURCES% %LFLAGS% gdi32.lib ^
+        user32.lib kernel32.lib Xaudio2.lib XAPOBase.lib ole32.lib
 )
 
 popd

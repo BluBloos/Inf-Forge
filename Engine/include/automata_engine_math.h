@@ -12,7 +12,7 @@
 #define AUTOMATA_ENGINE_MATH
 
 // TODO: Remove dependency on math.h and do transcendentals ourselves.
-// We want SPEED.
+// From a learning perspective, this is a good idea.
 #include <math.h>
 #include <initializer_list>
 
@@ -23,22 +23,26 @@
 
 namespace automata_engine {
   namespace math {
+    #pragma pack(push, 4) // align on 4 bytes 
     typedef struct vec2 {
       float x,y;
     } vec2_t;
     typedef struct vec4 vec4_t;
     typedef struct vec3 {
       float x,y,z;
-      vec3 operator-();
-      vec3();
+      constexpr vec3();
       vec3(float, float, float);
       vec3(vec4_t);
+      vec3 operator-();
+      float &operator[](int index);
     } vec3_t;
     typedef struct vec4 {
       float x,y,z,w;
-      vec4();
+      constexpr vec4();
+      vec4 operator-();
       vec4(float, float, float, float);
       vec4(vec3_t, float);
+      float &operator[](int index);
     } vec4_t;
     typedef struct mat4 mat4_t;
     typedef struct mat3 {
@@ -58,6 +62,7 @@ namespace automata_engine {
       };
       mat4(std::initializer_list<float>);
     } mat4_t;
+    #pragma pack(pop)
     /**
       * @param pos   camera is located by pos
       * @param scale camera is scaled by scale
@@ -77,7 +82,13 @@ namespace automata_engine {
       float fov;
       float nearPlane;
       float farPlane;
+      int height;
+      int width;
     } camera_t;
+    typedef struct box {
+      vec3_t pos;
+      vec3_t scale;
+    } box_t;
   }
 }
 

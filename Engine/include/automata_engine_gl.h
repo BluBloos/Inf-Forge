@@ -3,11 +3,10 @@
 // #include <automata_engine.h>
 #include <glew.h>
 #include <gl/gl.h>
+#include <gl/Glu.h>
 #include <initializer_list>
 
-// #include <vector>
-
-#define GL_CALL(code) GLClearError(); code; assert(GLCheckError(#code, __FILE__, __LINE__));
+#define GL_CALL(code) (ae::GL::GLClearError(), code, assert(ae::GL::GLCheckError(#code, __FILE_RELATIVE__, __LINE__)))
 
 namespace automata_engine {
     namespace GL {
