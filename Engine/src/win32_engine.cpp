@@ -199,6 +199,22 @@ static user_input_t globalUserInput = {};
 static game_memory_t globalGameMemory = {};
 static win32_backbuffer_t globalBackBuffer = {};
 
+void ScaleImGui() {
+    if (isImGuiInitialized) {
+        HMONITOR hMonitor = MonitorFromWindow(globalWin32Handle, MONITOR_DEFAULTTONEAREST);
+        DEVICE_SCALE_FACTOR scaleFactor;
+        if (SUCCEEDED(GetScaleFactorForMonitor(hMonitor, &scaleFactor))) {
+            float SCALE = (int)scaleFactor / 100.f;
+            ImFontConfig cfg; // = {};
+            cfg.SizePixels = 13 * SCALE;
+            ImGui::GetIO().Fonts->Clear();
+            ImGui::GetIO().Fonts->AddFontDefault(&cfg);
+            ImGui_ImplOpenGL3_DestroyFontsTexture();
+            ImGui_ImplOpenGL3_CreateFontsTexture();
+        }
+    }
+}
+
 static void Win32ResizeBackbuffer(win32_backbuffer_t *buffer, int newWidth, int newHeight)
 {
 	if(buffer->memory) {
@@ -325,6 +341,17 @@ LRESULT CALLBACK Win32WindowProc(HWND window,
                         */
                 }
             }
+        } break;
+        case WM_DPICHANGED: {
+            ScaleImGui();
+            RECT* const prcNewWindow = (RECT*)lParam;
+            SetWindowPos(window,
+                NULL,
+                prcNewWindow->left,
+                prcNewWindow->top,
+                prcNewWindow->right - prcNewWindow->left,
+                prcNewWindow->bottom - prcNewWindow->top,
+                SWP_NOZORDER | SWP_NOACTIVATE);
         } break;
         case WM_MOUSEMOVE: {
             int x = (int)lParam & 0x0000FFFF;
@@ -955,16 +982,7 @@ int CALLBACK WinMain(HINSTANCE instance,
         ImGui_ImplWin32_Init(windowHandle);
         ImGui_ImplOpenGL3_Init(glsl_version);
 
-        // TODO(Noah): Make ImGui font sizing dynamic if lets say we drag the game
-        // to another monitor or we change the settings in Windows.
-        HMONITOR hMonitor = MonitorFromWindow(globalWin32Handle, MONITOR_DEFAULTTONEAREST);
-        DEVICE_SCALE_FACTOR scaleFactor;
-        if ( SUCCEEDED(GetScaleFactorForMonitor(hMonitor, &scaleFactor))) {
-            float SCALE = (int)scaleFactor / 100.f;
-            ImFontConfig cfg;
-            cfg.SizePixels = 13 * SCALE;
-            ImGui::GetIO().Fonts->AddFontDefault(&cfg); // ->DisplayOffset.y = SCALE;
-        }
+        ScaleImGui();
     }
     // TODO(Noah): Look into what the imGUI functions are going to return on failure!
     isImGuiInitialized = true;
