@@ -205,10 +205,10 @@ void ScaleImGui() {
         DEVICE_SCALE_FACTOR scaleFactor;
         if (SUCCEEDED(GetScaleFactorForMonitor(hMonitor, &scaleFactor))) {
             float SCALE = (int)scaleFactor / 100.f;
-            ImFontConfig cfg; // = {};
-            cfg.SizePixels = float(uint32_t(13 * SCALE));
+            //ImFontConfig cfg; // = {};
+            float size_in_pixels = float(uint32_t(16 * SCALE));
             ImGui::GetIO().Fonts->Clear();
-            ImGui::GetIO().Fonts->AddFontDefault(&cfg);
+            ImGui::GetIO().Fonts->AddFontFromFileTTF("ProggyVector Regular.ttf", size_in_pixels);
             ImGui_ImplOpenGL3_DestroyFontsTexture();
             ImGui_ImplOpenGL3_CreateFontsTexture();
         }
