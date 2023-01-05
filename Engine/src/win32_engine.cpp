@@ -206,7 +206,7 @@ void ScaleImGui() {
         if (SUCCEEDED(GetScaleFactorForMonitor(hMonitor, &scaleFactor))) {
             float SCALE = (int)scaleFactor / 100.f;
             ImFontConfig cfg; // = {};
-            cfg.SizePixels = 13 * SCALE;
+            cfg.SizePixels = float(uint32_t(13 * SCALE));
             ImGui::GetIO().Fonts->Clear();
             ImGui::GetIO().Fonts->AddFontDefault(&cfg);
             ImGui_ImplOpenGL3_DestroyFontsTexture();
@@ -397,16 +397,19 @@ LRESULT CALLBACK Win32WindowProc(HWND window,
 
             }*/
         } break;
-        case WM_SIZE: {
-            // NOTE: these widths are client area. Good!
-            int width = (int)lParam & 0x0000FFFF;
-            int height = ((int)lParam & 0xFFFF0000) >> 16;
-            if (GameHandleWindowResize != nullptr) {
-                GameHandleWindowResize(&globalGameMemory, width, height);
+        case WM_WINDOWPOSCHANGED: {
+            WINDOWPOS *wp = (WINDOWPOS *)lParam;
+            if (!!(wp->flags & SWP_NOSIZE)) break;
+            if ((GameHandleWindowResize != nullptr) && 
+                (globalGameMemory.data != nullptr)
+            ) {
+                GameHandleWindowResize(&globalGameMemory, wp->cx, wp->cy);
             } else {
-                PlatformLoggerLog("WARN: GameHandleWindowResize == nullptr");
+                PlatformLoggerLog("WARN: (GameHandleWindowResize == nullptr) OR\n"
+                    "(globalGameMemory.data == nullptr)");
             }
         } break;
+        
         case WM_PAINT: {
             HDC DeviceContext = BeginPaint(window, &ps);
             // Do a render.
@@ -421,6 +424,10 @@ LRESULT CALLBACK Win32WindowProc(HWND window,
         case WM_CLOSE: {
             //TODO(Noah): Handle as message to user
             automata_engine::platform::GLOBAL_RUNNING = false;
+        } break;
+        case WM_NCCREATE: {
+            EnableNonClientDpiScaling(window);
+            result =  DefWindowProc(window, message, wParam, lParam);
         } break;
         default:
         result =  DefWindowProc(window, message, wParam, lParam);
@@ -802,14 +809,6 @@ int CALLBACK WinMain(HINSTANCE instance,
     const bool beginMaximized = (ae::defaultWidth == UINT32_MAX) &&
         (ae::defaultHeight == UINT32_MAX);
 
-    // query work area.
-    /*if (beginMaximized) {
-        RECT workArea;
-        SystemParametersInfo(SPI_GETWORKAREA, 0, &workArea, 0);
-        ae::defaultWidth = workArea.right - workArea.left;
-        ae::defaultHeight = workArea.bottom - workArea.top;
-    }*/
-
     windowHandle = CreateWindowExA(
         0, // dwExStyle
         windowClass.lpszClassName,
@@ -851,6 +850,13 @@ int CALLBACK WinMain(HINSTANCE instance,
 
     globalWin32Handle = windowHandle;
     g_hInstance = instance;
+
+    if (!beginMaximized && GameHandleWindowResize) {
+        // get height and width of window
+        RECT rect;
+        GetWindowRect(globalWin32Handle, &rect);
+        GameHandleWindowResize(&globalGameMemory, rect.right - rect.left, rect.bottom - rect.top);
+    }
 
     ShowWindow(windowHandle, (beginMaximized) ? SW_MAXIMIZE : showCode);
     UpdateWindow(windowHandle);
@@ -982,10 +988,11 @@ int CALLBACK WinMain(HINSTANCE instance,
         ImGui_ImplWin32_Init(windowHandle);
         ImGui_ImplOpenGL3_Init(glsl_version);
 
+        isImGuiInitialized = true;
+
         ScaleImGui();
     }
     // TODO(Noah): Look into what the imGUI functions are going to return on failure!
-    isImGuiInitialized = true;
 #endif
 
     LARGE_INTEGER LastCounter = Win32GetWallClock();
@@ -1101,6 +1108,7 @@ int CALLBACK WinMain(HINSTANCE instance,
 
         if (globalGameMemory.data != nullptr) {
             automata_engine::platform::free(globalGameMemory.data);
+            globalGameMemory.data = nullptr;
         }
 
         if (windowHandle != NULL) { DestroyWindow(windowHandle); }
