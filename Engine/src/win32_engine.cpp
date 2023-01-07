@@ -673,6 +673,19 @@ namespace automata_engine {
     };
 }
 
+LARGE_INTEGER g_epochCounter;
+
+float ae::timing::epoch() {
+    LARGE_INTEGER counter = Win32GetWallClock();
+    return Win32GetSecondsElapsed(g_epochCounter, counter, g_PerfCountFrequency64);
+}
+
+float ae::timing::wallClock() {
+    LARGE_INTEGER counter = Win32GetWallClock();
+    float Result = float(counter.QuadPart) / g_PerfCountFrequency64;
+	return (Result);
+}
+
 void automata_engine::platform::fprintf_proxy(int h, const char *fmt, ...) {
     
     char _buf[4096];
@@ -708,6 +721,8 @@ int CALLBACK WinMain(HINSTANCE instance,
         GameCleanup = automata_engine::Close;
         GameHandleWindowResize = automata_engine::HandleWindowResize;
     }
+
+    g_epochCounter = Win32GetWallClock();
 
     // NOTE(Noah): There is a reason that when you read C code, all the variables are defined
     // at the top of the function. I'm just guessing here, but maybe back in the day people

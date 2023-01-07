@@ -189,6 +189,11 @@ namespace automata_engine {
     }
 #endif
 
+    namespace timing {
+        float wallClock();
+        float epoch();
+    }
+
     namespace math {
         // TODO(Noah): Understand rvalues. Because, I'm a primitive ape, and,
         // they go right over my head, man.
