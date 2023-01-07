@@ -28,6 +28,7 @@ if ("${ProjectBackend}" MATCHES "GL_BACKEND")
     set(IMGUI_SOURCES 
         "${ENGINE_EXTERNAL}/imgui-1.87/backends/imgui_impl_opengl3.cpp"
         "${ENGINE_EXTERNAL}/imgui-1.87/backends/imgui_impl_win32.cpp"
+        "${ENGINE_EXTERNAL}/imgui-1.87/misc/freetype/imgui_freetype.cpp"
         ${IMGUI_SOURCES})
 endif()
 set(SOURCES ${PROJ_SOURCES} ${ENGINE_SOURCES} ${IMGUI_SOURCES})
@@ -42,7 +43,10 @@ source_group(TREE "${ProjectRoot}/src/" PREFIX "app/" FILES ${PROJ_SOURCES})
 source_group(TREE "${ENGINE_EXTERNAL}/" PREFIX "external/" FILES ${IMGUI_SOURCES})
 
 target_include_directories(${ProjectName}
-    PRIVATE "${ENGINE_ROOT}/src" "${ENGINE_ROOT}/include" "${ProjectRoot}/include" "${ENGINE_ROOT}" "${ProjectRoot}" "${ENGINE_EXTERNAL}" "${ENGINE_EXTERNAL}/imgui-1.87")
+    PUBLIC
+    "${ENGINE_ROOT}/src" "${ENGINE_ROOT}/include" "${ProjectRoot}/include" "${ENGINE_ROOT}" "${ProjectRoot}" "${ENGINE_EXTERNAL}" "${ENGINE_EXTERNAL}/imgui-1.87"
+    "${ENGINE_EXTERNAL}/freetype-2.12.1/include"
+)
 
 target_compile_features(${ProjectName} PRIVATE cxx_std_17)
 
@@ -106,6 +110,20 @@ if ( WIN32 )
         COMMAND "${ENGINE_ROOT}/cli/copy.bat" "$<TARGET_FILE_DIR:${ProjectName}>/res/" ${ProjectResourcesList}
     )
 endif()
+
+add_subdirectory(external/freetype-2.12.1)
+target_link_libraries(${ProjectName} freetype)
+
+target_compile_definitions(${ProjectName}
+    PUBLIC IMGUI_USER_CONFIG="automata_engine_imgui_config.h")
+
+
+add_custom_command(
+    TARGET ${ProjectName} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+    "${ENGINE_EXTERNAL}/ProggyVector/ProggyVector Regular.ttf"
+    $<TARGET_FILE_DIR:${ProjectName}>)
+
 
 # Use a foreach loop to iterate over the list of files
 #foreach(file IN LISTS ProjectResourcesList)
