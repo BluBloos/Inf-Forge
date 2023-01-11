@@ -32,6 +32,23 @@ namespace automata_engine {
                 }
             }
         } 
+        mat4::mat4() {
+            /*
+            matv[0] = vec4();
+            matv[1] = vec4();
+            matv[2] = vec4();
+            matv[3] = vec4();
+            for (uint32_t i = 0; i < 16; i++) {
+                matp[i] = 0.0f;
+            }
+            for (uint32_t i = 0; i < 4; i++) {
+                matp[i * 4 + i] = 1.0f;}
+            */
+            mat[0][0] = 1.f; mat[0][1] = 0.f; mat[0][2] = 0.f; mat[0][3] = 0.f;
+            mat[1][0] = 0.f; mat[1][1] = 1.f; mat[1][2] = 0.f; mat[1][3] = 0.f;
+            mat[2][0] = 0.f; mat[2][1] = 0.f; mat[2][2] = 1.f; mat[2][3] = 0.f;
+            mat[3][0] = 0.f; mat[3][1] = 0.f; mat[3][2] = 0.f; mat[3][3] = 1.f;
+        }
         mat4::mat4(std::initializer_list<float> initList) {
             initMat(matp, 4, initList);
         }

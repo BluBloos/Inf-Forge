@@ -60,6 +60,7 @@ namespace automata_engine {
         float matp[16];
         vec4_t matv[4];
       };
+      mat4(); // TODO(Noah): see if we can get this to be constexpr.
       mat4(std::initializer_list<float>);
     } mat4_t;
     #pragma pack(pop)
