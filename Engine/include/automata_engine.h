@@ -174,12 +174,12 @@ namespace automata_engine {
         GLuint createTextureFromFile(
             const char *filePath,
             GLint minFilter = GL_LINEAR, GLint magFilter = GL_LINEAR,
-            bool generateMips = true
+            bool generateMips = true, GLint wrap = GL_CLAMP_TO_BORDER
         );
         GLuint createTexture(
             unsigned int *pixelPointer, unsigned int width, unsigned int height,
             GLint minFilter = GL_LINEAR, GLint magFilter = GL_LINEAR,
-            bool generateMips = true
+            bool generateMips = true, GLint wrap = GL_CLAMP_TO_BORDER
         );
         GLuint compileShader(uint32_t type, char *shader);
         void setUniformMat4f(GLuint shader, char *uniformName, math::mat4 val);

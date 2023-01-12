@@ -138,14 +138,14 @@ namespace automata_engine {
         
         GLuint createTextureFromFile(
             const char *filePath,
-            GLint minFilter, GLint magFilter, bool generateMips
+            GLint minFilter, GLint magFilter, bool generateMips, GLint wrap
         ) {
             loaded_image_t img = ae::platform::stbImageLoad((char *)filePath);
             GLuint tex = 0;
             if (img.pixelPointer != nullptr) {
                 tex = createTexture(
                     img.pixelPointer, img.width, img.height,
-                    minFilter, magFilter, generateMips
+                    minFilter, magFilter, generateMips, wrap
                 );
                 glFlush(); // push all buffered commands to GPU
                 glFinish(); // block until GPU is complete
@@ -156,7 +156,7 @@ namespace automata_engine {
 
         GLuint createTexture(
             unsigned int *pixelPointer, unsigned int width, unsigned int height,
-            GLint minFilter, GLint magFilter, bool generateMips
+            GLint minFilter, GLint magFilter, bool generateMips, GLint wrap
         ) {
             GLuint newTexture;
             glGenTextures(1, &newTexture);
@@ -165,8 +165,8 @@ namespace automata_engine {
             // maybe we actually care about setting some different parameters.
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, minFilter);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, magFilter);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrap);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrap);
             glTexImage2D(
                 GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixelPointer);
             if (generateMips)
