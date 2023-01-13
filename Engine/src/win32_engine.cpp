@@ -397,13 +397,13 @@ LRESULT CALLBACK Win32WindowProc(HWND window,
 
             }*/
         } break;
-        case WM_WINDOWPOSCHANGED: {
-            WINDOWPOS *wp = (WINDOWPOS *)lParam;
-            if (!!(wp->flags & SWP_NOSIZE)) break;
+        case WM_SIZE: {
+            uint32_t width = LOWORD(lParam);
+            uint32_t height = HIWORD(lParam);
             if ((GameHandleWindowResize != nullptr) && 
                 (globalGameMemory.data != nullptr)
             ) {
-                GameHandleWindowResize(&globalGameMemory, wp->cx, wp->cy);
+                GameHandleWindowResize(&globalGameMemory, width, height);
             } else {
                 PlatformLoggerLog("WARN: (GameHandleWindowResize == nullptr) OR\n"
                     "(globalGameMemory.data == nullptr)");
