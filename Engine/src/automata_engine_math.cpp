@@ -249,9 +249,6 @@ namespace automata_engine {
             // TODO(Noah): replace with our own intrinsic.
             return ::sqrtf(a);
         }
-        float square(float a) {
-            return a * a;
-        }
         float dist(vec3_t a, vec3_t b) {
             return sqrt(square(a.x - b.x) + square(a.y - b.y) + square(a.z - b.z));
         }

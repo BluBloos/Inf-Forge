@@ -238,12 +238,17 @@ namespace automata_engine {
         // TODO(Noah): Probably make these constexpr, inline, templates and FAST intrinsics.
         float sqrt(float a);
         float atan2(float a, float b);
-        float square(float a);
+        
         float log10(float a); 
         float log2(float a); // base 2
         float deg2rad(float deg);
         float sin(float a);
         float cos(float a);
+
+        template <typename T>
+        T square(T a) {
+            return a * a;
+        }
 
         template <typename T>
         T min(T a, T b) {
