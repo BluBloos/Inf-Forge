@@ -196,7 +196,7 @@ void *automata_engine::platform::alloc(uint32_t bytes) {
 }
 
 static user_input_t globalUserInput = {};
-static game_memory_t globalGameMemory = {};
+static game_memory_t g_gameMemory = {};
 static win32_backbuffer_t globalBackBuffer = {};
 
 void ScaleImGui() {
@@ -239,10 +239,10 @@ static void Win32ResizeBackbuffer(win32_backbuffer_t *buffer, int newWidth, int 
 	// TODD(Noah): Probably want to clear to black each time we resize the window?
     // Or is VirtualAlloc already doing this?
 
-    // Update globalGameMemory too
-    globalGameMemory.backbufferPixels = (uint32_t *)buffer->memory;
-    globalGameMemory.backbufferWidth = newWidth;
-    globalGameMemory.backbufferHeight = newHeight;
+    // Update g_gameMemory too
+    g_gameMemory.backbufferPixels = (uint32_t *)buffer->memory;
+    g_gameMemory.backbufferWidth = newWidth;
+    g_gameMemory.backbufferHeight = newHeight;
 }
 
 float Win32GetSecondsElapsed(
@@ -390,7 +390,7 @@ LRESULT CALLBACK Win32WindowProc(HWND window,
                 // TODO(Noah): There's this pattern here where we are checking
                 // if the fptr is non-null. Can we abstract this?
                 if (GameHandleWindowResize != nullptr) {
-                    GameHandleWindowResize(&globalGameMemory, cstra->cx, cstra->cy);
+                    GameHandleWindowResize(&g_gameMemory, cstra->cx, cstra->cy);
                 } else {
                     PlatformLoggerLog("WARN: GameHandleWindowResize == nullptr");
                 }
@@ -401,12 +401,12 @@ LRESULT CALLBACK Win32WindowProc(HWND window,
             uint32_t width = LOWORD(lParam);
             uint32_t height = HIWORD(lParam);
             if ((GameHandleWindowResize != nullptr) && 
-                (globalGameMemory.data != nullptr)
+                (g_gameMemory.data != nullptr)
             ) {
-                GameHandleWindowResize(&globalGameMemory, width, height);
+                GameHandleWindowResize(&g_gameMemory, width, height);
             } else {
                 PlatformLoggerLog("WARN: (GameHandleWindowResize == nullptr) OR\n"
-                    "(globalGameMemory.data == nullptr)");
+                    "(g_gameMemory.data == nullptr)");
             }
         } break;
         
@@ -450,87 +450,38 @@ static void CheckSanePlatform(void) {
 
 int automata_engine::platform::GLOBAL_PROGRAM_RESULT = 0;
 
-static XAUDIO2_BUFFER xa2Buffer = {0};
-static IXAudio2SourceVoice* pSourceVoice = nullptr;
-
-// TODO(Noah): What happens if there is no buffer to play?? -_-
-void automata_engine::platform::playAudioBuffer() {
-    if (pSourceVoice != nullptr) {
-        pSourceVoice->Start( 0 );
-    }
+namespace automata_engine {
+    class IXAudio2VoiceCallback : public ::IXAudio2VoiceCallback  {
+    public:
+        IXAudio2VoiceCallback() = delete;
+        IXAudio2VoiceCallback(intptr_t voiceHandle) : m_voiceHandle(voiceHandle) {}
+        void OnLoopEnd(void *pBufferContext) {
+            PlatformLoggerLog("voice: %d, OnLoopEnd", m_voiceHandle);
+        }
+        void OnBufferEnd(void *pBufferContext) {
+            PlatformLoggerLog("voice: %d, OnBufferEnd", m_voiceHandle);
+        }
+        void OnBufferStart(void *pBufferContext) {
+            PlatformLoggerLog("voice: %d, OnBufferStart", m_voiceHandle);
+        }
+        void OnStreamEnd() {
+            PlatformLoggerLog("voice: %d, OnStreamEnd", m_voiceHandle);
+            OnVoiceBufferEnd((game_memory_t *)&g_gameMemory, m_voiceHandle);
+        }
+        void OnVoiceError(void    *pBufferContext, HRESULT Error) {
+            PlatformLoggerLog("voice: %d, OnVoiceError", m_voiceHandle);
+        }
+        // these ones exec like each frame.
+        void OnVoiceProcessingPassEnd() {
+            //PlatformLoggerLog("OnVoiceProcessingPassEnd");
+        }
+        void OnVoiceProcessingPassStart(UINT32 BytesRequired) {
+            //PlatformLoggerLog("OnVoiceProcessingPassStart");
+        }
+    private:
+        intptr_t m_voiceHandle;
+    };
 }
-
-void automata_engine::platform::stopAudioBuffer() {
-    if (pSourceVoice != nullptr) {
-        pSourceVoice->Stop( 0 );
-    }
-}
-
-void automata_engine::platform::setAudioBufferVolume(float volume) {
-    if (pSourceVoice != nullptr) {
-        pSourceVoice->SetVolume( volume );
-    }
-}
-
-float automata_engine::platform::decibelsToAmplitudeRatio(float db) {
-    return XAudio2DecibelsToAmplitudeRatio(db);
-}
-
-// TODO(Noah): Make our platform audio things more low-level.
-// I don't like the fact that we are using loaded_wav here.
-// What if I want to submit a full-blown buffer? maybe I generated
-// programatically or something.
-//
-// Another TODO would be ... make this NEVER fail! WHY would I
-// voluntarily release that sort of paradigm over to the game?
-// It's my job to put Xaudio in check. Why would you fail? Like ...
-// nah man. None of that shit!
-//
-// the paradigm should be like so. If things fail that should normally
-// work no problem, it means that something is catasrophically wrong.
-// Like idk, the sound card was removed? In these cases,
-// our engine should handle it entirely. Game, when making requests,
-// will have failures happen silently. This model is fine because
-// it will not be too long after that request failure that the engine
-// shuts itself down, or does SOMETHING.
-//
-// Now, there are also things that WILL fail. Like file reads and shader
-// compilation. i.e. file might not exist and shader could have syntax errs.
-// in these cases, the game has to deal with such errors.
-bool automata_engine::platform::submitAudioBuffer(struct loaded_wav myWav) {
-    if (pSourceVoice != nullptr) {
-        if (FAILED(pSourceVoice->Stop(0))) { return false; }
-        if (FAILED(pSourceVoice->FlushSourceBuffers())) { return false; }
-    } else {
-        return false; // no source voice...
-    }
-    xa2Buffer.AudioBytes = myWav.sampleCount * myWav.channels * sizeof(short);
-    xa2Buffer.pAudioData = (const BYTE *)myWav.sampleData;
-    return !FAILED(pSourceVoice->SubmitSourceBuffer(&xa2Buffer));
-}
-
-static HINSTANCE g_hInstance = NULL;
-
-void ae::platform::showWindowAlert(const char *windowTitle, const char *windowMessage) {
-    MessageBoxA(globalWin32Handle, windowMessage, windowTitle, MB_OK);
-}
-
-game_window_info_t automata_engine::platform::getWindowInfo() {
-    game_window_info_t winInfo;
-    winInfo.hWnd = (intptr_t)globalWin32Handle;
-    winInfo.hInstance = (intptr_t)g_hInstance;
-    if (globalWin32Handle == NULL) {
-        PlatformLoggerError("globalWin32Handle == NULL");
-    }
-    RECT rect;
-    if (GetClientRect(globalWin32Handle, &rect)) {
-        winInfo.width = rect.right - rect.left;
-        winInfo.height = fabs(rect.top - rect.bottom);
-    }
-    return winInfo;
-}
-
-// Xaudio2 callbacks.
 
 // TODO(Noah): Do something safer with the ref to global mem here.
 // i.e. what if global mem goes out of scope whilst this object is
@@ -539,7 +490,8 @@ class __declspec( uuid("{F5948348-445A-442C-BD86-27DD99A431B5}"))
 AutomataXAPO : public ::CXAPOBase {    
 public:
     AutomataXAPO() = delete; // no default constructor.
-    AutomataXAPO(void *pContext) : m_pContext(pContext), CXAPOBase(&m_regProps) {}
+    AutomataXAPO(void *pContext, intptr_t voiceHandle) :
+        m_pContext(pContext), m_voiceHandle(voiceHandle), CXAPOBase(&m_regProps) {}
     STDMETHOD(LockForProcess) (
         UINT32 InputLockedParameterCount,
         _In_reads_opt_(InputLockedParameterCount) const XAPO_LOCKFORPROCESS_BUFFER_PARAMETERS *pInputLockedParameters,
@@ -600,25 +552,15 @@ public:
         {
             memset( pInputProcessParameters[0].pBuffer, 0,
                     pInputProcessParameters[0].ValidFrameCount * m_wfx.nChannels * sizeof(FLOAT32) );
-
-            /*DoProcess(
-                *pParams,
-                (FLOAT32* __restrict)pInputProcessParameters[0].pBuffer,
-                pInputProcessParameters[0].ValidFrameCount,
-                m_wfx.nChannels );*/
         }
         else if( pInputProcessParameters[0].BufferFlags == XAPO_BUFFER_VALID )
         {
-            ae::OnBufferProcess((game_memory_t *)m_pContext,
+            ae::OnVoiceBufferProcess(
+                (game_memory_t *)m_pContext, m_voiceHandle,
                 pInputProcessParameters[0].pBuffer,
                 pOutputProcessParameters[0].pBuffer,
                 pInputProcessParameters[0].ValidFrameCount,
                 m_wfx.nChannels, m_wfx.wBitsPerSample >> 3);
-            /*DoProcess(
-                *pParams,
-                (FLOAT32* __restrict)pInputProcessParameters[0].pBuffer,
-                pInputProcessParameters[0].ValidFrameCount,
-                m_wfx.nChannels );*/
         }
         
         //EndProcess();
@@ -631,7 +573,21 @@ private:
     // Format of the audio we're processing
     WAVEFORMATEX    m_wfx;
     void *m_pContext;
+    intptr_t m_voiceHandle;
 };
+
+typedef struct {
+    IXAudio2SourceVoice *voice;
+    ae::IXAudio2VoiceCallback *callback;
+    AutomataXAPO *xapo;
+} win32_voice_t;
+
+static XAUDIO2_BUFFER g_xa2Buffer = {0};
+
+/// stretchy buffer.
+static win32_voice_t* ppSourceVoices = nullptr;
+
+// Xaudio2 callbacks.
 
 __declspec(selectany) XAPO_REGISTRATION_PROPERTIES AutomataXAPO::m_regProps = {
     __uuidof(AutomataXAPO),
@@ -645,34 +601,148 @@ __declspec(selectany) XAPO_REGISTRATION_PROPERTIES AutomataXAPO::m_regProps = {
         | XAPO_FLAG_INPLACE_SUPPORTED, 1, 1, 1, 1
 };
 
-namespace automata_engine {
-    class IXAudio2VoiceCallback : public ::IXAudio2VoiceCallback  {
-        void OnLoopEnd(void *pBufferContext) {
-            PlatformLoggerLog("OnLoopEnd");
-            //OnBufferLoopEnd((game_memory_t *)pBufferContext);
+// TODO(Noah): What happens if there is no buffer to play?? -_-
+void automata_engine::platform::voicePlayBuffer(intptr_t voiceHandle) {
+    auto pSourceVoice = (IXAudio2SourceVoice *)ppSourceVoices[voiceHandle].voice;
+    if (pSourceVoice != nullptr) {
+        pSourceVoice->Start( 0 );
+    }
+}
+
+void automata_engine::platform::voiceStopBuffer(intptr_t voiceHandle) {
+    auto pSourceVoice = (IXAudio2SourceVoice *)ppSourceVoices[voiceHandle].voice;
+    if (pSourceVoice != nullptr) {
+        pSourceVoice->Stop( 0 );
+    }
+}
+
+void automata_engine::platform::voiceSetBufferVolume(intptr_t voiceHandle, float volume) {
+    auto pSourceVoice = (IXAudio2SourceVoice *)ppSourceVoices[voiceHandle].voice;
+    if (pSourceVoice != nullptr) {
+        pSourceVoice->SetVolume( volume );
+    }
+}
+
+float automata_engine::platform::decibelsToAmplitudeRatio(float db) {
+    return XAudio2DecibelsToAmplitudeRatio(db);
+}
+
+constexpr WAVEFORMATEX initGlobalWaveFormat() {
+    WAVEFORMATEX waveFormat = {};
+    waveFormat.wFormatTag = WAVE_FORMAT_PCM; // going with 2-channel PCM data.
+    waveFormat.nChannels = 2;
+    waveFormat.nSamplesPerSec = ENGINE_DESIRED_SAMPLES_PER_SECOND; // 48 kHz
+    waveFormat.wBitsPerSample = sizeof(short) * 8;
+    waveFormat.nBlockAlign = waveFormat.nChannels * waveFormat.wBitsPerSample / 8;
+    waveFormat.nAvgBytesPerSec = waveFormat.nBlockAlign * waveFormat.nSamplesPerSec;
+    waveFormat.cbSize = 0;
+    return waveFormat;
+}
+constexpr WAVEFORMATEX  g_waveFormat = initGlobalWaveFormat();
+
+static IXAudio2* g_pXAudio2 = nullptr;
+
+// TODO(Noah): We should prob figure something intelligent
+// when voice creation fails.
+intptr_t automata_engine::platform::createVoice() {
+
+    uint32_t newVoiceIdx = StretchyBufferCount(ppSourceVoices);
+    IXAudio2SourceVoice* newVoice = nullptr;
+    
+    auto voiceCallback = new ae::IXAudio2VoiceCallback(newVoiceIdx); 
+    auto atoXAPO = new AutomataXAPO(&g_gameMemory, newVoiceIdx);
+    // TODO(Noah): Handle case where XAPO init fails.
+    HRESULT hr = atoXAPO->Initialize(nullptr, 0);
+
+    if (!FAILED(hr)) {
+        g_pXAudio2->CreateSourceVoice(&newVoice, (WAVEFORMATEX*)&g_waveFormat, 0, 
+        XAUDIO2_DEFAULT_FREQ_RATIO, voiceCallback, NULL, NULL);
+
+        if (newVoice) {
+            // create effect chain for DSP on voice.
+            XAUDIO2_EFFECT_DESCRIPTOR xapoDesc[1] = {};
+            xapoDesc[0].pEffect = static_cast<IXAPO *>(atoXAPO);
+            xapoDesc[0].InitialState = true;  // default enable.
+            xapoDesc[0].OutputChannels = 2;
+            XAUDIO2_EFFECT_CHAIN chain = {};
+            chain.EffectCount = 1;
+            chain.pEffectDescriptors = xapoDesc;
+            
+            HRESULT hResult;
+            if (S_OK == (hResult = newVoice->SetEffectChain(&chain))) {
+                // atoXAPO->Release();
+            } else {
+                PlatformLoggerError("newVoice->SetEffectChain() returned with code (0x%x)", hResult);
+            }
+
+    #if defined(_DEBUG)
+            // small sanity check.
+            float amplitude = XAudio2DecibelsToAmplitudeRatio(0.f);
+            assert(amplitude == 1.f);
+    #endif
         }
-        void OnBufferEnd(void *pBufferContext) {
-            PlatformLoggerLog("OnBufferEnd");
-            //OnBufferLoopEnd((game_memory_t *)pBufferContext);
-        }
-        void OnBufferStart(void *pBufferContext) {
-            PlatformLoggerLog("OnBufferStart");
-        }
-        void OnStreamEnd() {
-            PlatformLoggerLog("OnStreamEnd");
-            OnBufferLoopEnd((game_memory_t *)&globalGameMemory);
-        }
-        void OnVoiceError(void    *pBufferContext, HRESULT Error) {
-            PlatformLoggerLog("OnVoiceError");
-        }
-        // these ones exec like each frame.
-        void OnVoiceProcessingPassEnd() {
-            //PlatformLoggerLog("OnVoiceProcessingPassEnd");
-        }
-        void OnVoiceProcessingPassStart(UINT32 BytesRequired) {
-            //PlatformLoggerLog("OnVoiceProcessingPassStart");
-        }
-    };
+    } else {
+        PlatformLoggerError("atoXAPO->Initialize() returned with code (0x%x)", hr);
+    }
+
+    win32_voice_t w32NewVoice = {newVoice, voiceCallback, atoXAPO};
+    StretchyBufferPush(ppSourceVoices, w32NewVoice);
+    return (intptr_t)newVoiceIdx;
+}
+
+// TODO(Noah): Make our platform audio things more low-level.
+// I don't like the fact that we are using loaded_wav here.
+// What if I want to submit a full-blown buffer? maybe I generated
+// programatically or something.
+//
+// Another TODO would be ... make this NEVER fail! WHY would I
+// voluntarily release that sort of paradigm over to the game?
+// It's my job to put Xaudio in check. Why would you fail? Like ...
+// nah man. None of that shit!
+//
+// the paradigm should be like so. If things fail that should normally
+// work no problem, it means that something is catasrophically wrong.
+// Like idk, the sound card was removed? In these cases,
+// our engine should handle it entirely. Game, when making requests,
+// will have failures happen silently. This model is fine because
+// it will not be too long after that request failure that the engine
+// shuts itself down, or does SOMETHING.
+//
+// Now, there are also things that WILL fail. Like file reads and shader
+// compilation. i.e. file might not exist and shader could have syntax errs.
+// in these cases, the game has to deal with such errors.
+bool automata_engine::platform::voiceSubmitBuffer(intptr_t voiceHandle, struct loaded_wav myWav) {
+    auto pSourceVoice = (IXAudio2SourceVoice *)ppSourceVoices[voiceHandle].voice;
+    if (pSourceVoice != nullptr) {
+        if (FAILED(pSourceVoice->Stop(0))) { return false; }
+        if (FAILED(pSourceVoice->FlushSourceBuffers())) { return false; }
+    } else {
+        return false; // no source voice...
+    }
+    g_xa2Buffer.AudioBytes = myWav.sampleCount * myWav.channels * sizeof(short);
+    g_xa2Buffer.pAudioData = (const BYTE *)myWav.sampleData;
+    return !FAILED(pSourceVoice->SubmitSourceBuffer(&g_xa2Buffer));
+}
+
+static HINSTANCE g_hInstance = NULL;
+
+void ae::platform::showWindowAlert(const char *windowTitle, const char *windowMessage) {
+    MessageBoxA(globalWin32Handle, windowMessage, windowTitle, MB_OK);
+}
+
+game_window_info_t automata_engine::platform::getWindowInfo() {
+    game_window_info_t winInfo;
+    winInfo.hWnd = (intptr_t)globalWin32Handle;
+    winInfo.hInstance = (intptr_t)g_hInstance;
+    if (globalWin32Handle == NULL) {
+        PlatformLoggerError("globalWin32Handle == NULL");
+    }
+    RECT rect;
+    if (GetClientRect(globalWin32Handle, &rect)) {
+        winInfo.width = rect.right - rect.left;
+        winInfo.height = fabs(rect.top - rect.bottom);
+    }
+    return winInfo;
 }
 
 LARGE_INTEGER g_epochCounter;
@@ -713,7 +783,6 @@ int CALLBACK WinMain(HINSTANCE instance,
   int showCode)
 {
     CheckSanePlatform();
-    auto voiceCallback = automata_engine::IXAudio2VoiceCallback();
     automata_engine::super::init();
 
     // TODO: Do some hot reloading stuff! Game is a DLL to the engine :)
@@ -733,26 +802,16 @@ int CALLBACK WinMain(HINSTANCE instance,
     ATOM classAtom = 0;
     HWND windowHandle = NULL;
     HRESULT comResult = S_FALSE;
-    IXAudio2* pXAudio2 = nullptr;
-    bool sound_playing = false;
     WNDCLASS windowClass = {};
 
     // Before doing ANYTHING, we alloc memory.
-    globalGameMemory.isInitialized = false;
-    globalGameMemory.dataBytes = 67108864;
-    globalGameMemory.data =
-        automata_engine::platform::alloc(globalGameMemory.dataBytes); // will allocate 64 MB
-    if (globalGameMemory.data == nullptr) {
+    g_gameMemory.isInitialized = false;
+    g_gameMemory.dataBytes = 67108864;
+    g_gameMemory.data =
+        automata_engine::platform::alloc(g_gameMemory.dataBytes); // will allocate 64 MB
+    if (g_gameMemory.data == nullptr) {
         automata_engine::platform::GLOBAL_PROGRAM_RESULT = -1;
         return -1;
-    }
-
-    auto atoXAPO = new AutomataXAPO(&globalGameMemory);
-    HRESULT hr = atoXAPO->Initialize(nullptr, 0);
-    defer(delete atoXAPO);
-
-    if (FAILED(hr)) {
-        return - 1;
     }
 
     // Create a console.
@@ -814,7 +873,7 @@ int CALLBACK WinMain(HINSTANCE instance,
     }
 
     if (GamePreInit != nullptr) {
-        GamePreInit(&globalGameMemory);
+        GamePreInit(&g_gameMemory);
     } else {
         PlatformLoggerWarn("GamePreInit == nullptr");
     }
@@ -872,7 +931,7 @@ int CALLBACK WinMain(HINSTANCE instance,
         // get height and width of window
         RECT rect;
         GetWindowRect(globalWin32Handle, &rect);
-        GameHandleWindowResize(&globalGameMemory, rect.right - rect.left, rect.bottom - rect.top);
+        GameHandleWindowResize(&g_gameMemory, rect.right - rect.left, rect.bottom - rect.top);
     }
 
     ShowWindow(windowHandle, (beginMaximized) ? SW_MAXIMIZE : showCode);
@@ -909,7 +968,7 @@ int CALLBACK WinMain(HINSTANCE instance,
  #if defined(USING_XAUDIO2_7_DIRECTX) && !defined(RELEASE)
         flags |= XAUDIO2_DEBUG_ENGINE;
  #endif
-        if (FAILED(XAudio2Create(&pXAudio2, 0, flags))) {
+        if (FAILED(XAudio2Create(&g_pXAudio2, 0, flags))) {
             PlatformLoggerError("Unable to to create an instance of the XAudio2 engine");
             automata_engine::platform::GLOBAL_PROGRAM_RESULT = -1;
             goto WinMainEnd;
@@ -928,65 +987,28 @@ int CALLBACK WinMain(HINSTANCE instance,
         debug.TraceMask =
             XAUDIO2_LOG_ERRORS | XAUDIO2_LOG_WARNINGS;
         debug.BreakMask = XAUDIO2_LOG_ERRORS;
-        pXAudio2->SetDebugConfiguration( &debug, 0 );
+        g_pXAudio2->SetDebugConfiguration( &debug, 0 );
 #endif
 
-        if (FAILED(pXAudio2->CreateMasteringVoice(&pMasterVoice))) {
+        if (FAILED(g_pXAudio2->CreateMasteringVoice(&pMasterVoice))) {
             PlatformLoggerError("Unable to create a mastering voice (XAudio2)");
             automata_engine::platform::GLOBAL_PROGRAM_RESULT = -1;
             goto WinMainEnd;
         }
 
-        WAVEFORMATEX  waveFormat = {0};
-
-        waveFormat.wFormatTag = WAVE_FORMAT_PCM; // going with 2-channel PCM data.
-        waveFormat.nChannels = 2;
-        waveFormat.nSamplesPerSec = ENGINE_DESIRED_SAMPLES_PER_SECOND; // 48 kHz
-        waveFormat.wBitsPerSample = sizeof(short) * 8;
-        waveFormat.nBlockAlign = waveFormat.nChannels * waveFormat.wBitsPerSample / 8;
-        waveFormat.nAvgBytesPerSec = waveFormat.nBlockAlign * waveFormat.nSamplesPerSec;
-        waveFormat.cbSize = 0;
-
-        xa2Buffer.Flags = XAUDIO2_END_OF_STREAM;
-        xa2Buffer.AudioBytes = 0;
-        xa2Buffer.pAudioData = nullptr;
-        xa2Buffer.PlayBegin = 0;
-        xa2Buffer.PlayLength = 0; // play entire buffer
-        xa2Buffer.LoopBegin = 0;
-        xa2Buffer.LoopLength = 0; // entire sample should be looped.
-        xa2Buffer.LoopCount = 0; // no looping
-        xa2Buffer.pContext = (void *)&globalGameMemory;
-
-        // NOTE(Noah): Again, we do not need to be concerned with freeing the source voice
-        // as once we free the master xaudio2 object, we are good.
-        pXAudio2->CreateSourceVoice(&pSourceVoice, (WAVEFORMATEX*)&waveFormat, 0, 
-            XAUDIO2_DEFAULT_FREQ_RATIO, &voiceCallback, NULL, NULL);
-
-        if (pSourceVoice) {
-            PlatformLoggerLog("pSourceVoice successfully created.");
-            // create effect chain for DSP on voice.
-            XAUDIO2_EFFECT_DESCRIPTOR xapoDesc[1] = {};
-            xapoDesc[0].pEffect = static_cast<IXAPO *>(atoXAPO);
-            xapoDesc[0].InitialState = true;  // default enable.
-            xapoDesc[0].OutputChannels = 2;
-            XAUDIO2_EFFECT_CHAIN chain = {};
-            chain.EffectCount = 1;
-            chain.pEffectDescriptors = xapoDesc;
-            
-            HRESULT hResult;
-            if (S_OK == (hResult = pSourceVoice->SetEffectChain(&chain))) {
-                //atoXAPO->Release();
-            } else {
-                PlatformLoggerError("pSourceVoice->SetEffectChain() returned with code (0x%x)", hResult);
-            }
-            
-            float amplitude = XAudio2DecibelsToAmplitudeRatio(0.f);
-            assert(amplitude == 1.f);
-        }
+        g_xa2Buffer.Flags = XAUDIO2_END_OF_STREAM;
+        g_xa2Buffer.AudioBytes = 0;
+        g_xa2Buffer.pAudioData = nullptr;
+        g_xa2Buffer.PlayBegin = 0;
+        g_xa2Buffer.PlayLength = 0; // play entire buffer
+        g_xa2Buffer.LoopBegin = 0;
+        g_xa2Buffer.LoopLength = 0; // entire sample should be looped.
+        g_xa2Buffer.LoopCount = 0; // no looping
+        g_xa2Buffer.pContext = (void *)&g_gameMemory;
     }
 
     if (GameInit != nullptr) {
-        GameInit(&globalGameMemory);
+        GameInit(&g_gameMemory);
     } else {
         PlatformLoggerLog("WARN: GameInit == nullptr");
     }
@@ -1047,7 +1069,7 @@ int CALLBACK WinMain(HINSTANCE instance,
 
         auto gameUpdateAndRender = automata_engine::bifrost::getCurrentApp();
         if (gameUpdateAndRender != nullptr) {
-            gameUpdateAndRender(&globalGameMemory);
+            gameUpdateAndRender(&g_gameMemory);
         } else {
             PlatformLoggerLog("WARN: gameUpdateAndRender == nullptr");
         }
@@ -1098,14 +1120,18 @@ int CALLBACK WinMain(HINSTANCE instance,
 
     // TODO(Noah): Can we leverage our new nc_defer.h to replace this code below?
     {
-        // before kill Xaudio2, stop all audio and flush.
-        if (pSourceVoice != nullptr) {
-            // wait for audio thread to finish.
-            pSourceVoice->DestroyVoice();
+        // before kill Xaudio2, stop all audio and flush, for all voices.
+        for (uint32_t i = 0; i < StretchyBufferCount(ppSourceVoices); i++) {
+            if (ppSourceVoices[i].voice != nullptr) {
+                // wait for audio thread to finish.
+                ppSourceVoices[i].voice->DestroyVoice();
+                delete ppSourceVoices[i].callback;
+                delete ppSourceVoices[i].xapo;
+            }
         }
 
         // Free XAudio2 resources.
-        if (pXAudio2 != nullptr) { pXAudio2->Release(); }
+        if (g_pXAudio2 != nullptr) { g_pXAudio2->Release(); }
         if (!FAILED(comResult)) { CoUninitialize(); }
 
 #if defined(GL_BACKEND)
@@ -1118,14 +1144,14 @@ int CALLBACK WinMain(HINSTANCE instance,
 #endif
 
         if (GameCleanup != nullptr) {
-            GameCleanup(&globalGameMemory);
+            GameCleanup(&g_gameMemory);
         } else {
             PlatformLoggerLog("WARN: GameCleanup == nullptr");
         }
 
-        if (globalGameMemory.data != nullptr) {
-            automata_engine::platform::free(globalGameMemory.data);
-            globalGameMemory.data = nullptr;
+        if (g_gameMemory.data != nullptr) {
+            automata_engine::platform::free(g_gameMemory.data);
+            g_gameMemory.data = nullptr;
         }
 
         if (windowHandle != NULL) { DestroyWindow(windowHandle); }

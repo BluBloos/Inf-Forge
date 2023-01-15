@@ -1,5 +1,13 @@
-// NOTE(Noah): This file pertains to all things platform layer. i.e. structures and macros
-// that appear in both the platform impl and game.
+// NOTE(Noah): This file is the primary file for the Automata Engine API.
+// The documentation for Automata Engine is effectively this file along with the
+// associated doxygen build.
+
+// NOTE(Noah): All subnamespaces in automata engine will define their capabilities
+// within this file for the purpose of documentation.
+// The purpose of any header for a specific subnamespace will be to define relevant
+// types for that namespace.
+
+// TODO(Noah): We shouldn't litter the global namespace with AE_ macros (and other friends).
 
 #pragma once
 
@@ -13,20 +21,17 @@
 #include <string>
 #include <imgui.h>
 
-
 #include <automata_engine_math.h>
 
 #if defined(GL_BACKEND)
 #include <automata_engine_gl.h>
 #endif
 
-/** 
- * @param data pointer to underlying memory provided by the platform layer.
- * @param dataBytes amount of bytes that data takes up.
- * @param isInitialized this is a boolean used by the game to note that 
- * the memory has appropriate content
- * that we would expect to exist after calling EngineInit.
- */
+/// @param data pointer to underlying memory provided by the platform layer.
+/// @param dataBytes amount of bytes that data takes up.
+/// @param isInitialized this is a boolean used by the game to note that
+/// the memory has appropriate content
+/// that we would expect to exist after calling EngineInit.
 typedef struct game_memory {
     void *data;
     uint32_t dataBytes;
@@ -43,32 +48,28 @@ typedef struct game_window_info {
     intptr_t hInstance;
 } game_window_info_t;
 
-/**
- * @param pixelPointer pointer to contiguous chunk of memory corresponding to image pixels. Each pixel is 
- * a 32 bit unsigned integer with the RGBA channels packed each as 8 bit unsigned integers. This gives
- * each channel 0->255 in possible value. Format is not definitively in RGBA order...
- */
+
+/// @param pixelPointer pointer to contiguous chunk of memory corresponding to image pixels. Each pixel is
+/// a 32 bit unsigned integer with the RGBA channels packed each as 8 bit unsigned integers. This gives
+/// each channel 0->255 in possible value. Format is not definitively in RGBA order...
 typedef struct loaded_image {
     uint32_t *pixelPointer;
     uint32_t width;
     uint32_t height;
 } loaded_image_t;
 
-/**
- * @param contents pointer to unparsed binary data of the loaded file
- */
+/// @param contents pointer to unparsed binary data of the loaded file
 typedef struct loaded_file {
     const char *fileName;
     void *contents;
 	int contentSize;
 } loaded_file_t;
 
-/**
- * @param sampleData pointer to contiguous chunk of memory corresponding to 16-bit PCA sound samples. When 
- * there are two channels, the data is interleaved.
- * @param parentFile internal storage for corresponding loaded_file that contains the unparsed sound data. 
- * This is retained so that we can ultimately free the loaded file.
- */
+
+/// @param sampleData pointer to contiguous chunk of memory corresponding to 16-bit PCA sound samples. When
+/// there are two channels, the data is interleaved.
+/// @param parentFile internal storage for corresponding loaded_file that contains the unparsed sound data.
+/// This is retained so that we can ultimately free the loaded file.
 typedef struct loaded_wav {
     int sampleCount;
 	int channels;
@@ -106,7 +107,6 @@ typedef struct user_input {
     int deltaMouseY = 0;
     bool mouseLBttnDown = false;
     bool mouseRBttnDown = false;
-    // bool mouseRBttnDown = false;
     // TODO(Noah): We will prolly want to change how we represent keys.
     bool keyDown[(uint32_t)GAME_KEY_COUNT];
 } user_input_t;
@@ -124,7 +124,7 @@ enum game_window_profile_t {
 // But that is fine. That is just some work on behalf of the project. Things are seperated well.
 
 namespace automata_engine {
-    
+
     typedef enum update_model {
         AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC = 0,
         AUTOMATA_ENGINE_UPDATE_MODEL_FRAME_BUFFERING,
@@ -137,17 +137,28 @@ namespace automata_engine {
     extern int32_t defaultHeight;
     extern const char *defaultWindowName;
 
-    // Binding points exposed to the game, for the game to define.
+    // ----------------- GAME BINDING POINTS -----------------
+#pragma region GameBindingPoints
     void PreInit(game_memory_t *gameMemory);
     void Init(game_memory_t *gameMemory);
     void Close(game_memory_t *gameMemory);
     void HandleWindowResize(struct game_memory *gameMemory, int newWdith, int newHeight);
     
-    // TODO(Noah): Move towards a multi-voice system.
-    void OnBufferLoopEnd(game_memory_t *gameMemory);
-    void OnBufferProcess(game_memory_t *gameMemory, void *dst, void *src, 
+    // ----------------- AUDIO CALLBACKS -----------------
+#pragma region AudioCallbacks
+    /// @brief Main audio callback.
+    void OnVoiceBufferProcess(
+        game_memory_t *gameMemory, intptr_t voiceHandle, void *dst, void *src,
         uint32_t samplesToWrite, int channels, int bytesPerSample);
-    
+    /// @brief Called when a submitted buffer has finished playing. The implementation
+    /// may make state changes to the voice.
+    void OnVoiceBufferEnd(game_memory_t *gameMemory, intptr_t voiceHandle);
+#pragma endregion  // AudioCallbacks
+    // ----------------- END AUDIO CALLBACKS -----------------
+
+#pragma endregion  // GameBindingPoints
+    // ----------------- END GAME BINDING POINTS -----------------
+
     // engine helper funcs.
     game_state_t *getGameState(game_memory_t *gameMemory);
     void setGlobalRunning(bool); // this one enables more of a graceful exit.
@@ -157,8 +168,6 @@ namespace automata_engine {
     void ImGuiRenderMat4(char *matName, math::mat4_t mat);
     void ImGuiRenderVec3(char *vecName, math::vec3_t vec);
 
-// TODO(Noah): Some of this GL specific stuff
-// maybe we want to move into a proper namespace?
 #if defined(GL_BACKEND)
     namespace GL {
         // state that the engine exposes
@@ -204,7 +213,7 @@ namespace automata_engine {
         vec4_t operator+=(vec4_t &, vec4_t);
         vec4_t operator+(vec4_t b, vec4_t a);
         vec4_t operator*(vec4_t b, float a);
-        
+
         mat4_t operator*(mat4_t a, mat4_t b);
 
         vec3_t operator+=(vec3_t &, vec3_t);
@@ -234,12 +243,11 @@ namespace automata_engine {
         mat4_t buildRotMat4(vec3_t eulerAngles);
         mat4_t transposeMat4(mat4_t  mat);
 
-
         // TODO(Noah): Probably make these constexpr, inline, templates and FAST intrinsics.
         float sqrt(float a);
         float atan2(float a, float b);
-        
-        float log10(float a); 
+
+        float log10(float a);
         float log2(float a); // base 2
         float deg2rad(float deg);
         float sin(float a);
@@ -252,14 +260,14 @@ namespace automata_engine {
 
         template <typename T>
         T min(T a, T b) {
-            return std::min(a, b);
+            return (a < b) ? a : b;
         }
 
         template <typename T>
         T max(T a, T b) {
-            return std::max(a, b);
+            return (a > b) ? a : b;
         }
-        
+
         float abs(float a);
 
         float ceil(float a);
@@ -284,7 +292,7 @@ namespace automata_engine {
     // TODO(Noah): Add GPU adapter device name in updateApp ImGui idea :)
     typedef struct bifrost {
         static void registerApp(
-            const char *appName, 
+            const char *appName,
             void (*callback)(game_memory_t *),
             void (*transInto)(game_memory_t *) = nullptr,
             void (*transOut)(game_memory_t *) = nullptr);
@@ -292,41 +300,36 @@ namespace automata_engine {
         static std::function<void(game_memory_t *)> getCurrentApp();
     } bifrost_t;
 
-    // NOTE(Noah): All subnamespaces in automata engine will define their capabilities
-    // within this file for the purpose of documentation.
-    // The purpose of any header for a specific subnamespace will be to define relevant 
-    // types for that namespace.
-
     // function that go here are those that are a layer above the read entire file call
     // these functions do further processing (parse a file format).
     namespace io {
-        void freeWav(loaded_wav wavFile);
         loaded_wav_t loadWav(const char *);
+        void freeWav(loaded_wav wavFile);
         loaded_image_t loadBMP(const char *path);
         raw_model_t loadObj(const char *filePath);
         void freeObj(raw_model_t obj);
         void freeLoadedImage(loaded_image_t img);
     };
-    
+
     // Platform space are those functions that relate to doing something with the OS
     // Specifically, if calling the function requires any OS API to be made, that goes
     // in the platform layer. If calling the function uses cached information, but which
     // was initially retrieved by OS API, this too is a platform func. This case can
     // be classified as being temporally dependent: Ex) user input.
     namespace platform {
-        
+
         void fprintf_proxy(int handle, const char *fmt, ...);
 
         // NOTE(Noah): Does not sit ontop of readEntireFile, so it's actually
         // a platform thing. BUT, thankfully, we have the impl within the
         // guts of automata, so no need for platform code to impl.
-        loaded_image_t stbImageLoad(char *fileName); 
+        loaded_image_t stbImageLoad(char *fileName);
 
         void getUserInput(struct user_input *userInput);
 
         /// set the mouse position in client pixel coords.
         /// @param yPos y pos in client pixel coords.
-        /// @param xPos x pos in client pixel coords. 
+        /// @param xPos x pos in client pixel coords.
         void setMousePos(int xPos, int yPos);
 
         void showMouse(bool);
@@ -336,24 +339,29 @@ namespace automata_engine {
         extern bool GLOBAL_RUNNING;
         extern bool GLOBAL_VSYNC;
         extern int GLOBAL_PROGRAM_RESULT;
-        extern update_model_t GLOBAL_UPDATE_MODEL;        
+        extern update_model_t GLOBAL_UPDATE_MODEL;
 
         game_window_info_t getWindowInfo();
         void free(void *memToFree);
         void *alloc(uint32_t bytes);
         loaded_file readEntireFile(const char *fileName);
         void freeLoadedFile(loaded_file_t file);
-        // TODO(Noah): we will either replace these with a different
-        // paradigm, OR, it will make sense to have whatever the other
-        // audio paradigm is exist adjacently to what is below.
-        /**
-          * @returns false on failure.
-          */
-        bool submitAudioBuffer(loaded_wav_t wavFile);
-        void playAudioBuffer();
-        void stopAudioBuffer();
-        void setAudioBufferVolume(float volume);
+
+        
+        // --------- AUDIO ----------------
+#pragma region PlatformAudio
+        // TODO(Noah): allow for multiple buffer submissions to a voice. currently
+        // we are doing a single buffer model.
+        intptr_t createVoice();
+        /// @return false on failure.
+        bool voiceSubmitBuffer(intptr_t voiceHandle, loaded_wav_t wavFile);
+        void voicePlayBuffer(intptr_t voiceHandle);
+        void voiceStopBuffer(intptr_t voiceHandle);
+        void voiceSetBufferVolume(intptr_t voiceHandle, float volume);
         float decibelsToAmplitudeRatio(float db);
+#pragma endregion  // PlatformAudio
+        // --------- END AUDIO ------------
+        
 
         void showWindowAlert(const char *windowTitle, const char *windowMessage);
 
@@ -369,9 +377,9 @@ namespace ae = automata_engine;
 #define AE_STDOUT 1
 #define AE_STDIN  2
 
-// Returns pos of last chr in str.
-// https://stackoverflow.com/questions/69121423/could-not-deduce-template-argument-for-const-char-n-from-const-char-6
-// ^ need (&str) to ensure param does not decay and still have type information.
+/// Returns pos of last chr in str.
+/// https://stackoverflow.com/questions/69121423/could-not-deduce-template-argument-for-const-char-n-from-const-char-6
+/// ^ need (&str) to ensure param does not decay and still have type information.
 template <std::size_t strLen>
 static constexpr const char *__find_last_in_str(const char (&str)[strLen], const char chr) {
     const char *lastPos = str;
@@ -387,8 +395,7 @@ static constexpr const char *__find_last_in_str(const char (&str)[strLen], const
 
 #define __FILE_RELATIVE__ (__find_last_in_str("\\" __FILE__, '\\') + 1)
 
-// TODO(Noah): All Platform functions must have their impl in file <platform>_engine.h
-// NOTE(Noah): See this page for color code guide: 
+// NOTE(Noah): See this page for color code guide:
 // https://stackoverflow.com/questions/4842424/list-of-ansi-color-escape-sequences
 #ifndef RELEASE
 #define PlatformLoggerError(fmt, ...) \
