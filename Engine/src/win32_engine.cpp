@@ -815,7 +815,7 @@ int CALLBACK WinMain(HINSTANCE instance,
     }
 
     // Create a console.
-    #ifndef RELEASE
+#if defined(AE_ENABLE_PLATFORM_LOGGING)
     {
         int hConHandle;
         intptr_t lStdHandle;
@@ -850,7 +850,7 @@ int CALLBACK WinMain(HINSTANCE instance,
         // TODO(Noah): Make this print version from a manifest or something...
         PlatformLoggerLog("\"Hello, World!\" from Automata Engine %s", "Alpha v0.2.0");
     }
-    #endif
+#endif
 
     // Query performance counter
     {
@@ -967,7 +967,7 @@ int CALLBACK WinMain(HINSTANCE instance,
         }
 
         UINT32 flags = 0;
- #if defined(USING_XAUDIO2_7_DIRECTX) && !defined(RELEASE)
+ #if defined(USING_XAUDIO2_7_DIRECTX) && defined(_DEBUG)
         flags |= XAUDIO2_DEBUG_ENGINE;
  #endif
         if (FAILED(XAudio2Create(&g_pXAudio2, 0, flags))) {
@@ -976,7 +976,7 @@ int CALLBACK WinMain(HINSTANCE instance,
             goto WinMainEnd;
         }
 
-#if !defined(USING_XAUDIO2_7_DIRECTX) && !defined(RELEASE)
+#if !defined(USING_XAUDIO2_7_DIRECTX) && defined(_DEBUG)
         // NOTE(Noah): This logging seems useless, empirically after trying to see if
         // it would help to debug some issue.
         //
@@ -1061,7 +1061,7 @@ int CALLBACK WinMain(HINSTANCE instance,
             }
         }
 
-#if !defined(RELEASE) && defined(GL_BACKEND)
+#if defined(AE_ENABLE_IMGUI) && defined(GL_BACKEND)
         if (isImGuiInitialized) {
             ImGui_ImplOpenGL3_NewFrame();
             ImGui_ImplWin32_NewFrame();
@@ -1076,7 +1076,7 @@ int CALLBACK WinMain(HINSTANCE instance,
             PlatformLoggerLog("WARN: gameUpdateAndRender == nullptr");
         }
 
-#if !defined(RELEASE) && defined(GL_BACKEND)
+#if defined(AE_ENABLE_IMGUI) && defined(GL_BACKEND)
             ImGui::Render();
             ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 #endif

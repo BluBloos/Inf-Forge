@@ -30,7 +30,9 @@ namespace automata_engine {
     typedef struct vec4 vec4_t;
     typedef struct vec3 {
       float x,y,z;
-      constexpr vec3();
+      // NOTE(Noah): constexpr funcs are implicitly `inline`, so each translation unit
+      // must be able to see the def.
+      constexpr vec3() : x(0), y(0), z(0) {};
       vec3(float, float, float);
       vec3(vec4_t);
       vec3 operator-();
@@ -38,7 +40,7 @@ namespace automata_engine {
     } vec3_t;
     typedef struct vec4 {
       float x,y,z,w;
-      constexpr vec4();
+      constexpr vec4() : x(0), y(0), z(0), w(0) {};
       vec4 operator-();
       vec4(float, float, float, float);
       vec4(vec3_t, float);

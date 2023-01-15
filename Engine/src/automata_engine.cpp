@@ -122,7 +122,7 @@ namespace automata_engine {
     }
     void super::updateAndRender(game_memory_t * gameMemory) {
         // Present the ImGui stuff to allow user to switch apps.
-#if defined(_DEBUG)
+#if defined(AE_ENABLE_IMGUI)
     if (super::g_renderImGui) {
         ImGui::Begin("AutomataEngine");
         int item_current = _currentApp;

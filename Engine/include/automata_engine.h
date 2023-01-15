@@ -11,6 +11,9 @@
 
 #pragma once
 
+#define AE_ENABLE_PLATFORM_LOGGING 1
+#define AE_ENABLE_IMGUI 1
+
 #include <gist/github/nc_types.h>
 #include <gist/github/nc_defer.h>
 #include <gist/github/nc_stretchy_buffers.h>
@@ -397,7 +400,7 @@ static constexpr const char *__find_last_in_str(const char (&str)[strLen], const
 
 // NOTE(Noah): See this page for color code guide:
 // https://stackoverflow.com/questions/4842424/list-of-ansi-color-escape-sequences
-#ifndef RELEASE
+#if defined(AE_ENABLE_PLATFORM_LOGGING)
 #define PlatformLoggerError(fmt, ...) \
     (ae::platform::fprintf_proxy(AE_STDERR, "\033[0;31m" "[Error on line=%d in file:%s]:\n" fmt "\n" "\033[0m", __LINE__, __FILE_RELATIVE__, __VA_ARGS__))
 #define PlatformLoggerLog(fmt, ...) \

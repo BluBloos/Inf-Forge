@@ -69,8 +69,6 @@ namespace automata_engine {
         vec4_t vec4::operator-() {
             return vec4_t(-this->x, -this->y, -this->z, -this->w);
         }
-        constexpr vec3::vec3() : x(0), y(0), z(0) {}
-        constexpr vec4::vec4() : x(0), y(0), z(0), w(0) {}
         vec4::vec4(float a, float b, float c, float d) :
             x(a), y(b), z(c), w(d) {}
         vec4::vec4(vec3_t a, float b) : x(a.x), y(a.y), z(a.z), w(b) {}

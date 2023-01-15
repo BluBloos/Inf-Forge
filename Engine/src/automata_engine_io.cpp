@@ -268,7 +268,7 @@ namespace automata_engine {
         StretchyBufferFree(normalData);
         stbds_hmfree(vertex_uv_pair_map);
         // debug scan on .obj        
-#if !defined(RELEASE)
+#if defined(_DEBUG)
         for (uint32_t i = 0; i < StretchyBufferCount(rawModel.vertexData) / 8; i++) {
           float uvX = rawModel.vertexData[i * 8 + 3];
           float uvY = rawModel.vertexData[i * 8 + 4];
