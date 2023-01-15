@@ -649,16 +649,18 @@ namespace automata_engine {
     class IXAudio2VoiceCallback : public ::IXAudio2VoiceCallback  {
         void OnLoopEnd(void *pBufferContext) {
             PlatformLoggerLog("OnLoopEnd");
-            OnBufferLoopEnd((game_memory_t *)pBufferContext);
+            //OnBufferLoopEnd((game_memory_t *)pBufferContext);
         }
         void OnBufferEnd(void *pBufferContext) {
             PlatformLoggerLog("OnBufferEnd");
+            //OnBufferLoopEnd((game_memory_t *)pBufferContext);
         }
         void OnBufferStart(void *pBufferContext) {
             PlatformLoggerLog("OnBufferStart");
         }
         void OnStreamEnd() {
             PlatformLoggerLog("OnStreamEnd");
+            OnBufferLoopEnd((game_memory_t *)&globalGameMemory);
         }
         void OnVoiceError(void    *pBufferContext, HRESULT Error) {
             PlatformLoggerLog("OnVoiceError");
@@ -945,14 +947,14 @@ int CALLBACK WinMain(HINSTANCE instance,
         waveFormat.nAvgBytesPerSec = waveFormat.nBlockAlign * waveFormat.nSamplesPerSec;
         waveFormat.cbSize = 0;
 
-        xa2Buffer.Flags = 0;
+        xa2Buffer.Flags = XAUDIO2_END_OF_STREAM;
         xa2Buffer.AudioBytes = 0;
         xa2Buffer.pAudioData = nullptr;
         xa2Buffer.PlayBegin = 0;
         xa2Buffer.PlayLength = 0; // play entire buffer
         xa2Buffer.LoopBegin = 0;
         xa2Buffer.LoopLength = 0; // entire sample should be looped.
-        xa2Buffer.LoopCount = 1; // Sneaky trick to get loop callback but don't play buffer after :)
+        xa2Buffer.LoopCount = 0; // no looping
         xa2Buffer.pContext = (void *)&globalGameMemory;
 
         // NOTE(Noah): Again, we do not need to be concerned with freeing the source voice
