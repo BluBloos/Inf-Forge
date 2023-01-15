@@ -844,6 +844,8 @@ int CALLBACK WinMain(HINSTANCE instance,
         }
 
         PlatformLoggerLog("stdout initialized");
+        // TODO(Noah): Would be nice to have unicode support with our platform logger. Emojis are awesome!
+        PlatformLoggerWarn("Please NOTE below error is expected and NOT an error.");
         PlatformLoggerError("testing stderr out");
         // TODO(Noah): Make this print version from a manifest or something...
         PlatformLoggerLog("\"Hello, World!\" from Automata Engine %s", "Alpha v0.2.0");
