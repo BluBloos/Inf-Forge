@@ -362,6 +362,7 @@ namespace automata_engine {
         void voiceStopBuffer(intptr_t voiceHandle);
         void voiceSetBufferVolume(intptr_t voiceHandle, float volume);
         float decibelsToAmplitudeRatio(float db);
+        static const intptr_t INVALID_VOICE = UINT32_MAX;
 #pragma endregion  // PlatformAudio
         // --------- END AUDIO ------------
         
