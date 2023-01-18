@@ -267,7 +267,7 @@ namespace automata_engine {
         }
         float project(vec3_t a, vec3_t b) {
             b = normalize(b);
-            return (dot(a, b) / dot(b, b)); // * b;
+            return (dot(a, b)); // * b;
         }
         float log10(float a) {
             return std::log10(a);
