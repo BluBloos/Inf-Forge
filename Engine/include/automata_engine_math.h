@@ -3,7 +3,7 @@
 // #include <automata_engine.h>
 
 // I suppose we will use a combination of glm and our own routines.
-// Isn't math fun?
+// Isn't math fun?`
 
 // Oh, and, we'll probably want to make this code have some nice documentation.
 // In fact, learning is always the most important part, isn't it?
@@ -17,7 +17,7 @@
 #include <initializer_list>
 
 #if !defined(PI)
-#define PI 3.1415f
+#define PI 3.14159f
 #endif
 #define DEGREES_TO_RADIANS PI / 180.0f
 
