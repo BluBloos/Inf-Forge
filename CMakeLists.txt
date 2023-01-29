@@ -2,6 +2,13 @@ cmake_minimum_required(VERSION 3.10)
 
 set(ProjectName "AutomataApp" CACHE STRING "game EXE / target name")
 set(ProjectResourcesExtraPath "" CACHE STRING "absolute path to some dir with runtime game resources")
+set(ProjectExplicitSources OFF CACHE BOOL "if true, the app shall set PROJ_SOURCES as those to compile")
+set(ProjectExplicitResOutputDir "" CACHE STRING "if set, the app shall copy resources to this dir instead of default res/")
+set(ProjectBackend "CPU_BACKEND" CACHE STRING "can be any of {GL_BACKEND,CPU_BACKEND, DX12_BACKEND, VULKAN_BACKEND}")
+set(ProjectRoot "${CMAKE_CURRENT_SOURCE_DIR}" CACHE STRING "set to where the folder src/ and res/ can be found")
+
+
+# TODO: What if we want to make a multiple gfx-API application?
 
 if (${ProjectRoot} EQUAL "")
     message(FATAL_ERROR "Must supply ProjectRoot var")
@@ -18,17 +25,20 @@ set(ENGINE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/Engine")
 set(ENGINE_EXTERNAL "${CMAKE_CURRENT_SOURCE_DIR}/external")
 
 # find sources
-file(GLOB_RECURSE PROJ_SOURCES
-    "${ProjectRoot}/src/*.cpp")
+if (NOT ProjectExplicitSources)
+    file(GLOB_RECURSE PROJ_SOURCES
+        "${ProjectRoot}/src/*.cpp")
+endif()
 file(GLOB_RECURSE ENGINE_SOURCES
     "${ENGINE_ROOT}/src/*.cpp")
 file(GLOB IMGUI_SOURCES
-    "${ENGINE_EXTERNAL}/imgui-1.87/imgui*.cpp")
+    "${ENGINE_EXTERNAL}/imgui-1.87/imgui*.cpp"
+    "${ENGINE_EXTERNAL}/imgui-1.87/backends/imgui_impl_win32.cpp"
+    "${ENGINE_EXTERNAL}/imgui-1.87/misc/freetype/imgui_freetype.cpp")
+# TODO: We're kind of assuming Win32 all over the place right now.
 if ("${ProjectBackend}" MATCHES "GL_BACKEND")
-    set(IMGUI_SOURCES 
+    set(IMGUI_SOURCES
         "${ENGINE_EXTERNAL}/imgui-1.87/backends/imgui_impl_opengl3.cpp"
-        "${ENGINE_EXTERNAL}/imgui-1.87/backends/imgui_impl_win32.cpp"
-        "${ENGINE_EXTERNAL}/imgui-1.87/misc/freetype/imgui_freetype.cpp"
         ${IMGUI_SOURCES})
 endif()
 set(SOURCES ${PROJ_SOURCES} ${ENGINE_SOURCES} ${IMGUI_SOURCES})
@@ -45,7 +55,7 @@ source_group(TREE "${ENGINE_EXTERNAL}/" PREFIX "external/" FILES ${IMGUI_SOURCES
 target_include_directories(${ProjectName}
     PUBLIC
     "${ENGINE_ROOT}/src" "${ENGINE_ROOT}/include" "${ProjectRoot}/include" "${ENGINE_ROOT}" "${ProjectRoot}" "${ENGINE_EXTERNAL}" "${ENGINE_EXTERNAL}/imgui-1.87"
-    "${ENGINE_EXTERNAL}/freetype-2.12.1/include"
+    "${ENGINE_EXTERNAL}/freetype-2.12.1/include" "${ENGINE_EXTERNAL}/imgui-1.87/backends" "${ProjectRoot}/src"
 )
 
 target_compile_features(${ProjectName} PRIVATE cxx_std_17)
@@ -53,7 +63,7 @@ target_compile_features(${ProjectName} PRIVATE cxx_std_17)
 set_target_properties(${ProjectName}
     PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY $<TARGET_FILE_DIR:${ProjectName}>)
 
-set(COMMON_LIB gdi32 user32 kernel32 Xaudio2 XAPOBase ole32 Shcore) 
+set(COMMON_LIB gdi32 user32 kernel32 Xaudio2 XAPOBase ole32 Shcore)
 
 if ( ${ProjectBackend} MATCHES "GL_BACKEND" )
     target_link_libraries(${ProjectName}
@@ -64,26 +74,29 @@ if ( ${ProjectBackend} MATCHES "GL_BACKEND" )
         PRIVATE -DGL_BACKEND -DGLEW_STATIC)
     # TODO(Noah): We can probably get rid of glm here.
     target_include_directories(${ProjectName}
-        PRIVATE "${ENGINE_EXTERNAL}/imgui-1.87/backends" "${ENGINE_EXTERNAL}/glm-0.9.9.8" "${ENGINE_EXTERNAL}/glew-2.2.0/include/GL")
+        PRIVATE "${ENGINE_EXTERNAL}/glm-0.9.9.8" "${ENGINE_EXTERNAL}/glew-2.2.0/include/GL")
 
 elseif( ${ProjectBackend} MATCHES "DX12_BACKEND" )
     target_link_libraries(${ProjectName}
         ${COMMON_LIB} D3D12 DXGI D3DCompiler)
-    target_compile_definitions(${ProjectName} -DDX12_BACKEND)
+    target_compile_definitions(${ProjectName} PRIVATE -DDX12_BACKEND)
 elseif( ${ProjectBackend} MATCHES "CPU_BACKEND" )
     target_link_libraries(${ProjectName} ${COMMON_LIB})
-    target_compile_definitions(${ProjectName} -DCPU_BACKEND)
+    target_compile_definitions(${ProjectName} PRIVATE -DCPU_BACKEND)
 elseif( ${ProjectBackend} MATCHES "VULKAN_BACKEND" )
     target_link_libraries(${ProjectName} ${COMMON_LIB})
-    target_compile_definitions(${ProjectName} -DVULKAN_BACKEND)
+    target_compile_definitions(${ProjectName} PRIVATE -DVULKAN_BACKEND)
 endif()
 
-#set(output_directory "${CMAKE_BINARY_DIR}/res")
+set(output_directory "res")
+if ( NOT "${ProjectExplicitResOutputDir}" EQUAL "" )
+    set(output_directory "${ProjectExplicitResOutputDir}")
+endif()
 
 # Setup pre-build step of Python hook.
 add_custom_command(
     TARGET ${ProjectName} PRE_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:${ProjectName}>/res"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:${ProjectName}>/${output_directory}"
     COMMAND python "${ENGINE_ROOT}/cli/build.py" "${ENGINE_ROOT}"
     COMMAND python "${ENGINE_ROOT}/cli/build.py" "${ProjectRoot}")
 
@@ -94,7 +107,7 @@ file(GLOB_RECURSE ProjectResources
 if( NOT "${ProjectResourcesExtraPath}"  EQUAL "" )
     file(GLOB_RECURSE ProjectResourcesExtra
         LIST_DIRECTORIES false
-        "${ProjectResourcesExtraPath}/*")        
+        "${ProjectResourcesExtraPath}/*")
 endif()
 
 set( ProjectResourcesList ${ProjectResources} ${ProjectResourcesExtra} )
@@ -107,7 +120,7 @@ if ( WIN32 )
     list( TRANSFORM ProjectResourcesList REPLACE "/" "\\\\" )
     add_custom_command(
         TARGET ${ProjectName} POST_BUILD
-        COMMAND "${ENGINE_ROOT}/cli/copy.bat" "$<TARGET_FILE_DIR:${ProjectName}>/res/" ${ProjectResourcesList}
+        COMMAND "${ENGINE_ROOT}/cli/copy.bat" "$<TARGET_FILE_DIR:${ProjectName}>/${output_directory}/" ${ProjectResourcesList}
     )
 endif()
 

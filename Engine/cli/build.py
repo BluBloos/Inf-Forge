@@ -96,6 +96,12 @@ def get_gists(root_dir):
     # construct the file paths that need opening.
     file_paths = []
     dirs = [os.path.join(root_dir, "src"), os.path.join(root_dir, "include")]
+
+    # check if dirs exist, if not, remove from list.
+    for dir in dirs:
+        if not os.path.isdir(dir):
+            dirs.remove(dir)
+
     print("scanning source in dirs={}".format(dirs))
 
     blacklist = []

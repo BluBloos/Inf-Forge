@@ -29,11 +29,11 @@ static HWND globalWin32Handle = NULL;
 
 /// On the Windows platform, when a WM_SIZE message is recieved, this callback is invoked.
 /// the provided width and height are the client dimensions of the window.
-static void (*GameHandleWindowResize)(game_memory_t *, int, int) = nullptr;
+static void (*GameHandleWindowResize)(ae::game_memory_t *, int, int) = nullptr;
 
-static void (*GameInit)(game_memory_t *) = nullptr;
-static void (*GamePreInit)(game_memory_t *) = nullptr;
-static void (*GameCleanup)(game_memory_t *) = nullptr;
+static void (*GameInit)(ae::game_memory_t *) = nullptr;
+static void (*GamePreInit)(ae::game_memory_t *) = nullptr;
+static void (*GameCleanup)(ae::game_memory_t *) = nullptr;
 
 namespace ae = automata_engine;
 
@@ -57,11 +57,13 @@ void ae::platform::showMouse(bool show) {
     ShowCursor(show);
 }
 
+// TODO: this looks dangerous. why does loaded_file_t work
+// here without being qualified?
 void ae::platform::freeLoadedFile(loaded_file_t file) {
     VirtualFree(file.contents, 0, MEM_RELEASE);
 }
 
-loaded_file ae::platform::readEntireFile(const char *fileName) {
+ae::loaded_file ae::platform::readEntireFile(const char *fileName) {
 	void *result = 0;
 	int fileSize32 = 0;
 	HANDLE fileHandle = CreateFileA(fileName, GENERIC_READ,
@@ -90,18 +92,19 @@ loaded_file ae::platform::readEntireFile(const char *fileName) {
 		}
 		CloseHandle(fileHandle);
 	}
-	loaded_file fileResult = {};
+	ae::loaded_file fileResult = {};
 	fileResult.contents = result;
 	fileResult.contentSize = fileSize32;
     fileResult.fileName = fileName;
 	return fileResult;
 }
 
-#if defined(GL_BACKEND)
 static bool isImGuiInitialized = false;
 #include "imgui.h"
-#include "imgui_impl_opengl3.h"
 #include "imgui_impl_win32.h" // includes Windows.h for us
+
+#if defined(GL_BACKEND)
+#include "imgui_impl_opengl3.h"
 // NOTE(Noah): Pretty sure glew and gl must be after imgui headers here.
 #include <glew.h>
 #include <gl/gl.h>
@@ -187,6 +190,31 @@ void ae::platform::setVsync(bool b) {
 #endif
 }
 
+inline void GetAssetsPath(_Out_writes_(pathSize) WCHAR* path, UINT pathSize)
+{
+    if (path == nullptr)
+    {
+        throw std::exception();
+    }
+
+    
+}
+
+
+char *ae::platform::getRuntimeExeDirPath(char *pathOut, uint32_t pathSize)
+{
+    DWORD size = GetModuleFileNameA(nullptr, pathOut, pathSize);
+    if (size == 0 || size == pathSize) {
+        return nullptr;
+    }
+    char* lastSlash = strrchr(pathOut, L'\\');
+    if (lastSlash && ((lastSlash - pathOut + 1) < pathSize)) {
+        *(lastSlash + 1) = L'\0';
+        return pathOut;
+    }
+    return nullptr;
+}
+
 void automata_engine::platform::free(void *data) {
     VirtualFree((void *)data, 0, MEM_RELEASE);
 }
@@ -195,8 +223,8 @@ void *automata_engine::platform::alloc(uint32_t bytes) {
     return VirtualAlloc(0, bytes, MEM_COMMIT, PAGE_READWRITE);
 }
 
-static user_input_t globalUserInput = {};
-static game_memory_t g_gameMemory = {};
+static ae::user_input_t globalUserInput = {};
+static ae::game_memory_t g_gameMemory = {};
 static win32_backbuffer_t globalBackBuffer = {};
 
 void ScaleImGui() {
@@ -209,8 +237,10 @@ void ScaleImGui() {
             float size_in_pixels = float(uint32_t(16 * SCALE));
             ImGui::GetIO().Fonts->Clear();
             ImGui::GetIO().Fonts->AddFontFromFileTTF("ProggyVector Regular.ttf", size_in_pixels);
+#if defined(GL_BACKEND)
             ImGui_ImplOpenGL3_DestroyFontsTexture();
             ImGui_ImplOpenGL3_CreateFontsTexture();
+#endif
         }
     }
 }
@@ -259,7 +289,8 @@ LARGE_INTEGER Win32GetWallClock()
 	return (Result);
 }
 
-void Win32DisplayBufferWindow(HDC deviceContext, game_window_info_t winInfo) {
+void Win32DisplayBufferWindow(HDC deviceContext,
+                              ae::game_window_info_t winInfo) {
     int OffsetX = (winInfo.width - globalBackBuffer.width) / 2;
     int OffsetY = (winInfo.height - globalBackBuffer.height) / 2;
     PatBlt(deviceContext, 0, 0, winInfo.width, OffsetY, BLACKNESS);
@@ -282,22 +313,22 @@ void automata_engine::platform::getUserInput(user_input_t *userInput) {
 
 static void ProccessKeyboardMessage(unsigned int vkCode, bool down) {
   if (vkCode >= 'A' && vkCode <= 'Z') {
-    globalUserInput.keyDown[(uint32_t)GAME_KEY_A + (vkCode - 'A')] = down;
+    globalUserInput.keyDown[(uint32_t)ae::GAME_KEY_A + (vkCode - 'A')] = down;
   } else if (vkCode >= '0' && vkCode <= '9') {
-    globalUserInput.keyDown[(uint32_t)GAME_KEY_0 + (vkCode - '0')] = down;
+    globalUserInput.keyDown[(uint32_t)ae::GAME_KEY_0 + (vkCode - '0')] = down;
   } else {
     switch(vkCode) {
         case VK_SPACE:
-            globalUserInput.keyDown[GAME_KEY_SPACE] = down;
+        globalUserInput.keyDown[ae::GAME_KEY_SPACE] = down;
             break;
         case VK_SHIFT:
-            globalUserInput.keyDown[GAME_KEY_SHIFT] = down;
+          globalUserInput.keyDown[ae::GAME_KEY_SHIFT] = down;
             break;
         case VK_ESCAPE:
-            globalUserInput.keyDown[GAME_KEY_ESCAPE] = down;
+          globalUserInput.keyDown[ae::GAME_KEY_ESCAPE] = down;
             break;
         case VK_F5:
-            globalUserInput.keyDown[GAME_KEY_F5] = down;
+          globalUserInput.keyDown[ae::GAME_KEY_F5] = down;
             break;
     }
   }
@@ -413,7 +444,8 @@ LRESULT CALLBACK Win32WindowProc(HWND window,
         case WM_PAINT: {
             HDC DeviceContext = BeginPaint(window, &ps);
             // Do a render.
-			game_window_info_t winInfo = automata_engine::platform::getWindowInfo();
+            ae::game_window_info_t winInfo =
+                automata_engine::platform::getWindowInfo();
 			Win32DisplayBufferWindow(DeviceContext, winInfo);
             EndPaint(window, &ps);
         } break;
@@ -556,7 +588,7 @@ public:
         else if( pInputProcessParameters[0].BufferFlags == XAPO_BUFFER_VALID )
         {
             ae::OnVoiceBufferProcess(
-                (game_memory_t *)m_pContext, m_voiceHandle,
+                (ae::game_memory_t *)m_pContext, m_voiceHandle,
                 pInputProcessParameters[0].pBuffer,
                 pOutputProcessParameters[0].pBuffer,
                 pInputProcessParameters[0].ValidFrameCount,
@@ -730,8 +762,8 @@ void ae::platform::showWindowAlert(const char *windowTitle, const char *windowMe
     MessageBoxA(globalWin32Handle, windowMessage, windowTitle, MB_OK);
 }
 
-game_window_info_t automata_engine::platform::getWindowInfo() {
-    game_window_info_t winInfo;
+ae::game_window_info_t automata_engine::platform::getWindowInfo() {
+  ae::game_window_info_t winInfo;
     winInfo.hWnd = (intptr_t)globalWin32Handle;
     winInfo.hInstance = (intptr_t)g_hInstance;
     if (globalWin32Handle == NULL) {
@@ -881,7 +913,8 @@ int CALLBACK WinMain(HINSTANCE instance,
     }
 
     DWORD windowStyle = (WS_OVERLAPPEDWINDOW | WS_VISIBLE) &
-            ((ae::defaultWinProfile == AUTOMATA_ENGINE_WINPROFILE_NORESIZE) ?
+        ((ae::defaultWinProfile == ae::AUTOMATA_ENGINE_WINPROFILE_NORESIZE)
+             ?
             (~WS_MAXIMIZEBOX & ~WS_THICKFRAME) : (DWORD)(0xFFFFFFFF));
     
     const bool beginMaximized = (ae::defaultWidth == UINT32_MAX) &&
@@ -942,7 +975,8 @@ int CALLBACK WinMain(HINSTANCE instance,
     // Create the globalBackBuffer
 #if defined(CPU_BACKEND)
     {
-        game_window_info_t winInfo = automata_engine::platform::getWindowInfo();
+      ae::game_window_info_t winInfo =
+          automata_engine::platform::getWindowInfo();
         Win32ResizeBackbuffer(&globalBackBuffer, winInfo.width, winInfo.height);
     }
 #endif
@@ -1015,9 +1049,8 @@ int CALLBACK WinMain(HINSTANCE instance,
         PlatformLoggerLog("WARN: GameInit == nullptr");
     }
 
-#if defined(GL_BACKEND)
     // ImGUI initialization code :)
-    const char* glsl_version = "#version 330";
+
     {
         // Setup Dear ImGui context
         IMGUI_CHECKVERSION();
@@ -1027,14 +1060,17 @@ int CALLBACK WinMain(HINSTANCE instance,
         ImGui::StyleColorsDark();
         // Setup Platform/Renderer backends
         ImGui_ImplWin32_Init(windowHandle);
+#if defined(GL_BACKEND)
+    const char* glsl_version = "#version 330";
         ImGui_ImplOpenGL3_Init(glsl_version);
+#endif
 
         isImGuiInitialized = true;
 
         ScaleImGui();
     }
     // TODO(Noah): Look into what the imGUI functions are going to return on failure!
-#endif
+
 
     LARGE_INTEGER LastCounter = Win32GetWallClock();
 
@@ -1102,10 +1138,11 @@ int CALLBACK WinMain(HINSTANCE instance,
         // NOTE(Noah): Here we are going to call our custom windows platform layer function that
         // will write our custom buffer to the screen.
         HDC deviceContext = GetDC(windowHandle);
-        game_window_info_t winInfo = automata_engine::platform::getWindowInfo();
+        ae::game_window_info_t winInfo =
+            automata_engine::platform::getWindowInfo();
         Win32DisplayBufferWindow(deviceContext, winInfo);
         ReleaseDC(windowHandle, deviceContext);
-#endif
+#endif  
 
         {
             LARGE_INTEGER EndCounter = Win32GetWallClock();

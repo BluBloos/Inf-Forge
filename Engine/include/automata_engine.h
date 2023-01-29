@@ -30,103 +30,103 @@
 #include <automata_engine_gl.h>
 #endif
 
-/// @param data pointer to underlying memory provided by the platform layer.
-/// @param dataBytes amount of bytes that data takes up.
-/// @param isInitialized this is a boolean used by the game to note that
-/// the memory has appropriate content
-/// that we would expect to exist after calling EngineInit.
-typedef struct game_memory {
-    void *data;
-    uint32_t dataBytes;
-    bool isInitialized;
-    uint32_t *backbufferPixels;
-    uint32_t backbufferWidth;
-    uint32_t backbufferHeight;
-} game_memory_t;
-
-typedef struct game_window_info {
-    uint32_t width;
-    uint32_t height;
-    intptr_t hWnd;
-    intptr_t hInstance;
-} game_window_info_t;
-
-
-/// @param pixelPointer pointer to contiguous chunk of memory corresponding to image pixels. Each pixel is
-/// a 32 bit unsigned integer with the RGBA channels packed each as 8 bit unsigned integers. This gives
-/// each channel 0->255 in possible value. Format is not definitively in RGBA order...
-typedef struct loaded_image {
-    uint32_t *pixelPointer;
-    uint32_t width;
-    uint32_t height;
-} loaded_image_t;
-
-/// @param contents pointer to unparsed binary data of the loaded file
-typedef struct loaded_file {
-    const char *fileName;
-    void *contents;
-	int contentSize;
-} loaded_file_t;
-
-
-/// @param sampleData pointer to contiguous chunk of memory corresponding to 16-bit PCA sound samples. When
-/// there are two channels, the data is interleaved.
-/// @param parentFile internal storage for corresponding loaded_file that contains the unparsed sound data.
-/// This is retained so that we can ultimately free the loaded file.
-typedef struct loaded_wav {
-    int sampleCount;
-	int channels;
-	short *sampleData;
-    struct loaded_file parentFile;
-} loaded_wav_t;
-
-typedef struct raw_model
-{
-  char modelName[13];
-  float *vertexData; // stretchy buf
-  uint32_t *indexData; // stretchy buf
-} raw_model_t;
-
-typedef enum game_key {
-    GAME_KEY_0 = 0, GAME_KEY_1, GAME_KEY_2, GAME_KEY_3,
-    GAME_KEY_4, GAME_KEY_5, GAME_KEY_6, GAME_KEY_7, GAME_KEY_8,
-    GAME_KEY_9,
-    GAME_KEY_A, GAME_KEY_B, GAME_KEY_C, GAME_KEY_D, GAME_KEY_E,
-    GAME_KEY_F, GAME_KEY_G, GAME_KEY_H, GAME_KEY_I, GAME_KEY_J,
-    GAME_KEY_K, GAME_KEY_L, GAME_KEY_M, GAME_KEY_N, GAME_KEY_O,
-    GAME_KEY_P, GAME_KEY_Q, GAME_KEY_R, GAME_KEY_S, GAME_KEY_T,
-    GAME_KEY_U, GAME_KEY_V, GAME_KEY_W, GAME_KEY_X, GAME_KEY_Y,
-    GAME_KEY_Z,
-    GAME_KEY_SHIFT, GAME_KEY_SPACE, GAME_KEY_ESCAPE, GAME_KEY_F5,
-    GAME_KEY_COUNT
-} game_key_t;
-
-typedef struct user_input {
-    int mouseX = 0;
-    int mouseY = 0;
-    int rawMouseX = 0;
-    int rawMouseY = 0;
-    int deltaMouseX = 0;
-    int deltaMouseY = 0;
-    bool mouseLBttnDown = false;
-    bool mouseRBttnDown = false;
-    // TODO(Noah): We will prolly want to change how we represent keys.
-    bool keyDown[(uint32_t)GAME_KEY_COUNT];
-} user_input_t;
-
-typedef struct game_state game_state_t; // forward decl
-
-enum game_window_profile_t {
-    AUTOMATA_ENGINE_WINPROFILE_RESIZE,
-    AUTOMATA_ENGINE_WINPROFILE_NORESIZE
-};
-
 // NOTE(Noah): No need to be adding some sort of CI so that we can be testing all the projects
 // compat. All projects compat is responsibility of individual proj.
 // They select a version of the engine. If they want the updated engine, maybe there is some incompat.
 // But that is fine. That is just some work on behalf of the project. Things are seperated well.
 
 namespace automata_engine {
+
+    /// @param data pointer to underlying memory provided by the platform layer.
+    /// @param dataBytes amount of bytes that data takes up.
+    /// @param isInitialized this is a boolean used by the game to note that
+    /// the memory has appropriate content
+    /// that we would expect to exist after calling EngineInit.
+    typedef struct game_memory {
+        void *data;
+        uint32_t dataBytes;
+        bool isInitialized;
+        uint32_t *backbufferPixels;
+        uint32_t backbufferWidth;
+        uint32_t backbufferHeight;
+    } game_memory_t;
+
+    typedef struct game_window_info {
+        uint32_t width;
+        uint32_t height;
+        intptr_t hWnd;
+        intptr_t hInstance;
+    } game_window_info_t;
+
+
+    /// @param pixelPointer pointer to contiguous chunk of memory corresponding to image pixels. Each pixel is
+    /// a 32 bit unsigned integer with the RGBA channels packed each as 8 bit unsigned integers. This gives
+    /// each channel 0->255 in possible value. Format is not definitively in RGBA order...
+    typedef struct loaded_image {
+        uint32_t *pixelPointer;
+        uint32_t width;
+        uint32_t height;
+    } loaded_image_t;
+
+    /// @param contents pointer to unparsed binary data of the loaded file
+    typedef struct loaded_file {
+        const char *fileName;
+        void *contents;
+        int contentSize;
+    } loaded_file_t;
+
+
+    /// @param sampleData pointer to contiguous chunk of memory corresponding to 16-bit PCA sound samples. When
+    /// there are two channels, the data is interleaved.
+    /// @param parentFile internal storage for corresponding loaded_file that contains the unparsed sound data.
+    /// This is retained so that we can ultimately free the loaded file.
+    typedef struct loaded_wav {
+        int sampleCount;
+        int channels;
+        short *sampleData;
+        struct loaded_file parentFile;
+    } loaded_wav_t;
+
+    typedef struct raw_model
+    {
+    char modelName[13];
+    float *vertexData; // stretchy buf
+    uint32_t *indexData; // stretchy buf
+    } raw_model_t;
+
+    typedef enum game_key {
+        GAME_KEY_0 = 0, GAME_KEY_1, GAME_KEY_2, GAME_KEY_3,
+        GAME_KEY_4, GAME_KEY_5, GAME_KEY_6, GAME_KEY_7, GAME_KEY_8,
+        GAME_KEY_9,
+        GAME_KEY_A, GAME_KEY_B, GAME_KEY_C, GAME_KEY_D, GAME_KEY_E,
+        GAME_KEY_F, GAME_KEY_G, GAME_KEY_H, GAME_KEY_I, GAME_KEY_J,
+        GAME_KEY_K, GAME_KEY_L, GAME_KEY_M, GAME_KEY_N, GAME_KEY_O,
+        GAME_KEY_P, GAME_KEY_Q, GAME_KEY_R, GAME_KEY_S, GAME_KEY_T,
+        GAME_KEY_U, GAME_KEY_V, GAME_KEY_W, GAME_KEY_X, GAME_KEY_Y,
+        GAME_KEY_Z,
+        GAME_KEY_SHIFT, GAME_KEY_SPACE, GAME_KEY_ESCAPE, GAME_KEY_F5,
+        GAME_KEY_COUNT
+    } game_key_t;
+
+    typedef struct user_input {
+        int mouseX = 0;
+        int mouseY = 0;
+        int rawMouseX = 0;
+        int rawMouseY = 0;
+        int deltaMouseX = 0;
+        int deltaMouseY = 0;
+        bool mouseLBttnDown = false;
+        bool mouseRBttnDown = false;
+        // TODO(Noah): We will prolly want to change how we represent keys.
+        bool keyDown[(uint32_t)GAME_KEY_COUNT];
+    } user_input_t;
+
+    typedef struct game_state game_state_t; // forward decl
+
+    enum game_window_profile_t {
+        AUTOMATA_ENGINE_WINPROFILE_RESIZE,
+        AUTOMATA_ENGINE_WINPROFILE_NORESIZE
+    };
 
     typedef enum update_model {
         AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC = 0,
@@ -328,7 +328,10 @@ namespace automata_engine {
         // guts of automata, so no need for platform code to impl.
         loaded_image_t stbImageLoad(char *fileName);
 
+        // get functions
         void getUserInput(struct user_input *userInput);
+        game_window_info_t getWindowInfo();
+        char *getRuntimeExeDirPath(char *pathOut, uint32_t pathSize);
 
         /// set the mouse position in client pixel coords.
         /// @param yPos y pos in client pixel coords.
@@ -344,12 +347,11 @@ namespace automata_engine {
         extern int GLOBAL_PROGRAM_RESULT;
         extern update_model_t GLOBAL_UPDATE_MODEL;
 
-        game_window_info_t getWindowInfo();
+
         void free(void *memToFree);
         void *alloc(uint32_t bytes);
         loaded_file readEntireFile(const char *fileName);
         void freeLoadedFile(loaded_file_t file);
-
         
         // --------- AUDIO ----------------
 #pragma region PlatformAudio
