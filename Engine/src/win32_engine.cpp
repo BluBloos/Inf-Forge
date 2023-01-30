@@ -1002,8 +1002,8 @@ int CALLBACK WinMain(HINSTANCE instance,
     // Create the globalBackBuffer
 #if defined(CPU_BACKEND)
     {
-      ae::game_window_info_t winInfo =
-          automata_engine::platform::getWindowInfo();
+        ae::game_window_info_t winInfo =
+            automata_engine::platform::getWindowInfo();
         Win32ResizeBackbuffer(&globalBackBuffer, winInfo.width, winInfo.height);
     }
 #endif
