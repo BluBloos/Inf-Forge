@@ -770,7 +770,7 @@ intptr_t automata_engine::platform::createVoice() {
 // Now, there are also things that WILL fail. Like file reads and shader
 // compilation. i.e. file might not exist and shader could have syntax errs.
 // in these cases, the game has to deal with such errors.
-bool automata_engine::platform::voiceSubmitBuffer(intptr_t voiceHandle, struct loaded_wav myWav) {
+bool automata_engine::platform::voiceSubmitBuffer(intptr_t voiceHandle, void *data, uint32_t size, bool shouldLoop) {
     auto pSourceVoice = (IXAudio2SourceVoice *)ppSourceVoices[voiceHandle].voice;
     if (pSourceVoice != nullptr) {
         if (FAILED(pSourceVoice->Stop(0))) { return false; }
@@ -778,9 +778,23 @@ bool automata_engine::platform::voiceSubmitBuffer(intptr_t voiceHandle, struct l
     } else {
         return false; // no source voice...
     }
-    g_xa2Buffer.AudioBytes = myWav.sampleCount * myWav.channels * sizeof(short);
-    g_xa2Buffer.pAudioData = (const BYTE *)myWav.sampleData;
+    g_xa2Buffer.AudioBytes = size;//myWav.sampleCount * myWav.channels * sizeof(short);
+    g_xa2Buffer.pAudioData = (const BYTE *)data;//myWav.sampleData;
+    if (shouldLoop) {
+        g_xa2Buffer.LoopCount = XAUDIO2_LOOP_INFINITE;
+    } else {
+        g_xa2Buffer.LoopCount = 0;
+    }
+    // NOTE: The pBuffer pointer can be reused or freed immediately after calling this method
+    // so the concern of, "do we need to keep this pointer live"?
+    // is a non-issue.
     return !FAILED(pSourceVoice->SubmitSourceBuffer(&g_xa2Buffer));
+}
+
+bool ae::platform::voiceSubmitBuffer(intptr_t voiceHandle, loaded_wav_t wavFile) {
+    return voiceSubmitBuffer(voiceHandle, 
+        wavFile.sampleData, 
+        wavFile.sampleCount * wavFile.channels * sizeof(short));
 }
 
 static HINSTANCE g_hInstance = NULL;

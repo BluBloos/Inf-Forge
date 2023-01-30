@@ -361,6 +361,7 @@ namespace automata_engine {
         intptr_t createVoice();
         /// @return false on failure.
         bool voiceSubmitBuffer(intptr_t voiceHandle, loaded_wav_t wavFile);
+        bool voiceSubmitBuffer(intptr_t voiceHandle, void *data, uint32_t size, bool shoudLoop = false);
         void voicePlayBuffer(intptr_t voiceHandle);
         void voiceStopBuffer(intptr_t voiceHandle);
         void voiceSetBufferVolume(intptr_t voiceHandle, float volume);
