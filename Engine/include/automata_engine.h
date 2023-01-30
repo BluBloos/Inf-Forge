@@ -351,6 +351,7 @@ namespace automata_engine {
         void free(void *memToFree);
         void *alloc(uint32_t bytes);
         loaded_file readEntireFile(const char *fileName);
+        bool writeEntireFile(const char *fileName, void *memory, uint32_t memorySize);
         void freeLoadedFile(loaded_file_t file);
         
         // --------- AUDIO ----------------

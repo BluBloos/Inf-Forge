@@ -63,6 +63,33 @@ void ae::platform::freeLoadedFile(loaded_file_t file) {
     VirtualFree(file.contents, 0, MEM_RELEASE);
 }
 
+bool ae::platform::writeEntireFile(
+    const char *fileName, void *memory, uint32_t memorySize)
+{
+    bool Result = false;
+
+	HANDLE FileHandle = CreateFileA(fileName, GENERIC_WRITE,0,0,CREATE_ALWAYS,0,0);
+	if (FileHandle != INVALID_HANDLE_VALUE)
+	{
+		DWORD BytesWritten;
+		if (WriteFile(FileHandle,memory,memorySize,&BytesWritten,0)) 
+		{
+			//File read succesfully
+			Result = ((int)BytesWritten == memorySize);
+		}	
+		else
+		{
+			PlatformLoggerError("Could not write to file %s", fileName);
+		}		
+		CloseHandle(FileHandle);
+	}
+	else
+	{
+		PlatformLoggerError("Could not create file %s", fileName);
+	}
+	return Result;
+}
+
 ae::loaded_file ae::platform::readEntireFile(const char *fileName) {
 	void *result = 0;
 	int fileSize32 = 0;
