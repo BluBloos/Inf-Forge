@@ -318,8 +318,8 @@ LARGE_INTEGER Win32GetWallClock()
 
 void Win32DisplayBufferWindow(HDC deviceContext,
                               ae::game_window_info_t winInfo) {
-    int OffsetX = (winInfo.width - globalBackBuffer.width) / 2;
-    int OffsetY = (winInfo.height - globalBackBuffer.height) / 2;
+    int OffsetX = (int(winInfo.width) - globalBackBuffer.width) / 2;
+    int OffsetY = (int(winInfo.height) - globalBackBuffer.height) / 2;
     PatBlt(deviceContext, 0, 0, winInfo.width, OffsetY, BLACKNESS);
     PatBlt(deviceContext, 0, OffsetY + globalBackBuffer.height, winInfo.height, winInfo.height, BLACKNESS);
     PatBlt(deviceContext, 0, 0, OffsetX, winInfo.height, BLACKNESS);
