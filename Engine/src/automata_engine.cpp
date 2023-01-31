@@ -53,7 +53,7 @@ namespace automata_engine {
         updateModel = newModel;
     }
     loaded_image_t platform::stbImageLoad(char *fileName) {
-        loaded_image myImage = {};
+        loaded_image_t myImage = {};
         int x, y, n;
         // NOTE(Noah): For now, let's avoid .jpg.
         // seems stb image loader has troubles with a subset of .jpg,

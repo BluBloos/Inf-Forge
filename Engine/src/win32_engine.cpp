@@ -90,7 +90,7 @@ bool ae::platform::writeEntireFile(
 	return Result;
 }
 
-ae::loaded_file ae::platform::readEntireFile(const char *fileName) {
+ae::loaded_file_t ae::platform::readEntireFile(const char *fileName) {
 	void *result = 0;
 	int fileSize32 = 0;
 	HANDLE fileHandle = CreateFileA(fileName, GENERIC_READ,
@@ -119,7 +119,7 @@ ae::loaded_file ae::platform::readEntireFile(const char *fileName) {
 		}
 		CloseHandle(fileHandle);
 	}
-	ae::loaded_file fileResult = {};
+	ae::loaded_file_t fileResult = {};
 	fileResult.contents = result;
 	fileResult.contentSize = fileSize32;
     fileResult.fileName = fileName;
@@ -690,7 +690,7 @@ constexpr WAVEFORMATEX initGlobalWaveFormat() {
     WAVEFORMATEX waveFormat = {};
     waveFormat.wFormatTag = WAVE_FORMAT_PCM; // going with 2-channel PCM data.
     waveFormat.nChannels = 2;
-    waveFormat.nSamplesPerSec = ENGINE_DESIRED_SAMPLES_PER_SECOND; // 48 kHz
+    waveFormat.nSamplesPerSec = ae::io::ENGINE_DESIRED_SAMPLES_PER_SECOND; // 48 kHz
     waveFormat.wBitsPerSample = sizeof(short) * 8;
     waveFormat.nBlockAlign = waveFormat.nChannels * waveFormat.wBitsPerSample / 8;
     waveFormat.nAvgBytesPerSec = waveFormat.nBlockAlign * waveFormat.nSamplesPerSec;
@@ -888,7 +888,7 @@ int CALLBACK WinMain(HINSTANCE instance,
     }
 
     // Create a console.
-#if defined(AE_ENABLE_PLATFORM_LOGGING)
+#if !defined(AE_DISABLE_PLATFORM_LOGGING)
     {
         int hConHandle;
         intptr_t lStdHandle;

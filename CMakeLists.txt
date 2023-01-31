@@ -6,7 +6,7 @@ set(ProjectExplicitSources OFF CACHE BOOL "if true, the app shall set PROJ_SOURC
 set(ProjectExplicitResOutputDir "" CACHE STRING "if set, the app shall copy resources to this dir instead of default res/")
 set(ProjectBackend "CPU_BACKEND" CACHE STRING "can be any of {GL_BACKEND,CPU_BACKEND, DX12_BACKEND, VULKAN_BACKEND}")
 set(ProjectRoot "${CMAKE_CURRENT_SOURCE_DIR}" CACHE STRING "set to where the folder src/ and res/ can be found")
-
+set(ProjectDisableLogging OFF CACHE BOOL "if true, disables logging")
 
 # TODO: What if we want to make a multiple gfx-API application?
 
@@ -64,6 +64,10 @@ set_target_properties(${ProjectName}
     PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY $<TARGET_FILE_DIR:${ProjectName}>)
 
 set(COMMON_LIB gdi32 user32 kernel32 Xaudio2 XAPOBase ole32 Shcore)
+
+if (${ProjectDisableLogging})
+    target_compile_definitions(${ProjectName} PUBLIC -DAE_DISABLE_PLATFORM_LOGGING)
+endif()
 
 if ( ${ProjectBackend} MATCHES "GL_BACKEND" )
     target_link_libraries(${ProjectName}

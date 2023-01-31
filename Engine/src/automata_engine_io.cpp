@@ -11,7 +11,7 @@ namespace ae = automata_engine;
 
 namespace automata_engine {
   namespace io {
-    void freeWav(loaded_wav wavFile) {
+    void freeWav(loaded_wav_t wavFile) {
       ae::platform::freeLoadedFile(wavFile.parentFile);
     }
     static wav_file_cursor LoadWav_ParseChunkAt(void *bytePointer, void *endOfFile) {
@@ -51,8 +51,8 @@ namespace automata_engine {
     // TODO(Noah): Use stb_vorbis for .ogg file parsing. Prob going to be better (compressed?)
     // TODO(Noah): Think about failure cases for load file err.
     loaded_wav_t loadWav(const char *fileName) {
-      loaded_wav wavFile = {};
-      loaded_file fileResult = ae::platform::readEntireFile(fileName);
+      loaded_wav_t wavFile = {};
+      loaded_file_t fileResult = ae::platform::readEntireFile(fileName);
       wavFile.parentFile = fileResult;
       if (fileResult.contentSize != 0 ) {
         wav_header *wavHeader = (wav_header *)fileResult.contents;
