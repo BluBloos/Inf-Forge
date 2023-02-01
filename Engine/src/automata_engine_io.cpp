@@ -128,10 +128,10 @@ namespace automata_engine {
             }
             ae::platform::freeLoadedFile(fileResult);
           } else {
-            PlatformLoggerError("loadBMP failed to alloc.");
+            AELoggerError("loadBMP failed to alloc.");
           }
         } else {
-          PlatformLoggerError("%s is %d bpp, not %d", path, header->BitsPerPixel, 32);
+          AELoggerError("%s is %d bpp, not %d", path, header->BitsPerPixel, 32);
         }
       }
       return bitmap;
@@ -263,7 +263,7 @@ namespace automata_engine {
           line += lineLen;
           linesProcessed++;
         }
-        PlatformLoggerLog("loadObj: %d lines processed", linesProcessed);
+        AELoggerLog("loadObj: %d lines processed", linesProcessed);
         StretchyBufferFree(uvData);
         StretchyBufferFree(normalData);
         stbds_hmfree(vertex_uv_pair_map);
@@ -273,15 +273,15 @@ namespace automata_engine {
           float uvX = rawModel.vertexData[i * 8 + 3];
           float uvY = rawModel.vertexData[i * 8 + 4];
           if (uvX < 0.0f || uvX > 1.0f) {
-            PlatformLoggerWarn("uvX out of bounds: %f", uvX);
+            AELoggerWarn("uvX out of bounds: %f", uvX);
           }
           if (uvY < 0.0f || uvY > 1.0f) {
-            PlatformLoggerWarn("uvY out of bounds: %f", uvY);
+            AELoggerWarn("uvY out of bounds: %f", uvY);
           }
         }
 #endif
       } else {
-        PlatformLoggerError("unable to open %s", filePath);
+        AELoggerError("unable to open %s", filePath);
       }     
       return rawModel;
     }

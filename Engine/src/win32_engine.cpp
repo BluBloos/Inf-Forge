@@ -79,13 +79,13 @@ bool ae::platform::writeEntireFile(
 		}	
 		else
 		{
-			PlatformLoggerError("Could not write to file %s", fileName);
+			AELoggerError("Could not write to file %s", fileName);
 		}		
 		CloseHandle(FileHandle);
 	}
 	else
 	{
-		PlatformLoggerError("Could not create file %s", fileName);
+		AELoggerError("Could not create file %s", fileName);
 	}
 	return Result;
 }
@@ -202,7 +202,7 @@ static void InitOpenGL(HWND windowHandle, HDC dc) {
         ae::GL::initGlew();
     } else {
         //TODO(Noah): openGL did not initialize, what the heck do we do?
-        PlatformLoggerError("OpenGL did not initialize");
+        AELoggerError("OpenGL did not initialize");
         assert(false);
     }
 }
@@ -397,7 +397,7 @@ LRESULT CALLBACK Win32WindowProc(HWND window,
                     globalUserInput.deltaMouseY += raw->data.mouse.lLastY;
                 } else {
                     // TODO(Noah): impl.
-                    //PlatformLoggerWarn("handle RAWINPUT for devices that provide absolute motion");
+                    //AELoggerWarn("handle RAWINPUT for devices that provide absolute motion");
                     globalUserInput.deltaMouseX += raw->data.mouse.lLastX;
                     globalUserInput.deltaMouseY += raw->data.mouse.lLastY;
                     /*globalUserInput.deltaMouseX =
@@ -460,7 +460,7 @@ LRESULT CALLBACK Win32WindowProc(HWND window,
                 if (GameHandleWindowResize != nullptr) {
                     GameHandleWindowResize(&g_gameMemory, cstra->cx, cstra->cy);
                 } else {
-                    PlatformLoggerLog("WARN: GameHandleWindowResize == nullptr");
+                    AELoggerLog("WARN: GameHandleWindowResize == nullptr");
                 }
 
             }*/
@@ -473,7 +473,7 @@ LRESULT CALLBACK Win32WindowProc(HWND window,
             ) {
                 GameHandleWindowResize(&g_gameMemory, width, height);
             } else {
-                PlatformLoggerLog("WARN: (GameHandleWindowResize == nullptr) OR\n"
+                AELoggerLog("WARN: (GameHandleWindowResize == nullptr) OR\n"
                     "(g_gameMemory.data == nullptr)");
             }
         } break;
@@ -525,27 +525,27 @@ namespace automata_engine {
         IXAudio2VoiceCallback() = delete;
         IXAudio2VoiceCallback(intptr_t voiceHandle) : m_voiceHandle(voiceHandle) {}
         void OnLoopEnd(void *pBufferContext) {
-            PlatformLoggerLog("voice: %d, OnLoopEnd", m_voiceHandle);
+            AELoggerLog("voice: %d, OnLoopEnd", m_voiceHandle);
         }
         void OnBufferEnd(void *pBufferContext) {
-            PlatformLoggerLog("voice: %d, OnBufferEnd", m_voiceHandle);
+            AELoggerLog("voice: %d, OnBufferEnd", m_voiceHandle);
         }
         void OnBufferStart(void *pBufferContext) {
-            PlatformLoggerLog("voice: %d, OnBufferStart", m_voiceHandle);
+            AELoggerLog("voice: %d, OnBufferStart", m_voiceHandle);
         }
         void OnStreamEnd() {
-            PlatformLoggerLog("voice: %d, OnStreamEnd", m_voiceHandle);
+            AELoggerLog("voice: %d, OnStreamEnd", m_voiceHandle);
             OnVoiceBufferEnd((game_memory_t *)&g_gameMemory, m_voiceHandle);
         }
         void OnVoiceError(void    *pBufferContext, HRESULT Error) {
-            PlatformLoggerLog("voice: %d, OnVoiceError", m_voiceHandle);
+            AELoggerLog("voice: %d, OnVoiceError", m_voiceHandle);
         }
         // these ones exec like each frame.
         void OnVoiceProcessingPassEnd() {
-            //PlatformLoggerLog("OnVoiceProcessingPassEnd");
+            //AELoggerLog("OnVoiceProcessingPassEnd");
         }
         void OnVoiceProcessingPassStart(UINT32 BytesRequired) {
-            //PlatformLoggerLog("OnVoiceProcessingPassStart");
+            //AELoggerLog("OnVoiceProcessingPassStart");
         }
     private:
         intptr_t m_voiceHandle;
@@ -741,7 +741,7 @@ intptr_t automata_engine::platform::createVoice() {
             if (S_OK == (hResult = newVoice->SetEffectChain(&chain))) {
                 // atoXAPO->Release();
             } else {
-                PlatformLoggerError("newVoice->SetEffectChain() returned with code (0x%x)", hResult);
+                AELoggerError("newVoice->SetEffectChain() returned with code (0x%x)", hResult);
             }
 
     #if defined(_DEBUG)
@@ -751,7 +751,7 @@ intptr_t automata_engine::platform::createVoice() {
     #endif
         }
     } else {
-        PlatformLoggerError("atoXAPO->Initialize() returned with code (0x%x)", hr);
+        AELoggerError("atoXAPO->Initialize() returned with code (0x%x)", hr);
     }
 
     win32_voice_t w32NewVoice = {newVoice, voiceCallback, atoXAPO};
@@ -818,7 +818,7 @@ ae::game_window_info_t automata_engine::platform::getWindowInfo() {
     winInfo.hWnd = (intptr_t)globalWin32Handle;
     winInfo.hInstance = (intptr_t)g_hInstance;
     if (globalWin32Handle == NULL) {
-        PlatformLoggerError("globalWin32Handle == NULL");
+        AELoggerError("globalWin32Handle == NULL");
     }
     RECT rect;
     if (GetClientRect(globalWin32Handle, &rect)) {
@@ -926,12 +926,12 @@ int CALLBACK WinMain(HINSTANCE instance,
             SetConsoleMode(stdOutHandle, stdOutMode | 0x0004);
         }
 
-        PlatformLoggerLog("stdout initialized");
+        AELoggerLog("stdout initialized");
         // TODO(Noah): Would be nice to have unicode support with our platform logger. Emojis are awesome!
-        PlatformLoggerWarn("Please NOTE below error is expected and NOT an error.");
-        PlatformLoggerError("testing stderr out");
+        AELoggerWarn("Please NOTE below error is expected and NOT an error.");
+        AELoggerError("testing stderr out");
         // TODO(Noah): Make this print version from a manifest or something...
-        PlatformLoggerLog("\"Hello, World!\" from Automata Engine %s", "Alpha v0.2.0");
+        AELoggerLog("\"Hello, World!\" from Automata Engine %s", "Alpha v0.2.0");
     }
 #endif
 
@@ -952,7 +952,7 @@ int CALLBACK WinMain(HINSTANCE instance,
     // TODO(Noah): Here would be a nice instance for the defer statement.
     classAtom = RegisterClassA(&windowClass);
     if(classAtom == 0) {
-        PlatformLoggerError("Unable to create window class \"%s\"", windowClass.lpszClassName);
+        AELoggerError("Unable to create window class \"%s\"", windowClass.lpszClassName);
         automata_engine::platform::GLOBAL_PROGRAM_RESULT = -1;
         goto WinMainEnd;
     }
@@ -960,7 +960,7 @@ int CALLBACK WinMain(HINSTANCE instance,
     if (GamePreInit != nullptr) {
         GamePreInit(&g_gameMemory);
     } else {
-        PlatformLoggerWarn("GamePreInit == nullptr");
+        AELoggerWarn("GamePreInit == nullptr");
     }
 
     DWORD windowStyle = (WS_OVERLAPPEDWINDOW | WS_VISIBLE) &
@@ -1004,7 +1004,7 @@ int CALLBACK WinMain(HINSTANCE instance,
             NULL // not using any insert values such as %1
         );
         // TODO(Noah): Remove newline character at the end of lpMsgBuf
-        PlatformLoggerError("Unable to create window: %s", lpMsgBuf);
+        AELoggerError("Unable to create window: %s", lpMsgBuf);
         LocalFree(lpMsgBuf);
         automata_engine::platform::GLOBAL_PROGRAM_RESULT = -1;
         goto WinMainEnd;
@@ -1046,7 +1046,7 @@ int CALLBACK WinMain(HINSTANCE instance,
     {
         // Initializes the COM library for use by the calling thread.
         if (FAILED(comResult = CoInitializeEx(nullptr, COINIT_MULTITHREADED))) {
-            PlatformLoggerError("Unable to initialize COM library (XAudio2)");
+            AELoggerError("Unable to initialize COM library (XAudio2)");
             automata_engine::platform::GLOBAL_PROGRAM_RESULT = -1;
             goto WinMainEnd;
         }
@@ -1056,7 +1056,7 @@ int CALLBACK WinMain(HINSTANCE instance,
         flags |= XAUDIO2_DEBUG_ENGINE;
  #endif
         if (FAILED(XAudio2Create(&g_pXAudio2, 0, flags))) {
-            PlatformLoggerError("Unable to to create an instance of the XAudio2 engine");
+            AELoggerError("Unable to to create an instance of the XAudio2 engine");
             automata_engine::platform::GLOBAL_PROGRAM_RESULT = -1;
             goto WinMainEnd;
         }
@@ -1078,7 +1078,7 @@ int CALLBACK WinMain(HINSTANCE instance,
 #endif
 
         if (FAILED(g_pXAudio2->CreateMasteringVoice(&pMasterVoice))) {
-            PlatformLoggerError("Unable to create a mastering voice (XAudio2)");
+            AELoggerError("Unable to create a mastering voice (XAudio2)");
             automata_engine::platform::GLOBAL_PROGRAM_RESULT = -1;
             goto WinMainEnd;
         }
@@ -1097,7 +1097,7 @@ int CALLBACK WinMain(HINSTANCE instance,
     if (GameInit != nullptr) {
         GameInit(&g_gameMemory);
     } else {
-        PlatformLoggerLog("WARN: GameInit == nullptr");
+        AELoggerLog("WARN: GameInit == nullptr");
     }
 
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
@@ -1163,7 +1163,7 @@ int CALLBACK WinMain(HINSTANCE instance,
         if (gameUpdateAndRender != nullptr) {
             gameUpdateAndRender(&g_gameMemory);
         } else {
-            PlatformLoggerLog("WARN: gameUpdateAndRender == nullptr");
+            AELoggerLog("WARN: gameUpdateAndRender == nullptr");
         }
 
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
@@ -1243,7 +1243,7 @@ int CALLBACK WinMain(HINSTANCE instance,
         if (GameCleanup != nullptr) {
             GameCleanup(&g_gameMemory);
         } else {
-            PlatformLoggerLog("WARN: GameCleanup == nullptr");
+            AELoggerLog("WARN: GameCleanup == nullptr");
         }
 
         if (g_gameMemory.data != nullptr) {
@@ -1260,7 +1260,7 @@ int CALLBACK WinMain(HINSTANCE instance,
         // stall program to allow user to see err.
         
         // TODO(Noah): Sometimes this does not print?
-        PlatformLogger(
+        AELogger(
             "\033[0;93m"
             "\n\nPress any key to exit\n"
             "\033[0m"

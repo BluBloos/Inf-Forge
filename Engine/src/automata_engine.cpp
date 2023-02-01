@@ -71,7 +71,7 @@ namespace automata_engine {
             myImage.height = y;   
         } else {
             // TODO(Noah): Do something intelligent in the case of failure here.
-            PlatformLoggerError("automata_engine::platform::stbImageLoad failed");
+            AELoggerError("automata_engine::platform::stbImageLoad failed");
             assert(false);
         }
         return myImage;

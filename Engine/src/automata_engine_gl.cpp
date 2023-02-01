@@ -13,7 +13,7 @@ namespace automata_engine {
             while(GLenum error = glGetError()) {
                 static_assert(sizeof(GLubyte)==sizeof(char), "platform is odd");
                 const char *errorString = (const char*)gluErrorString(error);
-                PlatformLoggerLog("GL_ERROR: (%d, 0x%x) %s \nEXPR: %s\nFILE: %s\nLINE: %d", 
+                AELoggerLog("GL_ERROR: (%d, 0x%x) %s \nEXPR: %s\nFILE: %s\nLINE: %d", 
                     error, error, errorString, expr, file, line);
                 result = false;
             }
@@ -44,8 +44,8 @@ namespace automata_engine {
                 char *message = (char *)automata_engine::platform::alloc(length * sizeof(char));
                 if (message != NULL) {
                     glGetShaderInfoLog(id, length, &length, message);
-                    PlatformLoggerError("Failed to comile shader!\n");
-                    PlatformLoggerError("%s\n", message);
+                    AELoggerError("Failed to comile shader!\n");
+                    AELoggerError("%s\n", message);
                     automata_engine::platform::free(message);
                 }
                 glDeleteShader(id);
@@ -82,7 +82,7 @@ namespace automata_engine {
                 defer(delete[] logMsg);
                 static_assert(sizeof(GLchar) == sizeof(char), "odd platform");
                 glGetProgramInfoLog(program, logLength, &length, (GLchar *)logMsg);
-                PlatformLoggerError("Program link or validation failure:\n%s", logMsg);
+                AELoggerError("Program link or validation failure:\n%s", logMsg);
             };
             if ((int)vs == -1 || (int)fs == -1) {
                 goto createShader_Fail;
@@ -122,7 +122,7 @@ namespace automata_engine {
                 GLenum err = glewInit();
                 if(GLEW_OK != err) {
                     // TODO(Noah): GLEW failed, what the heck do we do?
-                    PlatformLoggerError("Something is seriously wrong");
+                    AELoggerError("Something is seriously wrong");
                     assert(false);
                 } else {
                     glewIsInit = true;
@@ -237,7 +237,7 @@ namespace automata_engine {
         GLuint createAndSetupVao(uint32_t attribCounts, ...) {
             GLuint vao;
             glGenVertexArrays(1, &vao); glBindVertexArray(vao);
-            PlatformLoggerLog("called createAndSetupVao with vao=%d", vao);
+            AELoggerLog("called createAndSetupVao with vao=%d", vao);
             GLuint boundVbo = 0;            
             va_list vl;
             va_start(vl, attribCounts);
@@ -245,7 +245,7 @@ namespace automata_engine {
                 vertex_attrib_desc_t attribDesc = va_arg(vl, vertex_attrib_desc_t);
                 vbo_t *pVbo = &attribDesc.vbo;
                 if (pVbo->attribs == nullptr) {
-                    PlatformLoggerError(
+                    AELoggerError(
                         "Fatal in createAndSetupVao\n"
                         "VBO is likely not initialized\n");
                     automata_engine::setFatalExit();
@@ -272,7 +272,7 @@ namespace automata_engine {
                                 vbo_GetStride(*pVbo),
                                 (const void *)(ptr = (intptr_t)offset + vbo_GetOffset(*pVbo, k))
                             );
-                            PlatformLoggerLog(
+                            AELoggerLog(
                                 "did glVertexAttribPointer(%d, %d, type, GL_FALSE, %d, %d);",
                                 attribIndex, componentCount, vbo_GetStride(*pVbo), ptr);
                             offset += componentCount * GLenumToBytes(attrib.type);

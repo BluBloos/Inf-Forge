@@ -61,7 +61,6 @@
 #include <iterator>
 #include <string>
 
-// TODO: if AUTOMATA_ENGINE_DISABLE_IMGUI, we prolly want to not include it.
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
 #include <imgui.h>
 #endif
@@ -371,21 +370,22 @@ static constexpr const char *__find_last_in_str(const char (&str)[strLen], const
 #endif
 #define _AUTOMATA_ENGINE_FILE_RELATIVE_ (__find_last_in_str("\\" __FILE__, '\\') + 1)
 
+
 #if !defined(AUTOMATA_ENGINE_DISABLE_PLATFORM_LOGGING)
 // See this page for color code guide:
 // https://stackoverflow.com/questions/4842424/list-of-ansi-color-escape-sequences
-#define PlatformLoggerError(fmt, ...) \
+#define AELoggerError(fmt, ...) \
     (ae::platform::fprintf_proxy(ae::platform::AE_STDERR, "\033[0;31m" "[Error on line=%d in file:%s]:\n" fmt "\n" "\033[0m", __LINE__, _AUTOMATA_ENGINE_FILE_RELATIVE_, __VA_ARGS__))
-#define PlatformLoggerLog(fmt, ...) \
+#define AELoggerLog(fmt, ...) \
     (ae::platform::fprintf_proxy(ae::platform::AE_STDOUT, "[Log from line=%d in file:%s]:\n" fmt "\n", __LINE__, _AUTOMATA_ENGINE_FILE_RELATIVE_, __VA_ARGS__))
-#define PlatformLoggerWarn(fmt, ...) \
+#define AELoggerWarn(fmt, ...) \
     (ae::platform::fprintf_proxy(ae::platform::AE_STDOUT, "\033[0;93m" "[Warn on line=%d in file:%s]:\n" fmt  "\n" "\033[0m", __LINE__, _AUTOMATA_ENGINE_FILE_RELATIVE_, __VA_ARGS__))
-#define PlatformLogger(fmt, ...) (ae::platform::fprintf_proxy(ae::platform::AE_STDOUT, fmt, __VA_ARGS__))
+#define AELogger(fmt, ...) (ae::platform::fprintf_proxy(ae::platform::AE_STDOUT, fmt, __VA_ARGS__))
 #else
-#define PlatformLoggerError(fmt, ...)
-#define PlatformLoggerLog(fmt, ...)
-#define PlatformLoggerWarn(fmt, ...)
-#define PlatformLogger(fmt, ...)
+#define AELoggerError(fmt, ...)
+#define AELoggerLog(fmt, ...)
+#define AELoggerWarn(fmt, ...)
+#define AELogger(fmt, ...)
 #endif
 
 // ---------- [SECTION] Type Definitions ------------
