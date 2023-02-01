@@ -3,7 +3,7 @@
 
 // TODO(Noah): impl dealloc unfunction for vbo_t
 
-#if defined(GL_BACKEND)
+#if defined(AUTOMATA_ENGINE_GL_BACKEND)
 #include <automata_engine_gl.h>
 namespace automata_engine {
     namespace GL {

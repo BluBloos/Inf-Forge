@@ -127,11 +127,17 @@ ae::loaded_file_t ae::platform::readEntireFile(const char *fileName) {
 }
 
 static bool isImGuiInitialized = false;
+#if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
 #include "imgui.h"
 #include "imgui_impl_win32.h" // includes Windows.h for us
+#endif
 
-#if defined(GL_BACKEND)
+#if defined(AUTOMATA_ENGINE_GL_BACKEND)
+
+#if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
 #include "imgui_impl_opengl3.h"
+#endif
+
 // NOTE(Noah): Pretty sure glew and gl must be after imgui headers here.
 #include <glew.h>
 #include <gl/gl.h>
@@ -210,7 +216,7 @@ bool automata_engine::GL::getGLInitialized() {
 // TODO(Noah): Need to also impl for DirectX, and same goes with update models ...
 void ae::platform::setVsync(bool b) {
     ae::platform::GLOBAL_VSYNC = b;
-#if defined(GL_BACKEND)
+#if defined(AUTOMATA_ENGINE_GL_BACKEND)
     if (wglSwapInterval) {
         (b) ? wglSwapInterval(1) : wglSwapInterval(0);
     }
@@ -254,6 +260,7 @@ static ae::user_input_t globalUserInput = {};
 static ae::game_memory_t g_gameMemory = {};
 static win32_backbuffer_t globalBackBuffer = {};
 
+#if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
 void ScaleImGui() {
     if (isImGuiInitialized) {
         HMONITOR hMonitor = MonitorFromWindow(globalWin32Handle, MONITOR_DEFAULTTONEAREST);
@@ -264,13 +271,14 @@ void ScaleImGui() {
             float size_in_pixels = float(uint32_t(16 * SCALE));
             ImGui::GetIO().Fonts->Clear();
             ImGui::GetIO().Fonts->AddFontFromFileTTF("ProggyVector Regular.ttf", size_in_pixels);
-#if defined(GL_BACKEND)
+#if defined(AUTOMATA_ENGINE_GL_BACKEND)
             ImGui_ImplOpenGL3_DestroyFontsTexture();
             ImGui_ImplOpenGL3_CreateFontsTexture();
 #endif
         }
     }
 }
+#endif
 
 static void Win32ResizeBackbuffer(win32_backbuffer_t *buffer, int newWidth, int newHeight)
 {
@@ -361,7 +369,7 @@ static void ProccessKeyboardMessage(unsigned int vkCode, bool down) {
   }
 }
 
-#if defined(GL_BACKEND)
+#if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 #endif
 
@@ -370,7 +378,7 @@ LRESULT CALLBACK Win32WindowProc(HWND window,
   WPARAM wParam,
   LPARAM lParam)
 {
-#if defined(GL_BACKEND)
+#if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
     if (ImGui_ImplWin32_WndProcHandler(window, message, wParam, lParam))
         return true;
 #endif
@@ -401,7 +409,9 @@ LRESULT CALLBACK Win32WindowProc(HWND window,
             }
         } break;
         case WM_DPICHANGED: {
+#if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
             ScaleImGui();
+#endif
             RECT* const prcNewWindow = (RECT*)lParam;
             SetWindowPos(window,
                 NULL,
@@ -439,7 +449,7 @@ LRESULT CALLBACK Win32WindowProc(HWND window,
             ProccessKeyboardMessage(wParam, true);
         } break;
         case WM_CREATE: {
-#if defined(GL_BACKEND)
+#if defined(AUTOMATA_ENGINE_GL_BACKEND)
             gHdc = GetDC(window);
             InitOpenGL(window, gHdc);
 #endif
@@ -842,8 +852,8 @@ void automata_engine::platform::fprintf_proxy(int h, const char *fmt, ...) {
 
     HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
     switch(h) {
-        case AE_STDERR: handle = GetStdHandle(STD_ERROR_HANDLE); break;
-        case AE_STDOUT: handle = GetStdHandle(STD_OUTPUT_HANDLE); break;
+        case ae::platform::AE_STDERR: handle = GetStdHandle(STD_ERROR_HANDLE); break;
+        case ae::platform::AE_STDOUT: handle = GetStdHandle(STD_OUTPUT_HANDLE); break;
         default: handle = GetStdHandle(STD_OUTPUT_HANDLE);
     }
 
@@ -888,7 +898,7 @@ int CALLBACK WinMain(HINSTANCE instance,
     }
 
     // Create a console.
-#if !defined(AE_DISABLE_PLATFORM_LOGGING)
+#if !defined(AUTOMATA_ENGINE_DISABLE_PLATFORM_LOGGING)
     {
         int hConHandle;
         intptr_t lStdHandle;
@@ -1014,7 +1024,7 @@ int CALLBACK WinMain(HINSTANCE instance,
     UpdateWindow(windowHandle);
 
     // Create the globalBackBuffer
-#if defined(CPU_BACKEND)
+#if defined(AUTOMATA_ENGINE_CPU_BACKEND)
     {
         ae::game_window_info_t winInfo =
             automata_engine::platform::getWindowInfo();
@@ -1090,8 +1100,8 @@ int CALLBACK WinMain(HINSTANCE instance,
         PlatformLoggerLog("WARN: GameInit == nullptr");
     }
 
+#if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
     // ImGUI initialization code :)
-
     {
         // Setup Dear ImGui context
         IMGUI_CHECKVERSION();
@@ -1101,7 +1111,7 @@ int CALLBACK WinMain(HINSTANCE instance,
         ImGui::StyleColorsDark();
         // Setup Platform/Renderer backends
         ImGui_ImplWin32_Init(windowHandle);
-#if defined(GL_BACKEND)
+#if defined(AUTOMATA_ENGINE_GL_BACKEND)
     const char* glsl_version = "#version 330";
         ImGui_ImplOpenGL3_Init(glsl_version);
 #endif
@@ -1110,6 +1120,7 @@ int CALLBACK WinMain(HINSTANCE instance,
 
         ScaleImGui();
     }
+#endif
     // TODO(Noah): Look into what the imGUI functions are going to return on failure!
 
 
@@ -1138,9 +1149,11 @@ int CALLBACK WinMain(HINSTANCE instance,
             }
         }
 
-#if defined(AE_ENABLE_IMGUI) && defined(GL_BACKEND)
+#if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
         if (isImGuiInitialized) {
+#if defined(AUTOMATA_ENGINE_GL_BACKEND)
             ImGui_ImplOpenGL3_NewFrame();
+#endif
             ImGui_ImplWin32_NewFrame();
             ImGui::NewFrame();
         }
@@ -1153,9 +1166,11 @@ int CALLBACK WinMain(HINSTANCE instance,
             PlatformLoggerLog("WARN: gameUpdateAndRender == nullptr");
         }
 
-#if defined(AE_ENABLE_IMGUI) && defined(GL_BACKEND)
+#if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
             ImGui::Render();
+#if defined(AUTOMATA_ENGINE_GL_BACKEND)
             ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+#endif
 #endif
 
         {
@@ -1165,7 +1180,7 @@ int CALLBACK WinMain(HINSTANCE instance,
             ae::platform::lastFrameTime = WorkSecondsElapsed;
         }
 
-#if defined(GL_BACKEND)
+#if defined(AUTOMATA_ENGINE_GL_BACKEND)
         if (ae::platform::GLOBAL_UPDATE_MODEL == ae::AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC) {
             glFlush(); // push all buffered commands to GPU
             glFinish(); // block until GPU is complete
@@ -1175,7 +1190,7 @@ int CALLBACK WinMain(HINSTANCE instance,
 
         // TODO(Noah): for CPU backend, add sleep if vsync = ON.
         // and I suppose figure out how to sync with the monitor?
-#if defined(CPU_BACKEND)
+#if defined(AUTOMATA_ENGINE_CPU_BACKEND)
         // NOTE(Noah): Here we are going to call our custom windows platform layer function that
         // will write our custom buffer to the screen.
         HDC deviceContext = GetDC(windowHandle);
@@ -1214,10 +1229,12 @@ int CALLBACK WinMain(HINSTANCE instance,
         if (g_pXAudio2 != nullptr) { g_pXAudio2->Release(); }
         if (!FAILED(comResult)) { CoUninitialize(); }
 
-#if defined(GL_BACKEND)
+#if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
         // ImGUI is tightly coupled with the platform.
         if (isImGuiInitialized) {
+#if defined(AUTOMATA_ENGINE_GL_BACKEND)
             ImGui_ImplOpenGL3_Shutdown();
+#endif
             ImGui_ImplWin32_Shutdown();
             ImGui::DestroyContext();
         }

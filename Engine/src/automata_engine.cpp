@@ -7,7 +7,10 @@
 
 #include <windows.h>
 #include <win32_engine.h>
+
+#if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
 #include "imgui.h"
+#endif
 
 namespace automata_engine {
 
@@ -21,6 +24,7 @@ namespace automata_engine {
     game_window_profile_t defaultWinProfile = AUTOMATA_ENGINE_WINPROFILE_RESIZE;
     const char *defaultWindowName = "Automata Engine";
 
+#if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
     void ImGuiRenderVec3(char *vecName, math::vec3_t vec) {
         ImGui::Text(vecName);
         if (ImGui::BeginTable(vecName, 3)) {
@@ -47,6 +51,7 @@ namespace automata_engine {
             ImGui::EndTable();
         }
     }
+#endif
 
     static update_model_t updateModel;
     void setUpdateModel(update_model_t newModel) {
@@ -121,24 +126,24 @@ namespace automata_engine {
             appTable_func[_currentApp].updateFunc;
     }
     void super::updateAndRender(game_memory_t * gameMemory) {
+#if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
         // Present the ImGui stuff to allow user to switch apps.
-#if defined(AE_ENABLE_IMGUI)
-    if (super::g_renderImGui) {
-        ImGui::Begin("AutomataEngine");
-        int item_current = _currentApp;
-        ImGui::Combo("App", &item_current, appTable_name, StretchyBufferCount(appTable_name));
-        if (item_current != _currentApp) { bifrost::updateApp(gameMemory, appTable_name[item_current]); }
-        ImGui::Text("lastFrameTimeCPU: %.3f ms", 1000.0f * platform::lastFrameTime);
-        ImGui::Text("lastFrameTimeTotal: %.3f ms (%.1f FPS)",
-            1000.0f * platform::lastFrameTimeTotal, 1.0f / platform::lastFrameTimeTotal);
-        ImGui::Text("updateModel: %s", updateModelToString(platform::GLOBAL_UPDATE_MODEL));
-        bool vsync = platform::GLOBAL_VSYNC;
-        ImGui::Checkbox("vsync", &vsync);
-        if (platform::GLOBAL_VSYNC != vsync) {
-            platform::setVsync(vsync);
+        if (super::g_renderImGui) {
+            ImGui::Begin("AutomataEngine");
+            int item_current = _currentApp;
+            ImGui::Combo("App", &item_current, appTable_name, StretchyBufferCount(appTable_name));
+            if (item_current != _currentApp) { bifrost::updateApp(gameMemory, appTable_name[item_current]); }
+            ImGui::Text("lastFrameTimeCPU: %.3f ms", 1000.0f * platform::lastFrameTime);
+            ImGui::Text("lastFrameTimeTotal: %.3f ms (%.1f FPS)",
+                1000.0f * platform::lastFrameTimeTotal, 1.0f / platform::lastFrameTimeTotal);
+            ImGui::Text("updateModel: %s", updateModelToString(platform::GLOBAL_UPDATE_MODEL));
+            bool vsync = platform::GLOBAL_VSYNC;
+            ImGui::Checkbox("vsync", &vsync);
+            if (platform::GLOBAL_VSYNC != vsync) {
+                platform::setVsync(vsync);
+            }
+            ImGui::End();
         }
-        ImGui::End();
-    }
 #endif
     }
     void super::close() {

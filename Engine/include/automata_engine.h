@@ -2,9 +2,15 @@
 // (headers)
 
 // Library Version
-// (Integer encoded as XYYZZ for use in #if preprocessor conditionals, e.g. '#if AUTOENGINE_VERSION_NUM > 12345')
+// (Integer encoded as AXYYZZSS for use in #if preprocessor conditionals, e.g. '#if AUTOENGINE_VERSION_NUM > 112345')
+// A = alpha/beta/official_release
+// alpha = 1, beta = 2, official_release = 3
+// X = major version
+// Y = minor version
+// Z = patch version
+// S = snapshot version
 #define AUTOMATA_ENGINE_VERSION               "v1.0.0-alpha WIP"
-#define AUTOMATA_ENGINE_VERSION_NUM           18925
+#define AUTOMATA_ENGINE_VERSION_NUM           11000000
 
 // This file is the primary file for the Automata Engine API.
 // The documentation for Automata Engine is effectively this file along with the
@@ -21,28 +27,48 @@
 
 // ----------------- [SECTION]     Definable Macros -----------------
 
-// #define AE_DISABLE_PLATFORM_LOGGING
+// NOTE: these macros must be defined when including this header as well as
+// for the .cpp files that are part of the engine.
+// If you are using the CMake build system, it will define these macros for you.
+
+// #define AUTOMATA_ENGINE_DISABLE_PLATFORM_LOGGING
 // define this macro to disable platform logging.
+
+// #define AUTOMATA_ENGINE_DISABLE_IMGUI
+// define this macro to disable imgui.
+
+// #define AUTOMATA_ENGINE_GL_BACKEND
+// define this macro to use the OpenGL backend.
+
+// #define AUTOMATA_ENGINE_VK_BACKEND
+// define this macro to use the Vulkan backend.
+
+// #define AUTOMATA_ENGINE_DX12_BACKEND
+// define this macro to use the DirectX 12 backend.
 
 // ----------------- [END SECTION] Definable Macros -----------------
 
 #pragma once
 
-#define AE_ENABLE_IMGUI 1
-
+// TODO: Cleanup this gist stuff.
 #include <gist/github/nc_types.h>
 #include <gist/github/nc_defer.h>
 #include <gist/github/nc_stretchy_buffers.h>
+
 #include <functional>
 #include <cassert>
 #include <tuple>
 #include <iterator>
 #include <string>
+
+// TODO: if AUTOMATA_ENGINE_DISABLE_IMGUI, we prolly want to not include it.
+#if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
 #include <imgui.h>
+#endif
 
 #include <automata_engine_math.h>
 
-#if defined(GL_BACKEND)
+#if defined(AUTOMATA_ENGINE_GL_BACKEND)
 #include <automata_engine_gl.h>
 #endif
 
@@ -107,7 +133,7 @@ namespace automata_engine {
     void ImGuiRenderMat4(char *matName, math::mat4_t mat);
     void ImGuiRenderVec3(char *vecName, math::vec3_t vec);
 
-#if defined(GL_BACKEND)
+#if defined(AUTOMATA_ENGINE_GL_BACKEND)
     namespace GL {
         // state that the engine exposes
         void GLClearError();
@@ -258,6 +284,11 @@ namespace automata_engine {
     // be classified as being temporally dependent: Ex) user input.
     namespace platform {
 
+        static constexpr uint32_t AE_STDERR = 0;
+        static constexpr uint32_t AE_STDOUT = 1;
+        static constexpr uint32_t AE_STDIN = 2;
+
+        // handle is one of AE_STDERR, AE_STDOUT, AE_STDIN
         void fprintf_proxy(int handle, const char *fmt, ...);
 
         // NOTE(Noah): Does not sit ontop of readEntireFile, so it's actually
@@ -318,17 +349,13 @@ namespace automata_engine {
 
 namespace ae = automata_engine;
 
-#define AE_STDERR 0
-#define AE_STDOUT 1
-#define AE_STDIN  2
-
 /// Returns pos of last chr in str.
 /// https://stackoverflow.com/questions/69121423/could-not-deduce-template-argument-for-const-char-n-from-const-char-6
 /// ^ need (&str) to ensure param does not decay and still have type information.
 template <std::size_t strLen>
 static constexpr const char *__find_last_in_str(const char (&str)[strLen], const char chr) {
     const char *lastPos = str;
-    // strlen can be a compile time thing depending on optimization level
+    // strlen() can be a compile time thing depending on optimization level
     // of compiler.
     // https://stackoverflow.com/questions/67571803/how-to-get-string-length-in-the-array-at-compile-time
     for (uint32_t i = 0; (i < (strLen - 1)) && (str[i]); i++) {
@@ -338,18 +365,22 @@ static constexpr const char *__find_last_in_str(const char (&str)[strLen], const
     return lastPos;
 }
 
-#define __FILE_RELATIVE__ (__find_last_in_str("\\" __FILE__, '\\') + 1)
+#if defined(_AUTOMATA_ENGINE_FILE_RELATIVE_)
+#error "_AUTOMATA_ENGINE_FILE_RELATIVE_ already defined." \
+    "Automata Engine tries to avoid bloat the global namespace, but this is a case where it is unavoidable."
+#endif
+#define _AUTOMATA_ENGINE_FILE_RELATIVE_ (__find_last_in_str("\\" __FILE__, '\\') + 1)
 
-// NOTE(Noah): See this page for color code guide:
+#if !defined(AUTOMATA_ENGINE_DISABLE_PLATFORM_LOGGING)
+// See this page for color code guide:
 // https://stackoverflow.com/questions/4842424/list-of-ansi-color-escape-sequences
-#if !defined(AE_DISABLE_PLATFORM_LOGGING)
 #define PlatformLoggerError(fmt, ...) \
-    (ae::platform::fprintf_proxy(AE_STDERR, "\033[0;31m" "[Error on line=%d in file:%s]:\n" fmt "\n" "\033[0m", __LINE__, __FILE_RELATIVE__, __VA_ARGS__))
+    (ae::platform::fprintf_proxy(ae::platform::AE_STDERR, "\033[0;31m" "[Error on line=%d in file:%s]:\n" fmt "\n" "\033[0m", __LINE__, _AUTOMATA_ENGINE_FILE_RELATIVE_, __VA_ARGS__))
 #define PlatformLoggerLog(fmt, ...) \
-    (ae::platform::fprintf_proxy(AE_STDOUT, "[Log from line=%d in file:%s]:\n" fmt "\n", __LINE__, __FILE_RELATIVE__, __VA_ARGS__))
+    (ae::platform::fprintf_proxy(ae::platform::AE_STDOUT, "[Log from line=%d in file:%s]:\n" fmt "\n", __LINE__, _AUTOMATA_ENGINE_FILE_RELATIVE_, __VA_ARGS__))
 #define PlatformLoggerWarn(fmt, ...) \
-    (ae::platform::fprintf_proxy(AE_STDOUT, "\033[0;93m" "[Warn on line=%d in file:%s]:\n" fmt  "\n" "\033[0m", __LINE__, __FILE_RELATIVE__, __VA_ARGS__))
-#define PlatformLogger(fmt, ...) (ae::platform::fprintf_proxy(AE_STDOUT, fmt, __VA_ARGS__))
+    (ae::platform::fprintf_proxy(ae::platform::AE_STDOUT, "\033[0;93m" "[Warn on line=%d in file:%s]:\n" fmt  "\n" "\033[0m", __LINE__, _AUTOMATA_ENGINE_FILE_RELATIVE_, __VA_ARGS__))
+#define PlatformLogger(fmt, ...) (ae::platform::fprintf_proxy(ae::platform::AE_STDOUT, fmt, __VA_ARGS__))
 #else
 #define PlatformLoggerError(fmt, ...)
 #define PlatformLoggerLog(fmt, ...)

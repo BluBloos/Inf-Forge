@@ -4,9 +4,10 @@ set(ProjectName "AutomataApp" CACHE STRING "game EXE / target name")
 set(ProjectResourcesExtraPath "" CACHE STRING "absolute path to some dir with runtime game resources")
 set(ProjectExplicitSources OFF CACHE BOOL "if true, the app shall set PROJ_SOURCES as those to compile")
 set(ProjectExplicitResOutputDir "" CACHE STRING "if set, the app shall copy resources to this dir instead of default res/")
-set(ProjectBackend "CPU_BACKEND" CACHE STRING "can be any of {GL_BACKEND,CPU_BACKEND, DX12_BACKEND, VULKAN_BACKEND}")
+set(ProjectBackend "CPU_BACKEND" CACHE STRING "can be any of {GL_BACKEND, CPU_BACKEND, DX12_BACKEND, VK_BACKEND}")
 set(ProjectRoot "${CMAKE_CURRENT_SOURCE_DIR}" CACHE STRING "set to where the folder src/ and res/ can be found")
 set(ProjectDisableLogging OFF CACHE BOOL "if true, disables logging")
+set(ProjectDisableImGui OFF CACHE BOOL "if true, disables imgui")
 
 # TODO: What if we want to make a multiple gfx-API application?
 
@@ -25,22 +26,26 @@ set(ENGINE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/Engine")
 set(ENGINE_EXTERNAL "${CMAKE_CURRENT_SOURCE_DIR}/external")
 
 # find sources
-if (NOT ProjectExplicitSources)
+if (NOT ${ProjectExplicitSources})
     file(GLOB_RECURSE PROJ_SOURCES
         "${ProjectRoot}/src/*.cpp")
 endif()
 file(GLOB_RECURSE ENGINE_SOURCES
     "${ENGINE_ROOT}/src/*.cpp")
-file(GLOB IMGUI_SOURCES
-    "${ENGINE_EXTERNAL}/imgui-1.87/imgui*.cpp"
-    "${ENGINE_EXTERNAL}/imgui-1.87/backends/imgui_impl_win32.cpp"
-    "${ENGINE_EXTERNAL}/imgui-1.87/misc/freetype/imgui_freetype.cpp")
-# TODO: We're kind of assuming Win32 all over the place right now.
-if ("${ProjectBackend}" MATCHES "GL_BACKEND")
-    set(IMGUI_SOURCES
-        "${ENGINE_EXTERNAL}/imgui-1.87/backends/imgui_impl_opengl3.cpp"
-        ${IMGUI_SOURCES})
+
+if (NOT ${ProjectDisableImGui})
+    file(GLOB IMGUI_SOURCES
+        "${ENGINE_EXTERNAL}/imgui-1.87/imgui*.cpp"
+        "${ENGINE_EXTERNAL}/imgui-1.87/backends/imgui_impl_win32.cpp"
+        "${ENGINE_EXTERNAL}/imgui-1.87/misc/freetype/imgui_freetype.cpp")
+    # TODO: We're kind of assuming Win32 all over the place right now.
+    if ("${ProjectBackend}" MATCHES "GL_BACKEND")
+        set(IMGUI_SOURCES
+            "${ENGINE_EXTERNAL}/imgui-1.87/backends/imgui_impl_opengl3.cpp"
+            ${IMGUI_SOURCES})
+    endif()
 endif()
+
 set(SOURCES ${PROJ_SOURCES} ${ENGINE_SOURCES} ${IMGUI_SOURCES})
 
 # WIN32 for WinMain
@@ -66,7 +71,11 @@ set_target_properties(${ProjectName}
 set(COMMON_LIB gdi32 user32 kernel32 Xaudio2 XAPOBase ole32 Shcore)
 
 if (${ProjectDisableLogging})
-    target_compile_definitions(${ProjectName} PUBLIC -DAE_DISABLE_PLATFORM_LOGGING)
+    target_compile_definitions(${ProjectName} PUBLIC -DAUTOMATA_ENGINE_DISABLE_PLATFORM_LOGGING)
+endif()
+
+if (${ProjectDisableImGui})
+    target_compile_definitions(${ProjectName} PUBLIC -DAUTOMATA_ENGINE_DISABLE_IMGUI)
 endif()
 
 if ( ${ProjectBackend} MATCHES "GL_BACKEND" )
@@ -75,7 +84,7 @@ if ( ${ProjectBackend} MATCHES "GL_BACKEND" )
         opengl32 Glu32
         "${ENGINE_EXTERNAL}/glew-2.2.0/lib/Release/x64/glew32s.lib")
     target_compile_definitions(${ProjectName}
-        PRIVATE -DGL_BACKEND -DGLEW_STATIC)
+        PRIVATE -DAUTOMATA_ENGINE_GL_BACKEND -DGLEW_STATIC)
     # TODO(Noah): We can probably get rid of glm here.
     target_include_directories(${ProjectName}
         PRIVATE "${ENGINE_EXTERNAL}/glm-0.9.9.8" "${ENGINE_EXTERNAL}/glew-2.2.0/include/GL")
@@ -83,13 +92,13 @@ if ( ${ProjectBackend} MATCHES "GL_BACKEND" )
 elseif( ${ProjectBackend} MATCHES "DX12_BACKEND" )
     target_link_libraries(${ProjectName}
         ${COMMON_LIB} D3D12 DXGI D3DCompiler)
-    target_compile_definitions(${ProjectName} PRIVATE -DDX12_BACKEND)
+    target_compile_definitions(${ProjectName} PRIVATE -DAUTOMATA_ENGINE_DX12_BACKEND)
 elseif( ${ProjectBackend} MATCHES "CPU_BACKEND" )
     target_link_libraries(${ProjectName} ${COMMON_LIB})
-    target_compile_definitions(${ProjectName} PRIVATE -DCPU_BACKEND)
-elseif( ${ProjectBackend} MATCHES "VULKAN_BACKEND" )
+    target_compile_definitions(${ProjectName} PRIVATE -DAUTOMATA_ENGINE_CPU_BACKEND)
+elseif( ${ProjectBackend} MATCHES "VK_BACKEND" )
     target_link_libraries(${ProjectName} ${COMMON_LIB})
-    target_compile_definitions(${ProjectName} PRIVATE -DVULKAN_BACKEND)
+    target_compile_definitions(${ProjectName} PRIVATE -DAUTOMATA_ENGINE_VK_BACKEND)
 endif()
 
 set(output_directory "res")
