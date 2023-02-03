@@ -1,5 +1,4 @@
 #include <automata_engine.h>
-#include <automata_engine_math.h>
 
 // TODO(Noah): roll out our own intrinsics for these things below.
 // we want to remove dependency on std:: and math.h.
@@ -32,12 +31,12 @@ namespace automata_engine {
                 }
             }
         } 
-        mat4::mat4() {
+        mat4_t::mat4_t() {
             /*
-            matv[0] = vec4();
-            matv[1] = vec4();
-            matv[2] = vec4();
-            matv[3] = vec4();
+            matv[0] = vec4_t();
+            matv[1] = vec4_t();
+            matv[2] = vec4_t();
+            matv[3] = vec4_t();
             for (uint32_t i = 0; i < 16; i++) {
                 matp[i] = 0.0f;
             }
@@ -49,43 +48,43 @@ namespace automata_engine {
             mat[2][0] = 0.f; mat[2][1] = 0.f; mat[2][2] = 1.f; mat[2][3] = 0.f;
             mat[3][0] = 0.f; mat[3][1] = 0.f; mat[3][2] = 0.f; mat[3][3] = 1.f;
         }
-        mat4::mat4(std::initializer_list<float> initList) {
+        mat4_t::mat4_t(std::initializer_list<float> initList) {
             initMat(matp, 4, initList);
         }
-        mat3::mat3(std::initializer_list<float> initList) {
+        mat3_t::mat3_t(std::initializer_list<float> initList) {
             initMat(matp, 3, initList);
         }
-        mat3::mat3(mat4_t b) {
-            this->matv[0] = vec3(b.matv[0]);
-            this->matv[1] = vec3(b.matv[1]);
-            this->matv[2] = vec3(b.matv[2]);
+        mat3_t::mat3_t(mat4_t b) {
+            this->matv[0] = vec3_t(b.matv[0]);
+            this->matv[1] = vec3_t(b.matv[1]);
+            this->matv[2] = vec3_t(b.matv[2]);
         }
-        vec3_t vec3::operator-() {
+        vec3_t vec3_t::operator-() {
             return vec3_t(-this->x, -this->y, -this->z);
         }
-        vec3::vec3(vec4_t a) : x(a.x), y(a.y), z(a.z) {}
-        vec3::vec3(float a, float b, float c) :
+        vec3_t::vec3_t(vec4_t a) : x(a.x), y(a.y), z(a.z) {}
+        vec3_t::vec3_t(float a, float b, float c) :
             x(a), y(b), z(c) {}
-        vec4_t vec4::operator-() {
+        vec4_t vec4_t::operator-() {
             return vec4_t(-this->x, -this->y, -this->z, -this->w);
         }
-        vec4::vec4(float a, float b, float c, float d) :
+        vec4_t::vec4_t(float a, float b, float c, float d) :
             x(a), y(b), z(c), w(d) {}
-        vec4::vec4(vec3_t a, float b) : x(a.x), y(a.y), z(a.z), w(b) {}
+        vec4_t::vec4_t(vec3_t a, float b) : x(a.x), y(a.y), z(a.z), w(b) {}
         vec3_t operator+=(vec3_t &a, vec3_t b) {
             return a = vec3_t(a.x + b.x, a.y + b.y, a.z + b.z);
         }
         vec3_t operator*(vec3_t b, float a) {
-            return vec3(b.x * a, b.y * a, b.z * a);
+            return vec3_t(b.x * a, b.y * a, b.z * a);
         }
         vec3_t operator+(vec3_t b, vec3_t a) {
-            return vec3(b.x + a.x, b.y + a.y, b.z + a.z);
+            return vec3_t(b.x + a.x, b.y + a.y, b.z + a.z);
         }
         vec4_t operator+(vec4_t b, vec4_t a) {
-            return vec4(b.x + a.x, b.y + a.y, b.z + a.z, b.w + a.w);
+            return vec4_t(b.x + a.x, b.y + a.y, b.z + a.z, b.w + a.w);
         }
         vec4_t operator*(vec4_t b, float a) {
-            return vec4(b.x * a, b.y * a, b.z * a, b.w * a);
+            return vec4_t(b.x * a, b.y * a, b.z * a, b.w * a);
         }
         vec3_t operator-(vec3_t b, vec3_t a) {
             return b + (-a);
@@ -234,7 +233,7 @@ namespace automata_engine {
             // TODO(Noah): can overloads be done for these sort of operations?
             rotMat4 = transposeMat4(rotMat4);
             mat4_t transMat = {};
-            transMat.matv[3] = vec4(-cam.trans.pos, 1.0f);
+            transMat.matv[3] = vec4_t(-cam.trans.pos, 1.0f);
             mat4_t scaleMat = {};
             scaleMat.matv[0][0] = 1.0f / cam.trans.scale.x;
             scaleMat.matv[1][1] = 1.0f / cam.trans.scale.y;

@@ -1,5 +1,6 @@
 // Automata Engine, v1.0.0-alpha WIP
-// (headers)
+
+// -------- [SECTION] Preamble --------
 
 // Library Version
 // (Integer encoded as AXYYZZSS for use in #if preprocessor conditionals, e.g. '#if AUTOENGINE_VERSION_NUM > 112345')
@@ -16,14 +17,25 @@
 // The documentation for Automata Engine is effectively this file along with the
 // associated doxygen build.
 
-// NOTE(Noah): All subnamespaces in automata engine will define their capabilities
-// within this file for the purpose of documentation.
-// The purpose of any header for a specific subnamespace will be to define relevant
-// types for that namespace.
-//
-// TODO: ^ I don't like this idea. I would prefer for example that we maybe forward declare all the types or something.
-// Then we can define them somewhere at the lower end of this file.
-// The goal is for a single include style model.
+// TODO: make using automata engine mean including this single .h
+
+// -------- [END SECTION] Preamble --------
+
+/*
+
+Index of this file:
+// [SECTION] Preamble
+// [SECTION] Definable Macros
+// [SECTION] Forward declarations and basic types
+// [SECTION] PreInit settings
+// [SECTION] GAME BINDING POINTS
+// [SECTION] AUDIO CALLBACKS
+// [SECTION] Platform Layer
+// [SECTION] PLATFORM AUDIO
+// [SECTION] Type Definitions
+
+*/
+
 
 // ----------------- [SECTION]     Definable Macros -----------------
 
@@ -56,60 +68,73 @@
 #include <gist/github/nc_stretchy_buffers.h>
 
 #include <functional>
+// TODO: We need to check casses where we assert but ought to replace with runtime logic.
 #include <cassert>
 #include <tuple>
 #include <iterator>
 #include <string>
+#include <initializer_list>
 
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
 #include <imgui.h>
 #endif
 
-#include <automata_engine_math.h>
-
 #if defined(AUTOMATA_ENGINE_GL_BACKEND)
 #include <automata_engine_gl.h>
 #endif
 
-// NOTE(Noah): No need to be adding some sort of CI so that we can be testing all the projects
-// compat. All projects compat is responsibility of individual proj.
-// They select a version of the engine. If they want the updated engine, maybe there is some incompat.
-// But that is fine. That is just some work on behalf of the project. Things are seperated well.
+// TODO: Here we trust that if PI and DEGREES_TO_RADIANS are defined, they are defined correctly.
+// we ought to implement some unit tests to ensure that this is the case.
+#if !defined(PI)
+#define PI 3.14159f
+#endif
+#if !defined(DEGREES_TO_RADIANS)
+#define DEGREES_TO_RADIANS PI / 180.0f
+#endif
 
 namespace automata_engine {
 
-    // ----------- [SECTION]     Forward declarations and basic types -----------
+// ----------- [SECTION]     Forward declarations and basic types -----------
     struct game_memory_t;
     struct game_window_info_t;
-    enum game_window_profile_t;
+    enum   game_window_profile_t;
     enum   game_key_t;
     struct game_state_t; // this is define by custom game that sits on Automata Engine
     struct user_input_t; // TODO: prob change to game_user_input_t;
 
-    // TODO: Types such as loaded_image_t, etc, aught to be scoped in the IO namespace.
+    // TODO: Types such as loaded_image_t, etc, ought to be scoped in the IO namespace.
     struct loaded_image_t;
     struct loaded_file_t;
     struct loaded_wav_t;
     struct raw_model_t;
     enum   update_model_t;
-    // ----------- [END SECTION] Forward declarations and basic types -----------
 
-    // ----------- [SECTION]    PreInit settings -----------
+    namespace math {
+        struct transform_t;
+        struct camera_t;
+        struct box_t;
+        struct vec2_t;
+        struct vec3_t;
+        struct vec4_t;
+        struct mat3_t;
+        struct mat4_t;        
+    };
+// ----------- [END SECTION] Forward declarations and basic types -----------
+
+// ----------- [SECTION]    PreInit settings -----------
     extern game_window_profile_t defaultWinProfile;
     extern int32_t defaultWidth;
     extern int32_t defaultHeight;
     extern const char *defaultWindowName;
-    // ----------- [END SECTION] PreInit settings -----------
+// ----------- [END SECTION] PreInit settings -----------
 
-    // ----------------- [SECTION] GAME BINDING POINTS -----------------
-#pragma region GameBindingPoints
+// ----------------- [SECTION] GAME BINDING POINTS -----------------
     void PreInit(game_memory_t *gameMemory);
     void Init(game_memory_t *gameMemory);
     void Close(game_memory_t *gameMemory);
     void HandleWindowResize(game_memory_t *gameMemory, int newWdith, int newHeight);
 
-    // ----------------- [SECTION] AUDIO CALLBACKS -----------------
-#pragma region AudioCallbacks
+// ----------------- [SECTION] AUDIO CALLBACKS -----------------
     /// @brief Main audio callback.
     void OnVoiceBufferProcess(
         game_memory_t *gameMemory, intptr_t voiceHandle, void *dst, void *src,
@@ -117,11 +142,9 @@ namespace automata_engine {
     /// @brief Called when a submitted buffer has finished playing. The implementation
     /// may make state changes to the voice.
     void OnVoiceBufferEnd(game_memory_t *gameMemory, intptr_t voiceHandle);
-#pragma endregion  // AudioCallbacks
-    // ----------------- [END SECTION] AUDIO CALLBACKS -----------------
+// ----------------- [END SECTION] AUDIO CALLBACKS -----------------
 
-#pragma endregion  // GameBindingPoints
-    // ----------------- [END SECTION] GAME BINDING POINTS -----------------
+// ----------------- [END SECTION] GAME BINDING POINTS -----------------
 
     // engine helper funcs.
     game_state_t *getGameState(game_memory_t *gameMemory);
@@ -167,30 +190,37 @@ namespace automata_engine {
         float epoch();
     }
 
+// TODO(Noah): Understand rvalues. Because, I'm a primitive ape, and,
+// they go right over my head, man.
+
+// TODO(Noah): Is there any way to expose member funcs for our math stuff
+// (declare them here) so that the documentation is there for what is defined?
+
     namespace math {
-        // TODO(Noah): Understand rvalues. Because, I'm a primitive ape, and,
-        // they go right over my head, man.
-        // TODO(Noah): Is there any way to expose member funcs for our math stuff
-        // (declare them here) so that the documentation is there for what is defined?
-        vec4_t operator*(mat4_t b, vec4_t a);
-        vec4_t operator*=(vec4_t &a, float scalar);
+
         vec4_t operator+=(vec4_t &, vec4_t);
-        vec4_t operator+(vec4_t b, vec4_t a);
-        vec4_t operator*(vec4_t b, float a);
-
-        mat4_t operator*(mat4_t a, mat4_t b);
-
         vec3_t operator+=(vec3_t &, vec3_t);
-        vec3_t operator*(mat3_t b, vec3_t a);
-        vec3_t operator*(vec3_t b, float a);
+        vec4_t operator+(vec4_t b, vec4_t a);
         vec3_t operator+(vec3_t b, vec3_t a);
         vec3_t operator-(vec3_t b, vec3_t a);
 
-        float round(float a);
+        vec4_t operator*=(vec4_t &a, float scalar);
+        vec4_t operator*(vec4_t b, float a);
+        vec4_t operator*(mat4_t b, vec4_t a);
+        vec3_t operator*(mat3_t b, vec3_t a);
+        mat4_t operator*(mat4_t a, mat4_t b);
+        vec3_t operator*(vec3_t b, float a);
+
+        float *value_ptr(vec3_t &);
+        float *value_ptr(vec4_t &);
+        float *value_ptr(mat3_t &);
+        float *value_ptr(mat4_t &);
+
         float magnitude(vec3_t a);
         float dist(vec3_t a, vec3_t b);
         float dot(vec3_t a, vec3_t b);
         float project(vec3_t a, vec3_t b);
+
         vec3_t normalize(vec3_t a);
         vec3_t lookAt(vec3_t origin, vec3_t target);
 
@@ -210,46 +240,37 @@ namespace automata_engine {
         // TODO(Noah): Probably make these constexpr, inline, templates and FAST intrinsics.
         float sqrt(float a);
         float atan2(float a, float b);
-
+        float round(float a);
         float log10(float a);
-        float log2(float a); // base 2
+        float log2(float a);
         float deg2rad(float deg);
         float sin(float a);
         float cos(float a);
-
         template <typename T>
         T square(T a) {
             return a * a;
         }
-
         template <typename T>
         T min(T a, T b) {
             return (a < b) ? a : b;
         }
-
         template <typename T>
         T max(T a, T b) {
             return (a > b) ? a : b;
         }
-
         float abs(float a);
-
         float ceil(float a);
         float floor(float a);
-
-        float *value_ptr(vec3_t &);
-        float *value_ptr(vec4_t &);
-        float *value_ptr(mat3_t &);
-        float *value_ptr(mat4_t &);
     }
 
     namespace super {
-        // called by platform
-        void init();
-        // called by platform
-        void close();
-        // called by user
+        void init();  // not to be called by the user.
+        void close(); // not to be called by the user.
+        
+        /// @brief presents an ImGui engine overlay
         void updateAndRender(game_memory_t * gameMemory);
+        
+        /// @brief a bool to control ALL ImGui rendering
         extern bool g_renderImGui;
     }
 
@@ -276,18 +297,28 @@ namespace automata_engine {
         constexpr static uint32_t ENGINE_DESIRED_SAMPLES_PER_SECOND = 44100;
     };
 
-    // Platform space are those functions that relate to doing something with the OS
-    // Specifically, if calling the function requires any OS API to be made, that goes
-    // in the platform layer. If calling the function uses cached information, but which
-    // was initially retrieved by OS API, this too is a platform func. This case can
-    // be classified as being temporally dependent: Ex) user input.
+
+// -------------------- [SECTION] Platform Layer --------------------
+//
+// The platform layer are those functions that do something with the OS.
+// Specifically, functions in this section require any OS API call to be made,
+// even if that call happened at a different time and we are merely accessing
+// cached information.
+//
     namespace platform {
 
         static constexpr uint32_t AE_STDERR = 0;
         static constexpr uint32_t AE_STDOUT = 1;
         static constexpr uint32_t AE_STDIN = 2;
 
-        // handle is one of AE_STDERR, AE_STDOUT, AE_STDIN
+        extern float lastFrameTime;
+        extern float lastFrameTimeTotal;
+        extern bool GLOBAL_RUNNING;
+        extern bool GLOBAL_VSYNC;
+        extern int GLOBAL_PROGRAM_RESULT;
+        extern update_model_t GLOBAL_UPDATE_MODEL;
+
+        /// @param handle is one of AE_STDERR, AE_STDOUT, AE_STDIN
         void fprintf_proxy(int handle, const char *fmt, ...);
 
         // NOTE(Noah): Does not sit ontop of readEntireFile, so it's actually
@@ -297,7 +328,13 @@ namespace automata_engine {
 
         // get functions
         void getUserInput(user_input_t *userInput);
+
+        /// @brief used for getting the width and height of the window.
         game_window_info_t getWindowInfo();
+
+        /// @brief get the path to directory the executable resides in.
+        /// @param pathOut buffer to write path to.
+        /// @param pathSize size of pathOut buffer.
         char *getRuntimeExeDirPath(char *pathOut, uint32_t pathSize);
 
         /// set the mouse position in client pixel coords.
@@ -305,70 +342,82 @@ namespace automata_engine {
         /// @param xPos x pos in client pixel coords.
         void setMousePos(int xPos, int yPos);
 
-        void showMouse(bool);
+        /// @brief show or hide the mouse cursor.
+        void showMouse(bool shouldShow);
 
-        extern float lastFrameTime;
-        extern float lastFrameTimeTotal;
-        extern bool GLOBAL_RUNNING;
-        extern bool GLOBAL_VSYNC;
-        extern int GLOBAL_PROGRAM_RESULT;
-        extern update_model_t GLOBAL_UPDATE_MODEL;
+        /// @brief show a window alert.
+        void showWindowAlert(const char *windowTitle, const char *windowMessage);
 
+        /// @brief Vsync is an OS state and we must make a call to OS to set it.
+        /// @param value true to enable Vsync, false to disable.
+        void setVsync(bool value);
 
+        /// @brief free memory allocated by the platform layer.
         void free(void *memToFree);
+
+        /// @brief allocate memory.
+        /// @param bytes number of bytes to allocate.
         void *alloc(uint32_t bytes);
+
         loaded_file_t readEntireFile(const char *fileName);
         bool writeEntireFile(const char *fileName, void *memory, uint32_t memorySize);
         void freeLoadedFile(loaded_file_t file);
 
-        // --------- AUDIO ----------------
-#pragma region PlatformAudio
-        // TODO(Noah): allow for multiple buffer submissions to a voice. currently
-        // we are doing a single buffer model.
+// --------- [SECTION]    PLATFORM AUDIO ----------------
+//
+// TODO(Noah): allow for multiple buffer submissions to a voice. currently
+// we are doing a single buffer model.
+//
+        static const intptr_t INVALID_VOICE = UINT32_MAX;
+
+        /// @return INVALID_VOICE on failure, a handle to the voice on success.
         intptr_t createVoice();
+
         /// @return false on failure.
         bool voiceSubmitBuffer(intptr_t voiceHandle, loaded_wav_t wavFile);
+
+        /// @return false on failure.
         bool voiceSubmitBuffer(intptr_t voiceHandle, void *data, uint32_t size, bool shoudLoop = false);
+
         void voicePlayBuffer(intptr_t voiceHandle);
         void voiceStopBuffer(intptr_t voiceHandle);
         void voiceSetBufferVolume(intptr_t voiceHandle, float volume);
+
+        /// @brief given the dB value, return the float multiplier to apply to LPCM float samples.
         float decibelsToAmplitudeRatio(float db);
-        static const intptr_t INVALID_VOICE = UINT32_MAX;
-#pragma endregion  // PlatformAudio
-        // --------- END AUDIO ------------
+//
+// --------- [END SECTION] PLATFORM AUDIO ------------
 
-
-        void showWindowAlert(const char *windowTitle, const char *windowMessage);
-
-        // NOTE(Noah): setVsync is in platform layer because Vsync is an OS state
-        // and we must make a call to OS to set it.
-        void setVsync(bool);
     };
+
+// -------------------- [END SECTION] Platform Layer --------------------
+
+    namespace __details {
+        /// Returns pos of last chr in str.
+        /// https://stackoverflow.com/questions/69121423/could-not-deduce-template-argument-for-const-char-n-from-const-char-6
+        /// ^ need (&str) to ensure param does not decay and still have type information.
+        template <std::size_t strLen>
+        static constexpr const char *find_last_in_str(const char (&str)[strLen], const char chr) {
+            const char *lastPos = str;
+            // strlen() can be a compile time thing depending on optimization level
+            // of compiler.
+            // https://stackoverflow.com/questions/67571803/how-to-get-string-length-in-the-array-at-compile-time
+            for (uint32_t i = 0; (i < (strLen - 1)) && (str[i]); i++) {
+                if (str[i] == chr)
+                    lastPos = &(str[i]);
+            }
+            return lastPos;
+        }
+    }
 }
 
 namespace ae = automata_engine;
 
-/// Returns pos of last chr in str.
-/// https://stackoverflow.com/questions/69121423/could-not-deduce-template-argument-for-const-char-n-from-const-char-6
-/// ^ need (&str) to ensure param does not decay and still have type information.
-template <std::size_t strLen>
-static constexpr const char *__find_last_in_str(const char (&str)[strLen], const char chr) {
-    const char *lastPos = str;
-    // strlen() can be a compile time thing depending on optimization level
-    // of compiler.
-    // https://stackoverflow.com/questions/67571803/how-to-get-string-length-in-the-array-at-compile-time
-    for (uint32_t i = 0; (i < (strLen - 1)) && (str[i]); i++) {
-        if (str[i] == chr)
-            lastPos = &(str[i]);
-    }
-    return lastPos;
-}
-
-#if defined(_AUTOMATA_ENGINE_FILE_RELATIVE_)
-#error "_AUTOMATA_ENGINE_FILE_RELATIVE_ already defined." \
-    "Automata Engine tries to avoid bloat the global namespace, but this is a case where it is unavoidable."
+#if defined(_AUTOMATA_ENGINE_FILE_RELATIVE_) || defined(AELoggerError) || defined(AELoggerLog) || defined(AELoggerWarn) || defined(AELogger)
+#error "Automata Engine tries to avoid bloat the global namespace, but these cases are unavoidable."
 #endif
-#define _AUTOMATA_ENGINE_FILE_RELATIVE_ (__find_last_in_str("\\" __FILE__, '\\') + 1)
+
+#define _AUTOMATA_ENGINE_FILE_RELATIVE_ (ae::__details::find_last_in_str("\\" __FILE__, '\\') + 1)
 
 
 #if !defined(AUTOMATA_ENGINE_DISABLE_PLATFORM_LOGGING)
@@ -428,7 +477,7 @@ namespace automata_engine {
         int contentSize;
     };
 
-    /// @param sampleData pointer to contiguous chunk of memory corresponding to 16-bit PCA sound samples. When
+    /// @param sampleData pointer to contiguous chunk of memory corresponding to 16-bit LPCM sound samples. When
     /// there are two channels, the data is interleaved.
     /// @param parentFile internal storage for corresponding loaded_file that contains the unparsed sound data.
     /// This is retained so that we can ultimately free the loaded file.
@@ -484,5 +533,83 @@ namespace automata_engine {
         AUTOMATA_ENGINE_UPDATE_MODEL_ONE_LATENT_FRAME,
         AUTOMATA_ENGINE_UPDATE_MODEL_COUNT
     };
+
+    namespace math {
+#pragma pack(push, 4) // align on 4 bytes
+        struct vec2_t {
+            float x, y;
+        };
+        struct vec4_t;
+        struct vec3_t {
+            float x, y, z;
+            constexpr vec3_t() : x(0), y(0), z(0) {};
+            vec3_t(float, float, float);
+            vec3_t(vec4_t);
+            vec3_t operator-();
+            float &operator[](int index);
+
+        };
+        struct vec4_t {
+            float x, y, z, w;
+            constexpr vec4_t() : x(0), y(0), z(0), w(0) {};
+            vec4_t operator-();
+            vec4_t(float, float, float, float);
+            vec4_t(vec3_t, float);
+            float &operator[](int index);
+        };
+        struct mat4_t;
+        struct mat3_t {
+            union {
+                float mat[3][3];
+                float matp[9];
+                vec3_t matv[3];
+            };
+            mat3_t(std::initializer_list<float>);
+            mat3_t(mat4_t);
+        };
+        struct mat4_t {
+            union {
+                float   mat[4][4];
+                float matp[16];
+                vec4_t matv[4];
+            };
+            mat4_t(); // TODO(Noah): see if we can get this to be constexpr.
+            mat4_t(std::initializer_list<float>);
+        };
+#pragma pack(pop)
+
+        /// @param pos         camera is located by pos
+        /// @param scale       camera is scaled by scale
+        /// @param eulerAngles camera is rotated about its own axis by eulerAngles.
+        ///                    Euler angles apply in the following rotation order: Z, Y, X.
+        struct transform_t {
+            vec3_t pos;
+            vec3_t eulerAngles;
+            vec3_t scale;
+        };
+
+        /// @brief a struct to define a frustrum.
+        /// The units for distance within this struct are up to the app. Probably world space coords.
+        /// @param fov       is the field of vision. Angle is applied in the vertical.
+        /// @param nearPlane is the distance from the camera origin to the near clipping plane.
+        /// @param farPlane  is the distance from the camera origin to the far clipping plane.
+        /// @param height    is the height of the viewport.
+        /// @param width     is the width of the viewport.
+        struct camera_t {
+            transform_t trans;
+            float fov;
+            float nearPlane;
+            float farPlane;
+            int height;
+            int width;
+        };
+
+        /// @brief a struct to define a box in 3D space.
+        /// @param pos is the bottom left corner of the box.
+        struct box_t {
+            vec3_t pos;
+            vec3_t scale;
+        };
+    }
 };
 // ---------- [END SECTION] Type Definitions ------------
