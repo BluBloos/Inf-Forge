@@ -138,10 +138,10 @@ static bool isImGuiInitialized = false;
 #include "imgui_impl_opengl3.h"
 #endif
 
-// NOTE(Noah): Pretty sure glew and gl must be after imgui headers here.
 #include <glew.h>
 #include <gl/gl.h>
 #include <gl/wglext.h>
+// TODO(Noah): Pretty sure glew and gl must be after imgui headers here?
 static HDC gHdc;
 typedef BOOL WINAPI wgl_swap_interval_ext(int interval);
 static wgl_swap_interval_ext *wglSwapInterval;

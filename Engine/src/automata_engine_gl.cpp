@@ -4,7 +4,6 @@
 // TODO(Noah): impl dealloc unfunction for vbo_t
 
 #if defined(AUTOMATA_ENGINE_GL_BACKEND)
-#include <automata_engine_gl.h>
 namespace automata_engine {
     namespace GL {
         void GLClearError() { while(glGetError() != GL_NO_ERROR); }
@@ -117,6 +116,7 @@ namespace automata_engine {
             automata_engine::platform::freeLoadedFile(f2);
             return program;
         }
+        // TODO: Can we remove this? Maybe make it so that if using glew, the game decides so.
         void initGlew() {
             if (!glewIsInit) {
                 GLenum err = glewInit();

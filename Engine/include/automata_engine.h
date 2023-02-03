@@ -68,7 +68,7 @@ Index of this file:
 #include <gist/github/nc_stretchy_buffers.h>
 
 #include <functional>
-// TODO: We need to check casses where we assert but ought to replace with runtime logic.
+// TODO: We need to check cases where we assert but ought to replace with runtime logic.
 #include <cassert>
 #include <tuple>
 #include <iterator>
@@ -80,7 +80,10 @@ Index of this file:
 #endif
 
 #if defined(AUTOMATA_ENGINE_GL_BACKEND)
-#include <automata_engine_gl.h>
+#include <glew.h> // TODO: can we get rid of glew?
+#include <gl/gl.h>
+#include <gl/Glu.h>
+// NOTE: glew must always be before gl.h
 #endif
 
 // TODO: Here we trust that if PI and DEGREES_TO_RADIANS are defined, they are defined correctly.
@@ -119,6 +122,16 @@ namespace automata_engine {
         struct mat3_t;
         struct mat4_t;        
     };
+
+#if defined(AUTOMATA_ENGINE_GL_BACKEND)
+    namespace GL {
+        struct vertex_attrib_t;
+        struct vbo_t;
+        struct ibo_t;
+        struct vertex_attrib_desc_t;
+    }
+#endif
+
 // ----------- [END SECTION] Forward declarations and basic types -----------
 
 // ----------- [SECTION]    PreInit settings -----------
@@ -419,6 +432,13 @@ namespace ae = automata_engine;
 
 #define _AUTOMATA_ENGINE_FILE_RELATIVE_ (ae::__details::find_last_in_str("\\" __FILE__, '\\') + 1)
 
+#if defined(AUTOMATA_ENGINE_GL_BACKEND)
+    #if !defined(GL_CALL)
+        #define GL_CALL(code) (ae::GL::GLClearError(), code, assert(ae::GL::GLCheckError(#code, _AUTOMATA_ENGINE_FILE_RELATIVE_, __LINE__)))
+    #else
+        #error "TODO"
+    #endif
+#endif
 
 #if !defined(AUTOMATA_ENGINE_DISABLE_PLATFORM_LOGGING)
 // See this page for color code guide:
@@ -611,5 +631,34 @@ namespace automata_engine {
             vec3_t scale;
         };
     }
+
+#if defined(AUTOMATA_ENGINE_GL_BACKEND)
+    namespace GL {
+        struct vertex_attrib_t {
+            GLenum type;
+            uint32_t count;
+            vertex_attrib_t(GLenum type, uint32_t count);
+        };
+        struct vbo_t {
+            uint32_t glHandle;
+            vertex_attrib_t *attribs; // stretchy buffer
+        };
+        struct ibo_t {
+            uint32_t count;
+            GLuint glHandle;
+        };
+        struct vertex_attrib_desc_t {
+            uint32_t attribIndex;
+            uint32_t *indices; // stretchy buffer
+            vbo_t vbo;
+            bool iterInstance;
+            vertex_attrib_desc_t(
+                uint32_t attribIndex,
+                std::initializer_list<uint32_t> indices,
+                vbo_t vbo,
+                bool iterInstance);
+        };
+    }
+#endif
 };
 // ---------- [END SECTION] Type Definitions ------------
