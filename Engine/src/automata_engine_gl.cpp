@@ -18,7 +18,7 @@ namespace automata_engine {
             }
             return result;
         }
-        vertex_attrib_desc::vertex_attrib_desc(
+        vertex_attrib_desc_t::vertex_attrib_desc_t(
             uint32_t attribIndex,
             std::initializer_list<uint32_t> indices_list,
             vbo_t vbo,
@@ -28,7 +28,8 @@ namespace automata_engine {
                 StretchyBufferPush(indices, std::data(indices_list)[i]);
             }
         };
-        vertex_attrib::vertex_attrib(GLenum type, uint32_t count) :
+        vertex_attrib_t::vertex_attrib_t(GLenum type, uint32_t count)
+            :
             type(type), count(count) {};
         bool glewIsInit = false;
         GLuint compileShader(uint32_t type, char *shader) {
@@ -58,14 +59,16 @@ namespace automata_engine {
         ) {
             uint32_t program;
             // Step 1: Setup our vertex and fragment GLSL shaders!
-            loaded_file f1 = automata_engine::platform::readEntireFile(vertFilePath);
-            loaded_file f2 = automata_engine::platform::readEntireFile(fragFilePath);
+            loaded_file_t f1 = automata_engine::platform::readEntireFile(vertFilePath);
+            loaded_file_t f2 =
+                automata_engine::platform::readEntireFile(fragFilePath);
             GL_CALL(program = glCreateProgram());
             uint32_t vs = compileShader(GL_VERTEX_SHADER, (char *)f1.contents);
             uint32_t fs = compileShader(GL_FRAGMENT_SHADER, (char *)f2.contents);
             uint32_t gs = 1;
             if (geoFilePath[0]) {
-                loaded_file f3 = automata_engine::platform::readEntireFile(geoFilePath);
+              loaded_file_t f3 =
+                  automata_engine::platform::readEntireFile(geoFilePath);
                 defer(automata_engine::platform::freeLoadedFile(f3));
                 gs = compileShader(GL_GEOMETRY_SHADER, (char *)f3.contents);
                 if ((int)gs == -1) {
@@ -130,7 +133,7 @@ namespace automata_engine {
             }
         }
         // TODO(Noah): Are there performance concerns with always calling GetUniformLocation?
-        void setUniformMat4f(GLuint shader, char *uniformName, ae::math::mat4 val) {
+        void setUniformMat4f(GLuint shader, char *uniformName, ae::math::mat4_t val) {
             GLuint loc;
             GL_CALL(loc = glGetUniformLocation(shader, uniformName));
             GL_CALL(glUniformMatrix4fv(loc, 1, GL_FALSE, (val).matp));
