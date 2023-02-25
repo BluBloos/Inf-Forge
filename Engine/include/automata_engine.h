@@ -163,14 +163,14 @@ namespace automata_engine {
     void setFatalExit();
     void setUpdateModel(update_model_t updateModel);
     const char *updateModelToString(update_model_t updateModel);
-    void ImGuiRenderMat4(char *matName, math::mat4_t mat);
-    void ImGuiRenderVec3(char *vecName, math::vec3_t vec);
+    void ImGuiRenderMat4(const char *matName, math::mat4_t mat);
+    void ImGuiRenderVec3(const char *vecName, math::vec3_t vec);
 
 #if defined(AUTOMATA_ENGINE_GL_BACKEND)
     namespace GL {
         // state that the engine exposes
         void GLClearError();
-        bool GLCheckError(char *, const char *, int);
+        bool GLCheckError(const char *, const char *, int);
         extern bool glewIsInit;
         void initGlew();
         bool getGLInitialized();

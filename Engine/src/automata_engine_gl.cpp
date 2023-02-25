@@ -7,7 +7,7 @@
 namespace automata_engine {
     namespace GL {
         void GLClearError() { while(glGetError() != GL_NO_ERROR); }
-        bool GLCheckError(char *expr, const char *file, int line) {
+        bool GLCheckError(const char *expr, const char *file, int line) {
             bool result = true;
             while(GLenum error = glGetError()) {
                 static_assert(sizeof(GLubyte)==sizeof(char), "platform is odd");

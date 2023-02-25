@@ -25,7 +25,7 @@ namespace automata_engine {
     const char *defaultWindowName = "Automata Engine";
 
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
-    void ImGuiRenderVec3(char *vecName, math::vec3_t vec) {
+    void ImGuiRenderVec3(const char *vecName, math::vec3_t vec) {
         ImGui::Text(vecName);
         if (ImGui::BeginTable(vecName, 3)) {
             float vals[] = {vec.x, vec.y, vec.z};
@@ -37,7 +37,7 @@ namespace automata_engine {
         }
     }
 
-    void ImGuiRenderMat4(char *matName, math::mat4_t mat) {
+    void ImGuiRenderMat4(const char *matName, math::mat4_t mat) {
         ImGui::Text(matName);
         if (ImGui::BeginTable(matName, 4)) {
             // Diaply the matrix back in ImGUI.
