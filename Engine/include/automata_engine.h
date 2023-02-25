@@ -102,7 +102,6 @@ namespace automata_engine {
     struct game_window_info_t;
     enum   game_window_profile_t;
     enum   game_key_t;
-    struct game_state_t; // this is define by custom game that sits on Automata Engine
     struct user_input_t; // TODO: prob change to game_user_input_t;
 
     // TODO: Types such as loaded_image_t, etc, ought to be scoped in the IO namespace.
@@ -160,7 +159,6 @@ namespace automata_engine {
 // ----------------- [END SECTION] GAME BINDING POINTS -----------------
 
     // engine helper funcs.
-    game_state_t *getGameState(game_memory_t *gameMemory);
     void setGlobalRunning(bool); // this one enables more of a graceful exit.
     void setFatalExit();
     void setUpdateModel(update_model_t updateModel);

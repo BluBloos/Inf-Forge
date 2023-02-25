@@ -83,9 +83,6 @@ namespace automata_engine {
         platform::GLOBAL_PROGRAM_RESULT = -1;
         platform::GLOBAL_RUNNING = false;
     }
-    game_state_t *getGameState(game_memory_t *gameMemory) {
-        return (game_state_t *)gameMemory->data;
-    }
     // TODO(Noah): Swap this appTable out for something more performant
     // like a hash table. OR, could do the other design pattern where we map
     // some index to names. We just O(1) lookup...
