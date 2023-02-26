@@ -66,6 +66,17 @@ namespace automata_engine {
             uint32_t vs = compileShader(GL_VERTEX_SHADER, (char *)f1.contents);
             uint32_t fs = compileShader(GL_FRAGMENT_SHADER, (char *)f2.contents);
             uint32_t gs = 1;
+            auto findAndlogError = [=]() {
+              GLsizei length;
+              GLint logLength;
+              glGetProgramiv(program, GL_INFO_LOG_LENGTH, &logLength);
+              const char *logMsg = new char[logLength + 1];
+              defer(delete[] logMsg);
+              static_assert(sizeof(GLchar) == sizeof(char), "odd platform");
+              glGetProgramInfoLog(program, logLength, &length,
+                                  (GLchar *)logMsg);
+              AELoggerError("Program link or validation failure:\n%s", logMsg);
+            };
             if (geoFilePath[0]) {
               loaded_file_t f3 =
                   automata_engine::platform::readEntireFile(geoFilePath);
@@ -76,16 +87,6 @@ namespace automata_engine {
                 }
                 glAttachShader(program, gs);
             }
-            auto findAndlogError = [=]() {
-                GLsizei length;
-                GLint logLength;
-                glGetProgramiv(program, GL_INFO_LOG_LENGTH, &logLength);
-                const char *logMsg = new char[logLength + 1];
-                defer(delete[] logMsg);
-                static_assert(sizeof(GLchar) == sizeof(char), "odd platform");
-                glGetProgramInfoLog(program, logLength, &length, (GLchar *)logMsg);
-                AELoggerError("Program link or validation failure:\n%s", logMsg);
-            };
             if ((int)vs == -1 || (int)fs == -1) {
                 goto createShader_Fail;
             }
@@ -133,7 +134,7 @@ namespace automata_engine {
             }
         }
         // TODO(Noah): Are there performance concerns with always calling GetUniformLocation?
-        void setUniformMat4f(GLuint shader, char *uniformName, ae::math::mat4_t val) {
+        void setUniformMat4f(GLuint shader, const char *uniformName, ae::math::mat4_t val) {
             GLuint loc;
             GL_CALL(loc = glGetUniformLocation(shader, uniformName));
             GL_CALL(glUniformMatrix4fv(loc, 1, GL_FALSE, (val).matp));
