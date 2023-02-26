@@ -114,7 +114,7 @@ namespace automata_engine {
     namespace math {
         struct transform_t;
         struct camera_t;
-        struct box_t;
+        struct aabb_t;
         struct vec2_t;
         struct vec3_t;
         struct vec4_t;
@@ -235,10 +235,11 @@ namespace automata_engine {
         vec3_t normalize(vec3_t a);
         vec3_t lookAt(vec3_t origin, vec3_t target);
 
-        // returns true if wrote to intersectionOut
-        bool rayBoxIntersection(
-            vec3_t rayOrigin, vec3_t rayDir, float rayLen, const box_t *candidateBoxes,
-            uint32_t candidateBoxCount, vec3_t *intersectionOut);
+        bool doesRayIntersectWithAABB(
+            const vec3_t &rayOrigin, const vec3_t &rayDir, float rayLen,
+            const aabb_t &candidateBox,
+            float *tOut
+        );
 
         mat4_t buildMat4fFromTransform(transform_t trans);
         mat4_t buildProjMat(camera_t cam);
@@ -622,11 +623,22 @@ namespace automata_engine {
             int width;
         };
 
-        /// @brief a struct to define a box in 3D space.
-        /// @param pos is the bottom left corner of the box.
-        struct box_t {
-            vec3_t pos;
-            vec3_t scale;
+        /// @brief A struct to define an AABB (axis aligned bounding box).
+        /// The extent of the box is defined by the origin and halfDim, i.e.
+        /// xMin=origin.x-halfDim.x, xMax=origin.x+halfDim.x, etc.
+        ///
+        /// @param origin is the center of the box.
+        /// @param halfDim is the half of the dimensions of the box.
+        /// @param min is the bottom left corner of the box.
+        /// @param max is the top right corner of the box.
+        struct aabb_t {
+            vec3_t origin;
+            vec3_t halfDim;
+            vec3_t min;
+            vec3_t max;
+            static aabb_t make(vec3_t origin, vec3_t halfDim);
+            static aabb_t fromCube(vec3_t bottomLeft, float width);
+            static aabb_t fromLine(vec3_t p0, vec3_t p1);
         };
     }
 

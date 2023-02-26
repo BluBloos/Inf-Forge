@@ -292,24 +292,43 @@ namespace automata_engine {
         float cos(float a) {
             return std::cos(a);
         }
-        bool rayBoxIntersection(
-            vec3_t rayOrigin, vec3_t rayDir, float rayLen, const box_t *candidateBoxes,
-            uint32_t candidateBoxCount, vec3_t *intersectionOut
+        bool doesRayIntersectWithAABB(
+            const vec3_t &rayOrigin, const vec3_t &rayDir, float rayLen,
+            const aabb_t &candidateBox,
+            float *tOut
         ) {
-            for (uint32_t i = 0; i < candidateBoxCount; i++) {
-                box_t box = candidateBoxes[i];
-                float boxTop = box.pos.y + box.scale.y;
-                vec3_t rayHorizon = (rayOrigin + rayDir * (rayLen));
-                // can reduce ray/box to two 2D problems
-                // consider orthogonal viewpoint of box.
-                // 3D line becomes 2D, and cube becomes square.
-                // now 2D line intersect with square?
-                    // two sample points, at x1 and x2.
-                    // if y1 and y2 are on same "side" of square,
-                    // i.e. both above or below the box top / bottom,
-                    // then there is no intersect.
+            const vec3_t R = candidateBox.origin - rayOrigin;
+            const float t = min(project(R, rayDir), rayLen);
+            const vec3_t W = rayOrigin + rayDir * t;
+            const float xDist = abs(W.x - candidateBox.origin.x);
+            const float yDist = abs(W.y - candidateBox.origin.y);
+            const float zDist = abs(W.z - candidateBox.origin.z);
+            const bool wInBox = (xDist <= candidateBox.halfDim.x) && (yDist <= candidateBox.halfDim.y) && (zDist <= candidateBox.halfDim.z);
+            if (wInBox) {
+                *tOut = t;
             }
-            return false;
+            return wInBox;
+        }
+        aabb_t aabb_t::make(vec3_t origin,vec3_t halfDim)
+        {
+          aabb_t r = {};
+          r.origin = origin;
+          r.halfDim = halfDim;
+          r.min = origin - halfDim;
+          r.max = origin + halfDim;
+          return r;
+        }
+        // NOTE(Noah): All this stuff below is prob slow. Abstraction makes things slow. later we can speed up.
+        aabb_t aabb_t::fromCube(vec3_t bottomLeft, float width) {
+            const vec3_t halfDim = { width / 2.0f, width / 2.0f, width / 2.0f };
+            const vec3_t origin = bottomLeft + halfDim;
+            return aabb_t::make(origin, halfDim);
+        }
+        aabb_t aabb_t::fromLine(vec3_t p0, vec3_t p1) {
+            const vec3_t delta = {p1.x-p0.x, p1.y-p0.y, p1.z-p0.z}; 
+            const vec3_t origin = p0 + delta;
+            const vec3_t halfDim = { abs(delta.x) / 2.0f, abs(delta.y) / 2.0f, abs(delta.z) / 2.0f };
+            return aabb_t::make(origin, halfDim);
         }
     }
 }
