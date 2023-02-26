@@ -325,9 +325,10 @@ namespace automata_engine {
             return aabb_t::make(origin, halfDim);
         }
         aabb_t aabb_t::fromLine(vec3_t p0, vec3_t p1) {
-            const vec3_t delta = {p1.x-p0.x, p1.y-p0.y, p1.z-p0.z}; 
-            const vec3_t origin = p0 + delta;
-            const vec3_t halfDim = { abs(delta.x) / 2.0f, abs(delta.y) / 2.0f, abs(delta.z) / 2.0f };
+            const vec3_t halfDelta = {(p1.x-p0.x)/2.0f, (p1.y-p0.y)/2.0f, (p1.z-p0.z)/2.0f}; 
+            const vec3_t origin = p0 + halfDelta;
+            const vec3_t halfDim = {abs(halfDelta.x), abs(halfDelta.y),
+                                    abs(halfDelta.z)};
             return aabb_t::make(origin, halfDim);
         }
     }
