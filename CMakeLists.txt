@@ -63,7 +63,7 @@ target_include_directories(${ProjectName}
     "${ENGINE_EXTERNAL}/freetype-2.12.1/include" "${ENGINE_EXTERNAL}/imgui-1.87/backends" "${ProjectRoot}/src"
 )
 
-target_compile_features(${ProjectName} PRIVATE cxx_std_20)
+target_compile_features(${ProjectName} PRIVATE cxx_std_17)
 
 set_target_properties(${ProjectName}
     PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY $<TARGET_FILE_DIR:${ProjectName}>)
