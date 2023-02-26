@@ -949,269 +949,270 @@ int CALLBACK WinMain(HINSTANCE instance,
     windowClass.hCursor = LoadCursor(0, IDC_ARROW);
     windowClass.lpszClassName = "Automata Engine";
 
-    // TODO(Noah): Here would be a nice instance for the defer statement.
-    classAtom = RegisterClassA(&windowClass);
-    if(classAtom == 0) {
-        AELoggerError("Unable to create window class \"%s\"", windowClass.lpszClassName);
-        automata_engine::platform::GLOBAL_PROGRAM_RESULT = -1;
-        goto WinMainEnd;
-    }
-
-    if (GamePreInit != nullptr) {
-        GamePreInit(&g_gameMemory);
-    } else {
-        AELoggerWarn("GamePreInit == nullptr");
-    }
-
-    DWORD windowStyle = (WS_OVERLAPPEDWINDOW | WS_VISIBLE) &
-        ((ae::defaultWinProfile == ae::AUTOMATA_ENGINE_WINPROFILE_NORESIZE)
-             ?
-            (~WS_MAXIMIZEBOX & ~WS_THICKFRAME) : (DWORD)(0xFFFFFFFF));
     
-    const bool beginMaximized = (ae::defaultWidth == UINT32_MAX) &&
-        (ae::defaultHeight == UINT32_MAX);
+    do {
+        // TODO(Noah): Here would be a nice instance for the defer statement.
+        classAtom = RegisterClassA(&windowClass);
+        if(classAtom == 0) {
+            AELoggerError("Unable to create window class \"%s\"", windowClass.lpszClassName);
+            automata_engine::platform::GLOBAL_PROGRAM_RESULT = -1;
+            break;
+        }
 
-    windowHandle = CreateWindowExA(
-        0, // dwExStyle
-        windowClass.lpszClassName,
-        ae::defaultWindowName,
-        windowStyle,
-        CW_USEDEFAULT, // init X
-        CW_USEDEFAULT, // init Y
-        (ae::defaultWidth == UINT32_MAX) ? CW_USEDEFAULT : ae::defaultWidth,
-        (ae::defaultHeight == UINT32_MAX) ? CW_USEDEFAULT : ae::defaultHeight,
-        NULL, // parent handle
-        NULL, // menu
-        instance,
-        NULL // structure to be passed to WM_CREATE message
-    );
+        if (GamePreInit != nullptr) {
+            GamePreInit(&g_gameMemory);
+        } else {
+            AELoggerWarn("GamePreInit == nullptr");
+        }
 
-    // TODO(Noah): Can abstract this type of windows error print code.
-    if (windowHandle == NULL) {
-        DWORD resultCode = GetLastError();
-        char *lpMsgBuf;
-        FormatMessage(
-            // FORMAT_MESSAGE_FROM_SYSTEM -> search the system message-table resource(s) for the requested message
-            // FORMAT_MESSAGE_ALLOCATE_BUFFER -> allocates buffer, places pointer at the address specified by lpBuffer
-            // FORMAT_MESSAGE_IGNORE_INSERTS -> Insert sequences in the message definition such as %1 are to be
-            //   ignored and passed through to the output buffer unchanged.
-            FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-            NULL,
-            resultCode, // dwMessageId
-            MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-            (LPTSTR) &lpMsgBuf, // lpBuffer
-            0, // no need for nSize with FORMAT_MESSAGE_ALLOCATE_BUFFER
-            NULL // not using any insert values such as %1
+        const DWORD windowStyle = (WS_OVERLAPPEDWINDOW | WS_VISIBLE) &
+            ((ae::defaultWinProfile == ae::AUTOMATA_ENGINE_WINPROFILE_NORESIZE)
+                ?
+                (~WS_MAXIMIZEBOX & ~WS_THICKFRAME) : (DWORD)(0xFFFFFFFF));
+        
+        const bool beginMaximized = (ae::defaultWidth == UINT32_MAX) &&
+            (ae::defaultHeight == UINT32_MAX);
+
+        windowHandle = CreateWindowExA(
+            0, // dwExStyle
+            windowClass.lpszClassName,
+            ae::defaultWindowName,
+            windowStyle,
+            CW_USEDEFAULT, // init X
+            CW_USEDEFAULT, // init Y
+            (ae::defaultWidth == UINT32_MAX) ? CW_USEDEFAULT : ae::defaultWidth,
+            (ae::defaultHeight == UINT32_MAX) ? CW_USEDEFAULT : ae::defaultHeight,
+            NULL, // parent handle
+            NULL, // menu
+            instance,
+            NULL // structure to be passed to WM_CREATE message
         );
-        // TODO(Noah): Remove newline character at the end of lpMsgBuf
-        AELoggerError("Unable to create window: %s", lpMsgBuf);
-        LocalFree(lpMsgBuf);
-        automata_engine::platform::GLOBAL_PROGRAM_RESULT = -1;
-        goto WinMainEnd;
-    }
 
-    globalWin32Handle = windowHandle;
-    g_hInstance = instance;
-
-    if (!beginMaximized && GameHandleWindowResize) {
-        // get height and width of window
-        RECT rect;
-        GetWindowRect(globalWin32Handle, &rect);
-        GameHandleWindowResize(&g_gameMemory, rect.right - rect.left, rect.bottom - rect.top);
-    }
-
-    ShowWindow(windowHandle, (beginMaximized) ? SW_MAXIMIZE : showCode);
-    UpdateWindow(windowHandle);
-
-    // Create the globalBackBuffer
-#if defined(AUTOMATA_ENGINE_CPU_BACKEND)
-    {
-        ae::game_window_info_t winInfo =
-            automata_engine::platform::getWindowInfo();
-        Win32ResizeBackbuffer(&globalBackBuffer, winInfo.width, winInfo.height);
-    }
-#endif
-
-    // Register mouse for raw input capture
-    RAWINPUTDEVICE Rid[1];
-    Rid[0].usUsagePage = HID_USAGE_PAGE_GENERIC;
-    Rid[0].usUsage = HID_USAGE_GENERIC_MOUSE;
-    Rid[0].dwFlags = RIDEV_INPUTSINK;
-    Rid[0].hwndTarget = windowHandle;
-    RegisterRawInputDevices(Rid, 1, sizeof(Rid[0]));
-
-    // Initialize XAudio2 !!!
-    // NOTE(Noah): When we free the xAudio2 object, that frees all subordinate objects.
-    IXAudio2MasteringVoice* pMasterVoice = nullptr;
-    {
-        // Initializes the COM library for use by the calling thread.
-        if (FAILED(comResult = CoInitializeEx(nullptr, COINIT_MULTITHREADED))) {
-            AELoggerError("Unable to initialize COM library (XAudio2)");
+        // TODO(Noah): Can abstract this type of windows error print code.
+        if (windowHandle == NULL) {
+            DWORD resultCode = GetLastError();
+            char *lpMsgBuf;
+            FormatMessage(
+                // FORMAT_MESSAGE_FROM_SYSTEM -> search the system message-table resource(s) for the requested message
+                // FORMAT_MESSAGE_ALLOCATE_BUFFER -> allocates buffer, places pointer at the address specified by lpBuffer
+                // FORMAT_MESSAGE_IGNORE_INSERTS -> Insert sequences in the message definition such as %1 are to be
+                //   ignored and passed through to the output buffer unchanged.
+                FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+                NULL,
+                resultCode, // dwMessageId
+                MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+                (LPTSTR) &lpMsgBuf, // lpBuffer
+                0, // no need for nSize with FORMAT_MESSAGE_ALLOCATE_BUFFER
+                NULL // not using any insert values such as %1
+            );
+            // TODO(Noah): Remove newline character at the end of lpMsgBuf
+            AELoggerError("Unable to create window: %s", lpMsgBuf);
+            LocalFree(lpMsgBuf);
             automata_engine::platform::GLOBAL_PROGRAM_RESULT = -1;
-            goto WinMainEnd;
+            break;
         }
 
-        UINT32 flags = 0;
- #if defined(USING_XAUDIO2_7_DIRECTX) && defined(_DEBUG)
-        flags |= XAUDIO2_DEBUG_ENGINE;
- #endif
-        if (FAILED(XAudio2Create(&g_pXAudio2, 0, flags))) {
-            AELoggerError("Unable to to create an instance of the XAudio2 engine");
-            automata_engine::platform::GLOBAL_PROGRAM_RESULT = -1;
-            goto WinMainEnd;
+        globalWin32Handle = windowHandle;
+        g_hInstance = instance;
+
+        if (!beginMaximized && GameHandleWindowResize) {
+            // get height and width of window
+            RECT rect;
+            GetWindowRect(globalWin32Handle, &rect);
+            GameHandleWindowResize(&g_gameMemory, rect.right - rect.left, rect.bottom - rect.top);
         }
 
-#if !defined(USING_XAUDIO2_7_DIRECTX) && defined(_DEBUG)
-        // NOTE(Noah): This logging seems useless, empirically after trying to see if
-        // it would help to debug some issue.
-        //
-        // To see the trace output, you need to view ETW logs for this application:
-        //    Go to Control Panel, Administrative Tools, Event Viewer.
-        //    View->Show Analytic and Debug Logs.
-        //    Applications and Services Logs / Microsoft / Windows / XAudio2. 
-        //    Right click on Microsoft Windows XAudio2 debug logging, Properties, then Enable Logging, and hit OK 
-        XAUDIO2_DEBUG_CONFIGURATION debug = {};
-        debug.TraceMask =
-            XAUDIO2_LOG_ERRORS | XAUDIO2_LOG_WARNINGS;
-        debug.BreakMask = XAUDIO2_LOG_ERRORS;
-        g_pXAudio2->SetDebugConfiguration( &debug, 0 );
-#endif
+        ShowWindow(windowHandle, (beginMaximized) ? SW_MAXIMIZE : showCode);
+        UpdateWindow(windowHandle);
 
-        if (FAILED(g_pXAudio2->CreateMasteringVoice(&pMasterVoice))) {
-            AELoggerError("Unable to create a mastering voice (XAudio2)");
-            automata_engine::platform::GLOBAL_PROGRAM_RESULT = -1;
-            goto WinMainEnd;
-        }
-
-        g_xa2Buffer.Flags = XAUDIO2_END_OF_STREAM;
-        g_xa2Buffer.AudioBytes = 0;
-        g_xa2Buffer.pAudioData = nullptr;
-        g_xa2Buffer.PlayBegin = 0;
-        g_xa2Buffer.PlayLength = 0; // play entire buffer
-        g_xa2Buffer.LoopBegin = 0;
-        g_xa2Buffer.LoopLength = 0; // entire sample should be looped.
-        g_xa2Buffer.LoopCount = 0; // no looping
-        g_xa2Buffer.pContext = (void *)&g_gameMemory;
-    }
-
-    if (GameInit != nullptr) {
-        GameInit(&g_gameMemory);
-    } else {
-        AELoggerLog("WARN: GameInit == nullptr");
-    }
-
-#if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
-    // ImGUI initialization code :)
-    {
-        // Setup Dear ImGui context
-        IMGUI_CHECKVERSION();
-        ImGui::CreateContext();
-        // ImGuiIO& io = ImGui::GetIO(); (void)io;
-        // Setup Dear ImGui style
-        ImGui::StyleColorsDark();
-        // Setup Platform/Renderer backends
-        ImGui_ImplWin32_Init(windowHandle);
-#if defined(AUTOMATA_ENGINE_GL_BACKEND)
-    const char* glsl_version = "#version 330";
-        ImGui_ImplOpenGL3_Init(glsl_version);
-#endif
-
-        isImGuiInitialized = true;
-
-        ScaleImGui();
-    }
-#endif
-    // TODO(Noah): Look into what the imGUI functions are going to return on failure!
-
-
-    LARGE_INTEGER LastCounter = Win32GetWallClock();
-
-    // TODO(Noah):
-    // add stalling in the CPU model (i.e. the engine does not call game update)
-    // as fast as possible. Then make ae::setVsync() control whether this happens, or no.
-
-    while(automata_engine::platform::GLOBAL_RUNNING) {
-        // Reset input
-        globalUserInput.deltaMouseX = 0; globalUserInput.deltaMouseY = 0;
-        // Process windows messages
+        // Create the globalBackBuffer
+    #if defined(AUTOMATA_ENGINE_CPU_BACKEND)
         {
-            MSG message;
-            while(PeekMessage(&message, NULL, 0, 0, PM_REMOVE)) {
-                switch (message.message) {
-                    case WM_QUIT:
-                    automata_engine::platform::GLOBAL_RUNNING = false;
-                    break;
-                    default:
-                    TranslateMessage(&message);
-                    DispatchMessage(&message);
-                    break;
+            ae::game_window_info_t winInfo =
+                automata_engine::platform::getWindowInfo();
+            Win32ResizeBackbuffer(&globalBackBuffer, winInfo.width, winInfo.height);
+        }
+    #endif
+
+        // Register mouse for raw input capture
+        RAWINPUTDEVICE Rid[1];
+        Rid[0].usUsagePage = HID_USAGE_PAGE_GENERIC;
+        Rid[0].usUsage = HID_USAGE_GENERIC_MOUSE;
+        Rid[0].dwFlags = RIDEV_INPUTSINK;
+        Rid[0].hwndTarget = windowHandle;
+        RegisterRawInputDevices(Rid, 1, sizeof(Rid[0]));
+
+        // Initialize XAudio2 !!!
+        // NOTE(Noah): When we free the xAudio2 object, that frees all subordinate objects.
+        IXAudio2MasteringVoice* pMasterVoice = nullptr;
+        {
+            // Initializes the COM library for use by the calling thread.
+            if (FAILED(comResult = CoInitializeEx(nullptr, COINIT_MULTITHREADED))) {
+                AELoggerError("Unable to initialize COM library (XAudio2)");
+                automata_engine::platform::GLOBAL_PROGRAM_RESULT = -1;
+                break;
+            }
+
+            UINT32 flags = 0;
+    #if defined(USING_XAUDIO2_7_DIRECTX) && defined(_DEBUG)
+            flags |= XAUDIO2_DEBUG_ENGINE;
+    #endif
+            if (FAILED(XAudio2Create(&g_pXAudio2, 0, flags))) {
+                AELoggerError("Unable to to create an instance of the XAudio2 engine");
+                automata_engine::platform::GLOBAL_PROGRAM_RESULT = -1;
+                break;
+            }
+
+    #if !defined(USING_XAUDIO2_7_DIRECTX) && defined(_DEBUG)
+            // NOTE(Noah): This logging seems useless, empirically after trying to see if
+            // it would help to debug some issue.
+            //
+            // To see the trace output, you need to view ETW logs for this application:
+            //    Go to Control Panel, Administrative Tools, Event Viewer.
+            //    View->Show Analytic and Debug Logs.
+            //    Applications and Services Logs / Microsoft / Windows / XAudio2. 
+            //    Right click on Microsoft Windows XAudio2 debug logging, Properties, then Enable Logging, and hit OK 
+            XAUDIO2_DEBUG_CONFIGURATION debug = {};
+            debug.TraceMask =
+                XAUDIO2_LOG_ERRORS | XAUDIO2_LOG_WARNINGS;
+            debug.BreakMask = XAUDIO2_LOG_ERRORS;
+            g_pXAudio2->SetDebugConfiguration( &debug, 0 );
+    #endif
+
+            if (FAILED(g_pXAudio2->CreateMasteringVoice(&pMasterVoice))) {
+                AELoggerError("Unable to create a mastering voice (XAudio2)");
+                automata_engine::platform::GLOBAL_PROGRAM_RESULT = -1;
+                break;
+            }
+
+            g_xa2Buffer.Flags = XAUDIO2_END_OF_STREAM;
+            g_xa2Buffer.AudioBytes = 0;
+            g_xa2Buffer.pAudioData = nullptr;
+            g_xa2Buffer.PlayBegin = 0;
+            g_xa2Buffer.PlayLength = 0; // play entire buffer
+            g_xa2Buffer.LoopBegin = 0;
+            g_xa2Buffer.LoopLength = 0; // entire sample should be looped.
+            g_xa2Buffer.LoopCount = 0; // no looping
+            g_xa2Buffer.pContext = (void *)&g_gameMemory;
+        }
+
+        if (GameInit != nullptr) {
+            GameInit(&g_gameMemory);
+        } else {
+            AELoggerLog("WARN: GameInit == nullptr");
+        }
+
+    #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
+        // ImGUI initialization code :)
+        {
+            // Setup Dear ImGui context
+            IMGUI_CHECKVERSION();
+            ImGui::CreateContext();
+            // ImGuiIO& io = ImGui::GetIO(); (void)io;
+            // Setup Dear ImGui style
+            ImGui::StyleColorsDark();
+            // Setup Platform/Renderer backends
+            ImGui_ImplWin32_Init(windowHandle);
+    #if defined(AUTOMATA_ENGINE_GL_BACKEND)
+        const char* glsl_version = "#version 330";
+            ImGui_ImplOpenGL3_Init(glsl_version);
+    #endif
+
+            isImGuiInitialized = true;
+
+            ScaleImGui();
+        }
+    #endif
+        // TODO(Noah): Look into what the imGUI functions are going to return on failure!
+
+
+        LARGE_INTEGER LastCounter = Win32GetWallClock();
+
+        // TODO(Noah):
+        // add stalling in the CPU model (i.e. the engine does not call game update)
+        // as fast as possible. Then make ae::setVsync() control whether this happens, or no.
+
+        while(automata_engine::platform::GLOBAL_RUNNING) {
+            // Reset input
+            globalUserInput.deltaMouseX = 0; globalUserInput.deltaMouseY = 0;
+            // Process windows messages
+            {
+                MSG message;
+                while(PeekMessage(&message, NULL, 0, 0, PM_REMOVE)) {
+                    switch (message.message) {
+                        case WM_QUIT:
+                        automata_engine::platform::GLOBAL_RUNNING = false;
+                        break;
+                        default:
+                        TranslateMessage(&message);
+                        DispatchMessage(&message);
+                        break;
+                    }
                 }
             }
+
+    #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
+            if (isImGuiInitialized) {
+    #if defined(AUTOMATA_ENGINE_GL_BACKEND)
+                ImGui_ImplOpenGL3_NewFrame();
+    #endif
+                ImGui_ImplWin32_NewFrame();
+                ImGui::NewFrame();
+            }
+    #endif
+
+            auto gameUpdateAndRender = automata_engine::bifrost::getCurrentApp();
+            if (gameUpdateAndRender != nullptr) {
+                gameUpdateAndRender(&g_gameMemory);
+            } else {
+                AELoggerLog("WARN: gameUpdateAndRender == nullptr");
+            }
+
+    #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
+                ImGui::Render();
+    #if defined(AUTOMATA_ENGINE_GL_BACKEND)
+                ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    #endif
+    #endif
+
+            {
+                LARGE_INTEGER WorkCounter = Win32GetWallClock();
+                float WorkSecondsElapsed =
+                    Win32GetSecondsElapsed(LastCounter, WorkCounter, g_PerfCountFrequency64);
+                ae::platform::lastFrameTime = WorkSecondsElapsed;
+            }
+
+    #if defined(AUTOMATA_ENGINE_GL_BACKEND)
+            if (ae::platform::GLOBAL_UPDATE_MODEL == ae::AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC) {
+                glFlush(); // push all buffered commands to GPU
+                glFinish(); // block until GPU is complete
+            }
+            SwapBuffers(gHdc);
+    #endif
+
+            // TODO(Noah): for CPU backend, add sleep if vsync = ON.
+            // and I suppose figure out how to sync with the monitor?
+    #if defined(AUTOMATA_ENGINE_CPU_BACKEND)
+            // NOTE(Noah): Here we are going to call our custom windows platform layer function that
+            // will write our custom buffer to the screen.
+            HDC deviceContext = GetDC(windowHandle);
+            ae::game_window_info_t winInfo =
+                automata_engine::platform::getWindowInfo();
+            Win32DisplayBufferWindow(deviceContext, winInfo);
+            ReleaseDC(windowHandle, deviceContext);
+    #endif  
+
+            {
+                LARGE_INTEGER EndCounter = Win32GetWallClock();
+                float TotalFrameTime =
+                    (Win32GetSecondsElapsed(LastCounter, EndCounter, g_PerfCountFrequency64));
+                ae::platform::lastFrameTimeTotal = TotalFrameTime;
+                LastCounter = EndCounter;
+            }
+
         }
 
-#if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
-        if (isImGuiInitialized) {
-#if defined(AUTOMATA_ENGINE_GL_BACKEND)
-            ImGui_ImplOpenGL3_NewFrame();
-#endif
-            ImGui_ImplWin32_NewFrame();
-            ImGui::NewFrame();
-        }
-#endif
-
-        auto gameUpdateAndRender = automata_engine::bifrost::getCurrentApp();
-        if (gameUpdateAndRender != nullptr) {
-            gameUpdateAndRender(&g_gameMemory);
-        } else {
-            AELoggerLog("WARN: gameUpdateAndRender == nullptr");
-        }
-
-#if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
-            ImGui::Render();
-#if defined(AUTOMATA_ENGINE_GL_BACKEND)
-            ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-#endif
-#endif
-
-        {
-            LARGE_INTEGER WorkCounter = Win32GetWallClock();
-            float WorkSecondsElapsed =
-                Win32GetSecondsElapsed(LastCounter, WorkCounter, g_PerfCountFrequency64);
-            ae::platform::lastFrameTime = WorkSecondsElapsed;
-        }
-
-#if defined(AUTOMATA_ENGINE_GL_BACKEND)
-        if (ae::platform::GLOBAL_UPDATE_MODEL == ae::AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC) {
-            glFlush(); // push all buffered commands to GPU
-            glFinish(); // block until GPU is complete
-        }
-        SwapBuffers(gHdc);
-#endif
-
-        // TODO(Noah): for CPU backend, add sleep if vsync = ON.
-        // and I suppose figure out how to sync with the monitor?
-#if defined(AUTOMATA_ENGINE_CPU_BACKEND)
-        // NOTE(Noah): Here we are going to call our custom windows platform layer function that
-        // will write our custom buffer to the screen.
-        HDC deviceContext = GetDC(windowHandle);
-        ae::game_window_info_t winInfo =
-            automata_engine::platform::getWindowInfo();
-        Win32DisplayBufferWindow(deviceContext, winInfo);
-        ReleaseDC(windowHandle, deviceContext);
-#endif  
-
-        {
-            LARGE_INTEGER EndCounter = Win32GetWallClock();
-            float TotalFrameTime =
-                (Win32GetSecondsElapsed(LastCounter, EndCounter, g_PerfCountFrequency64));
-            ae::platform::lastFrameTimeTotal = TotalFrameTime;
-            LastCounter = EndCounter;
-        }
-
-    }
-
-    // NOTE(Noah): Again, we want a standard naming convention. Labels should be done like func names.
-    WinMainEnd:
+    } while(0); // WinMainEnd
 
     // TODO(Noah): Can we leverage our new nc_defer.h to replace this code below?
     {
