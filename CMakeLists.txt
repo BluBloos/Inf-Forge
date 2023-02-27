@@ -48,8 +48,9 @@ endif()
 
 set(SOURCES ${PROJ_SOURCES} ${ENGINE_SOURCES} ${IMGUI_SOURCES})
 
-# WIN32 for WinMain
+# Add EXEs
 add_executable(${ProjectName} WIN32 ${SOURCES})
+add_executable(AutomataTests "${ENGINE_ROOT}/tests/test_main.cpp")
 
 set_property(TARGET ${ProjectName} PROPERTY VS_DPI_AWARE "PerMonitor")
 
@@ -57,13 +58,14 @@ source_group(TREE "${ENGINE_ROOT}/src/" PREFIX "engine/" FILES ${ENGINE_SOURCES}
 source_group(TREE "${ProjectRoot}/src/" PREFIX "app/" FILES ${PROJ_SOURCES})
 source_group(TREE "${ENGINE_EXTERNAL}/" PREFIX "external/" FILES ${IMGUI_SOURCES})
 
-target_include_directories(${ProjectName}
-    PUBLIC
-    "${ENGINE_ROOT}/src" "${ENGINE_ROOT}/include" "${ProjectRoot}/include" "${ENGINE_ROOT}" "${ProjectRoot}" "${ENGINE_EXTERNAL}" "${ENGINE_EXTERNAL}/imgui-1.87"
-    "${ENGINE_EXTERNAL}/freetype-2.12.1/include" "${ENGINE_EXTERNAL}/imgui-1.87/backends" "${ProjectRoot}/src"
-)
+set(ENGINE_INCLUDES "${ENGINE_ROOT}/src" "${ENGINE_ROOT}/include"  "${ENGINE_ROOT}" "${ENGINE_EXTERNAL}" "${ENGINE_EXTERNAL}/imgui-1.87"
+"${ENGINE_EXTERNAL}/freetype-2.12.1/include" "${ENGINE_EXTERNAL}/imgui-1.87/backends" )
+
+target_include_directories( ${ProjectName} PUBLIC ${ENGINE_INCLUDES} "${ProjectRoot}/include" "${ProjectRoot}" "${ProjectRoot}/src")
+target_include_directories( AutomataTests PUBLIC ${ENGINE_INCLUDES} )
 
 target_compile_features(${ProjectName} PRIVATE cxx_std_17)
+target_compile_features(AutomataTests PRIVATE cxx_std_17)
 
 set_target_properties(${ProjectName}
     PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY $<TARGET_FILE_DIR:${ProjectName}>)
@@ -125,7 +127,6 @@ endif()
 
 set( ProjectResourcesList ${ProjectResources} ${ProjectResourcesExtra} )
 list( FILTER ProjectResourcesList EXCLUDE REGEX "\\.ini" )
-
 message(STATUS "found ProjectResourcesList=${ProjectResourcesList}")
 
 # TODO: add other platforms
