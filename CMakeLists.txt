@@ -50,7 +50,7 @@ set(SOURCES ${PROJ_SOURCES} ${ENGINE_SOURCES} ${IMGUI_SOURCES})
 
 # Add EXEs
 add_executable(${ProjectName} WIN32 ${SOURCES})
-add_executable(AutomataTests "${ENGINE_ROOT}/tests/test_main.cpp")
+add_executable(AutomataTests ${ENGINE_SOURCES} "${ENGINE_ROOT}/tests/test_main.cpp")
 
 set_property(TARGET ${ProjectName} PROPERTY VS_DPI_AWARE "PerMonitor")
 
@@ -76,6 +76,8 @@ if (${ProjectDisableLogging})
     target_compile_definitions(${ProjectName} PUBLIC -DAUTOMATA_ENGINE_DISABLE_PLATFORM_LOGGING)
 endif()
 
+target_link_libraries(AutomataTests ${COMMON_LIB})
+target_compile_definitions( AutomataTests PUBLIC -DAUTOMATA_ENGINE_DISABLE_IMGUI)
 if (${ProjectDisableImGui})
     target_compile_definitions(${ProjectName} PUBLIC -DAUTOMATA_ENGINE_DISABLE_IMGUI)
 endif()

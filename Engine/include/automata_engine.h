@@ -235,6 +235,7 @@ namespace automata_engine {
         vec3_t normalize(vec3_t a);
         vec3_t lookAt(vec3_t origin, vec3_t target);
 
+        /// @param rayDir must be normalized.
         bool doesRayIntersectWithAABB(
             const vec3_t &rayOrigin, const vec3_t &rayDir, float rayLen,
             const aabb_t &candidateBox,
