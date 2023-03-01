@@ -80,6 +80,12 @@ TEST_CASE("ray x AABB intersection", "[ae::math]") {
         rDir = ae::math::normalize(rEnd - rBegin);
         REQUIRE( false == doesRayIntersectWithAABB(rBegin, rDir, rayLen, cube, &T));
     }
+    SECTION( "rays are not infinite" ) {
+        rBegin = {0, 0, -10};
+        rEnd = {0, 0, 0};
+        rDir = ae::math::normalize(rEnd - rBegin);
+        REQUIRE( false == doesRayIntersectWithAABB(rBegin, rDir, 0, cube, &T));
+    }
 }
 
 // TEST_CASE( name, tags )
