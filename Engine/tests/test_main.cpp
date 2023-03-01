@@ -17,6 +17,32 @@ unsigned int Factorial( unsigned int number ) {
     return number <= 1 ? number : Factorial(number-1)*number;
 }
 
+
+namespace utils {
+    #include <stdlib.h>
+
+    void Seed(uint32_t seed) {
+        // TODO(Noah): Implement a better pseudo-random number generator.
+        srand(seed);
+    }
+
+    uint32_t RandomUINT32(uint32_t lower, uint32_t upper) {
+        assert(upper >= lower);
+        if (upper == lower) return upper;
+        uint64_t diff = upper - lower;
+        assert((uint32_t)RAND_MAX >= diff);
+        return (uint32_t)( (uint64_t)rand() % (diff + 1) + (uint64_t)lower );
+    }
+
+    float32_t RandomFloat(float begin, float end) {
+        assert(RAND_MAX != 0); // this should be obvious ... 
+        const float f = (float32_t)rand() / (float32_t)RAND_MAX;
+        return begin + f * (end - begin);
+    }
+
+}
+
+
 TEST_CASE("cross product", "[ae:math]") {
     ae::math::vec3_t a = { 1, 0, 0 };
     ae::math::vec3_t b = { 0, 1, 0 };
@@ -69,16 +95,26 @@ TEST_CASE("ray x AABB intersection", "[ae::math]") {
         REQUIRE( true == doesRayIntersectWithAABB(rBegin, rDir, rayLen, cube, &T));
     }
     SECTION( "intersects if ray goes through AABB generically" ) {
-        rBegin = {0, 0, -2};   // somewhere not in AABB.
-        rEnd  = {0.5, 0, 0.5}; // somewhere in AABB.
-        rDir = ae::math::normalize(rEnd - rBegin);
-        REQUIRE( true == doesRayIntersectWithAABB(rBegin, rDir, rayLen, cube, &T));
+        utils::Seed(__LINE__);
+        for (int i=0;i<1000;i++){
+            // a random point somewhere outside of AABB.
+            rBegin = {utils::RandomFloat(-10, -2), utils::RandomFloat(-10, -2), utils::RandomFloat(-10, -2)};
+            // a random point somewhere inside of AABB.
+            rEnd = {utils::RandomFloat(-1, 1), utils::RandomFloat(-1, 1), utils::RandomFloat(-1, 1)};
+            rDir = ae::math::normalize(rEnd - rBegin);
+            REQUIRE( true == doesRayIntersectWithAABB(rBegin, rDir, rayLen, cube, &T));
+        }
     }
     SECTION( "does not intersect" ) {
-        rBegin = {0, 0, -2};
-        rEnd = {-1.2, 0, -1.2};
-        rDir = ae::math::normalize(rEnd - rBegin);
-        REQUIRE( false == doesRayIntersectWithAABB(rBegin, rDir, rayLen, cube, &T));
+        utils::Seed(__LINE__);
+        for (int i=0;i<1000;i++){
+            // a random point somewhere outside of AABB.
+            rBegin = {utils::RandomFloat(-10, -2), utils::RandomFloat(-10, -2), utils::RandomFloat(-10, -2)};
+            // a random point somewhere outside of AABB.
+            rEnd = {utils::RandomFloat(-1.5, -1.2), utils::RandomFloat(1.2, 1.5), utils::RandomFloat(-1.2, -1.3)};
+            rDir = ae::math::normalize(rEnd - rBegin);
+            REQUIRE( false == doesRayIntersectWithAABB(rBegin, rDir, rayLen, cube, &T));
+        }
     }
     SECTION( "rays are not infinite" ) {
         rBegin = {0, 0, -10};

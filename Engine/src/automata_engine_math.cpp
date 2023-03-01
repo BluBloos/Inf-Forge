@@ -325,9 +325,7 @@ namespace automata_engine {
             constexpr float piHalf = PI/2.0f;
             // we can exit early if angle is too large.
             if (abs(a0) >(piHalf)) return false;
-            
             // intersect the plane with the box and get back a set of intersection points.
-                // when the intersection is an entire line, return the endpoints of that line.
             vec3_t planeCubeHitPoints[24];
             int planeCubeHitPointsCount=0;
             typedef struct axisLine_t {
