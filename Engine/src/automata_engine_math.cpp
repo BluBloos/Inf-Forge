@@ -318,7 +318,7 @@ namespace automata_engine {
             const vec3_t R = candidateBox.origin - rayOrigin;
             vec3_t N = cross(rayDir, R);
             if (N.x == 0.f && N.y == 0.f && N.z == 0.f) {
-                if (exitedEarly) *exitedEarly = true;
+                if (exitedEarly) *exitedEarly = true; // TODO: this bool should be optimized out at compile-time if not unit testing. 
                 return dot(R, rayDir) >= 0.f;
             }
             N = normalize(N);
