@@ -244,9 +244,8 @@ namespace automata_engine {
 
         /// @param rayDir must be normalized.
         bool doesRayIntersectWithAABB(
-            const vec3_t &rayOrigin, const vec3_t &rayDir, float rayLen,
-            const aabb_t &candidateBox,
-            float *tOut
+            const vec3_t &rayOrigin, const vec3_t &rayDir,
+            const aabb_t &candidateBox
         );
 
         mat4_t buildMat4fFromTransform(transform_t trans);

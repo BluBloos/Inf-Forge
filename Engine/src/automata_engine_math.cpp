@@ -311,9 +311,8 @@ namespace automata_engine {
         // TODO: Seems I made something slow. in a way, it's almost like a rube goldberg machine.
         //       it was fun, anyways.
         bool doesRayIntersectWithAABB(
-            const vec3_t &rayOrigin, const vec3_t &rayDir, float rayLen,
-            const aabb_t &candidateBox,
-            float *tOut
+            const vec3_t &rayOrigin, const vec3_t &rayDir,
+            const aabb_t &candidateBox
         ) {
             const vec3_t R = candidateBox.origin - rayOrigin;
             vec3_t N = cross(rayDir, R);
