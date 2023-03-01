@@ -103,26 +103,53 @@ TEST_CASE("ray x AABB intersection", "[ae::math]") {
             // a random point somewhere inside of AABB.
             rEnd = {utils::RandomFloat(-1, 1), utils::RandomFloat(-1, 1), utils::RandomFloat(-1, 1)};
             rDir = ae::math::normalize(rEnd - rBegin);
+            CAPTURE(rBegin.x, rBegin.y, rBegin.z);
+            CAPTURE(rEnd.x, rEnd.y, rEnd.z);
             REQUIRE( true == doesRayIntersectWithAABB(rBegin, rDir, cube));
         }
     }
     SECTION( "does not intersect" ) {
         utils::Seed(__LINE__);
-        for (int i=0;i<1000;i++){
+        int i;
+        for (i = 0; i < 1000; i++) {
             const float theta = utils::RandomFloat(0,2*PI);
             const float phi   = utils::RandomFloat(0,2*PI);
             const float R     = utils::RandomFloat(2,10);
             // a random point somewhere outside of AABB.
             rBegin = {R*ae::math::cos(theta)*ae::math::sin(phi), R*ae::math::sin(theta)*ae::math::sin(phi), R*ae::math::cos(phi)};
-            const float theta2 = utils::RandomFloat(0,2*PI);
-            const float phi2   = utils::RandomFloat(0,2*PI);
-            const float R2     = utils::RandomFloat(2,10);
-            // a random point somewhere outside of AABB.
-            rEnd = {R2*ae::math::cos(theta2)*ae::math::sin(phi2), R2*ae::math::sin(theta2)*ae::math::sin(phi2), R2*ae::math::cos(phi2)};
-            rDir = ae::math::normalize(rEnd - rBegin);
+            rDir = -ae::math::normalize(cube.origin - rBegin);
+            CAPTURE(rBegin.x, rBegin.y, rBegin.z);
+            CAPTURE(rDir.x, rDir.y, rDir.z);
+            CAPTURE(i);
             REQUIRE( false == doesRayIntersectWithAABB(rBegin, rDir, cube));
         }
     }
+    SECTION( "if ray is facing away from cube" ) {
+        utils::Seed(__LINE__);
+        SECTION( "works when ray direction is parallel with ray origin" ) {
+            const float theta = utils::RandomFloat(0,2*PI);
+            const float phi   = utils::RandomFloat(0,2*PI);
+            const float R     = utils::RandomFloat(2,10);
+            // a random point somewhere outside of AABB.
+            rBegin = {R*ae::math::cos(theta)*ae::math::sin(phi), R*ae::math::sin(theta)*ae::math::sin(phi), R*ae::math::cos(phi)};
+            rDir = ae::math::normalize(rBegin);
+            CAPTURE(rBegin.x, rBegin.y, rBegin.z);
+            CAPTURE(rDir.x, rDir.y, rDir.z);
+            bool ee=false;
+            REQUIRE( false == doesRayIntersectWithAABB(rBegin, rDir, cube, &ee));
+            REQUIRE( ee == true );
+        }
+    }
+}
+
+TEST_CASE( "signed angle", "[ae::math]" ) {
+    ae::math::vec3_t a = {0.56744,-1.16698,-8.14923};//begin
+    ae::math::vec3_t b = {0.06876, -0.14142,-0.98756};//dir
+    ae::math::vec3_t R = ae::math::vec3_t{0, 0, 0} - a;
+    auto N = ae::math::normalize(ae::math::cross(R,b));
+    const float ang = ae::math::signedAngle(R, b, N);
+    constexpr float halfPi = PI/2.0f;
+    REQUIRE(abs(ang)>halfPi);
 }
 
 // TEST_CASE( name, tags )
