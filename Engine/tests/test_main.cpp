@@ -112,12 +112,10 @@ TEST_CASE("ray x AABB intersection", "[ae::math]") {
         utils::Seed(__LINE__);
         int i;
         for (i = 0; i < 1000; i++) {
-            const float theta = utils::RandomFloat(0,2*PI);
-            const float phi   = utils::RandomFloat(0,2*PI);
-            const float R     = utils::RandomFloat(2,10);
             // a random point somewhere outside of AABB.
-            rBegin = {R*ae::math::cos(theta)*ae::math::sin(phi), R*ae::math::sin(theta)*ae::math::sin(phi), R*ae::math::cos(phi)};
-            rDir = -ae::math::normalize(cube.origin - rBegin);
+            rBegin = {utils::RandomFloat(-10, -2), utils::RandomFloat(-10, -2), utils::RandomFloat(-10, -2)};
+            rEnd = {utils::RandomFloat(-1.5, -1.1), utils::RandomFloat(-1.5, -1.1), utils::RandomFloat(-1.5, -1.1)};
+            rDir = -ae::math::normalize(rEnd - rBegin);
             CAPTURE(rBegin.x, rBegin.y, rBegin.z);
             CAPTURE(rDir.x, rDir.y, rDir.z);
             CAPTURE(i);
