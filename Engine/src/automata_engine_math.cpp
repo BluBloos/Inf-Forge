@@ -312,18 +312,23 @@ namespace automata_engine {
         //       it was fun, anyways.
         bool doesRayIntersectWithAABB(
             const vec3_t &rayOrigin, const vec3_t &rayDir,
-            const aabb_t &candidateBox
+            const aabb_t &candidateBox, bool *exitedEarly
         ) {
+            assert(rayDir.x != 0.f || rayDir.y != 0.f || rayDir.z != 0.f);
             const vec3_t R = candidateBox.origin - rayOrigin;
             vec3_t N = cross(rayDir, R);
-            if (N.x == 0.f && N.y == 0.f && N.z == 0.f)
-            return true; // special case where ray goes direct through box
-                         // origin.
+            if (N.x == 0.f && N.y == 0.f && N.z == 0.f) {
+                if (exitedEarly) *exitedEarly = true;
+                return dot(R, rayDir) >= 0.f;
+            }
             N = normalize(N);
             const float a0 = signedAngle(rayDir, R, N);
             constexpr float piHalf = PI/2.0f;
             // we can exit early if angle is too large.
-            if (abs(a0) >(piHalf)) return false;
+            if (abs(a0) >(piHalf)) {
+                if (exitedEarly) *exitedEarly = true;
+                return false;
+            }
             // intersect the plane with the box and get back a set of intersection points.
             vec3_t planeCubeHitPoints[24];
             int planeCubeHitPointsCount=0;
