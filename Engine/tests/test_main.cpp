@@ -95,8 +95,11 @@ TEST_CASE("ray x AABB intersection", "[ae::math]") {
     SECTION( "intersects if ray goes through AABB generically" ) {
         utils::Seed(__LINE__);
         for (int i=0;i<1000;i++){
+            const float theta = utils::RandomFloat(0,2*PI);
+            const float phi   = utils::RandomFloat(0,2*PI);
+            const float R     = utils::RandomFloat(2,10);
             // a random point somewhere outside of AABB.
-            rBegin = {utils::RandomFloat(-10, -2), utils::RandomFloat(-10, -2), utils::RandomFloat(-10, -2)};
+            rBegin = {R*ae::math::cos(theta)*ae::math::sin(phi), R*ae::math::sin(theta)*ae::math::sin(phi), R*ae::math::cos(phi)};
             // a random point somewhere inside of AABB.
             rEnd = {utils::RandomFloat(-1, 1), utils::RandomFloat(-1, 1), utils::RandomFloat(-1, 1)};
             rDir = ae::math::normalize(rEnd - rBegin);
@@ -106,10 +109,16 @@ TEST_CASE("ray x AABB intersection", "[ae::math]") {
     SECTION( "does not intersect" ) {
         utils::Seed(__LINE__);
         for (int i=0;i<1000;i++){
+            const float theta = utils::RandomFloat(0,2*PI);
+            const float phi   = utils::RandomFloat(0,2*PI);
+            const float R     = utils::RandomFloat(2,10);
             // a random point somewhere outside of AABB.
-            rBegin = {utils::RandomFloat(-10, -2), utils::RandomFloat(-10, -2), utils::RandomFloat(-10, -2)};
+            rBegin = {R*ae::math::cos(theta)*ae::math::sin(phi), R*ae::math::sin(theta)*ae::math::sin(phi), R*ae::math::cos(phi)};
+            const float theta2 = utils::RandomFloat(0,2*PI);
+            const float phi2   = utils::RandomFloat(0,2*PI);
+            const float R2     = utils::RandomFloat(2,10);
             // a random point somewhere outside of AABB.
-            rEnd = {utils::RandomFloat(-1.5, -1.2), utils::RandomFloat(1.2, 1.5), utils::RandomFloat(-1.2, -1.3)};
+            rEnd = {R2*ae::math::cos(theta2)*ae::math::sin(phi2), R2*ae::math::sin(theta2)*ae::math::sin(phi2), R2*ae::math::cos(phi2)};
             rDir = ae::math::normalize(rEnd - rBegin);
             REQUIRE( false == doesRayIntersectWithAABB(rBegin, rDir, cube));
         }
