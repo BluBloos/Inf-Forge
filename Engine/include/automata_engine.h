@@ -230,7 +230,14 @@ namespace automata_engine {
         float magnitude(vec3_t a);
         float dist(vec3_t a, vec3_t b);
         float dot(vec3_t a, vec3_t b);
-        float project(vec3_t a, vec3_t b);
+        vec3_t cross(vec3_t a, vec3_t b);
+        float project(vec3_t a, vec3_t b);        
+        
+        /// returns the angle in radians between two vectors
+        float angle(vec3_t a, vec3_t b);
+
+        ///@param N is the normal vector of the plane that A and B are on.
+        float signedAngle(vec3_t a, vec3_t b, vec3_t N);
 
         vec3_t normalize(vec3_t a);
         vec3_t lookAt(vec3_t origin, vec3_t target);
@@ -253,6 +260,7 @@ namespace automata_engine {
         // TODO(Noah): Probably make these constexpr, inline, templates and FAST intrinsics.
         float sqrt(float a);
         float atan2(float a, float b);
+        float acos(float a);
         float round(float a);
         float log10(float a);
         float log2(float a);

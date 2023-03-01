@@ -17,6 +17,32 @@ unsigned int Factorial( unsigned int number ) {
     return number <= 1 ? number : Factorial(number-1)*number;
 }
 
+TEST_CASE("cross product", "[ae:math]") {
+    ae::math::vec3_t a = { 1, 0, 0 };
+    ae::math::vec3_t b = { 0, 1, 0 };
+    ae::math::vec3_t c = ae::math::cross(a, b);
+    REQUIRE( c.x == 0 );
+    REQUIRE( c.y == 0 );
+    REQUIRE( c.z == 1 );
+
+    ae::math::vec3_t d = ae::math::cross(b, a);
+    REQUIRE( d.x == 0 );
+    REQUIRE( d.y == 0 );
+    REQUIRE( d.z == -1 );
+
+    ae::math::vec3_t e = ae::math::cross(a, a);
+    REQUIRE( e.x == 0 );
+    REQUIRE( e.y == 0 );
+    REQUIRE( e.z == 0 );
+
+    ae::math::vec3_t f = { 2, 3, 4 };
+    ae::math::vec3_t g = { 5, 6, 7 };
+    ae::math::vec3_t h = ae::math::cross(f, g);
+    REQUIRE(h.x == -3);
+    REQUIRE(h.y == 6);
+    REQUIRE(h.z == -3);
+}
+
 TEST_CASE("ray x AABB intersection", "[ae::math]") {
     ae::math::aabb_t cube = ae::math::aabb_t::make( { 0, 0, 0 }, { 1, 1, 1 }  );
     const float rayLen = 6.f;

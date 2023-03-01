@@ -242,6 +242,9 @@ namespace automata_engine {
         float atan2(float a, float b) {
             return std::atan2f(a, b);
         }
+        float acos(float a) {
+            return std::acosf(a);
+        }
         float sqrt(float a) {
             // TODO(Noah): replace with our own intrinsic.
             return ::sqrtf(a);
@@ -292,22 +295,102 @@ namespace automata_engine {
         float cos(float a) {
             return std::cos(a);
         }
+        float signedAngle(vec3_t a, vec3_t b, vec3_t N) {
+            return atan2(dot(N, cross(a, b)), dot(a, b));
+        }
+        float angle(vec3_t a, vec3_t b) {
+            return acos(dot(a, b) / (magnitude(a) * magnitude(b)));
+        }
+        vec3_t cross(vec3_t a, vec3_t b){
+            return {
+                a.y * b.z - a.z * b.y,
+                a.z * b.x - a.x * b.z,
+                a.x * b.y - a.y * b.x
+            };
+        }
+        // TODO: Seems I made something slow. in a way, it's almost like a rube goldberg machine.
+        //       it was fun, anyways.
         bool doesRayIntersectWithAABB(
             const vec3_t &rayOrigin, const vec3_t &rayDir, float rayLen,
             const aabb_t &candidateBox,
             float *tOut
         ) {
             const vec3_t R = candidateBox.origin - rayOrigin;
-            const float t = min(project(R, rayDir), rayLen);
-            const vec3_t W = rayOrigin + rayDir * t;
-            const float xDist = abs(W.x - candidateBox.origin.x);
-            const float yDist = abs(W.y - candidateBox.origin.y);
-            const float zDist = abs(W.z - candidateBox.origin.z);
-            const bool wInBox = (xDist <= candidateBox.halfDim.x) && (yDist <= candidateBox.halfDim.y) && (zDist <= candidateBox.halfDim.z);
-            if (wInBox) {
-                *tOut = t;
+            vec3_t N = cross(rayDir, R);
+            if (N.x == 0.f && N.y == 0.f && N.z == 0.f)
+            return true; // special case where ray goes direct through box
+                         // origin.
+            N = normalize(N);
+            const float a0 = signedAngle(rayDir, R, N);
+            constexpr float piHalf = PI/2.0f;
+            // we can exit early if angle is too large.
+            if (abs(a0) >(piHalf)) return false;
+            
+            // intersect the plane with the box and get back a set of intersection points.
+                // when the intersection is an entire line, return the endpoints of that line.
+            vec3_t planeCubeHitPoints[24];
+            int planeCubeHitPointsCount=0;
+            typedef struct axisLine_t {
+                float x,y,z;
+                int axis; // 0=x, 1=y, 2=z.
+            };
+            constexpr size_t boxLineCount=12;
+            const axisLine_t cbLines[boxLineCount] = {
+                {candidateBox.min.x,0,candidateBox.min.z,1}, //note y=0 doesn't matter as this is a line along Y axis.
+                {candidateBox.max.x,0,candidateBox.min.z,1},
+                {candidateBox.min.x,0,candidateBox.max.z,1},
+                {candidateBox.max.x,0,candidateBox.max.z,1},
+                {0,candidateBox.min.y,candidateBox.min.z,0},
+                {0,candidateBox.max.y,candidateBox.min.z,0},
+                {0,candidateBox.min.y,candidateBox.max.z,0},
+                {0,candidateBox.max.y,candidateBox.max.z,0},
+                {candidateBox.min.x,candidateBox.min.y,0,2},
+                {candidateBox.max.x,candidateBox.min.y,0,2},
+                {candidateBox.min.x,candidateBox.max.y,0,2},
+                {candidateBox.max.x,candidateBox.max.y,0,2},
+            };
+            for (int i=0;i<boxLineCount;i++){
+                axisLine_t al = cbLines[i];
+                // TODO: below looks RIPE for optimization.
+                switch(al.axis){
+                    case 0: // x axis
+                    // NOTE: we can skip the 0 case since points returned by this are caught by other AABB lines.
+                    if (N.x!=0.0f) {
+                        float x = (-N.y*(al.y-candidateBox.origin.y)-N.z*(al.z-candidateBox.origin.z))/N.x+candidateBox.origin.x;
+                        if (x>=candidateBox.min.x && x<=candidateBox.max.x)
+                            planeCubeHitPoints[planeCubeHitPointsCount++]={x,al.y,al.z};
+                    }
+                    break;
+                    case 1: // y axis
+                    if (N.y!=0.0f) {
+                        float y = (-N.x*(al.x-candidateBox.origin.x)-N.z*(al.z-candidateBox.origin.z))/N.y+candidateBox.origin.y;
+                        if (y>=candidateBox.min.y && y<=candidateBox.max.y)
+                            planeCubeHitPoints[planeCubeHitPointsCount++]={al.x,y,al.z};
+                    }
+                    break;
+                    case 2: // z axis
+                    if (N.z!=0.0f) {
+                        float z = (-N.x*(al.x-candidateBox.origin.x)-N.y*(al.y-candidateBox.origin.y))/N.z+candidateBox.origin.z;
+                        if (z>=candidateBox.min.z && z<=candidateBox.max.z)
+                            planeCubeHitPoints[planeCubeHitPointsCount++]={al.x,al.y,z};
+                    }
+                    break;
+                }
             }
-            return wInBox;
+            // then make rays from the rayOrigin to all the intersection points.
+            // find of those rays those that give the min/max angle.
+                // the angle in this case is that of the ray and R.
+            float minAngle = piHalf;
+            float maxAngle = -piHalf;
+            for (int i = 0; i < planeCubeHitPointsCount; ++i) {
+                const vec3_t rN = planeCubeHitPoints[i] - rayOrigin;
+                const float aN=signedAngle(rN, R, N);
+                // TODO: we are not getting a negative angle when we would expect to...
+                if (aN < minAngle) minAngle = aN;
+                if (aN > maxAngle) maxAngle = aN;
+            }
+            // these min/max form the permissible range that our ray could make with R.
+            return (a0 >= minAngle) && (a0 <= maxAngle);
         }
         aabb_t aabb_t::make(vec3_t origin,vec3_t halfDim)
         {
