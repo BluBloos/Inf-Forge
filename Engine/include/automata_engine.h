@@ -143,10 +143,14 @@ namespace automata_engine {
     // These values are meant to be set by the game during its PreInit() function.
     // Otherwise, they are initialized to default values by the engine source.
     // These values are used as the initial values for what they respectively represent.
-    // i.e. defaultWidth is the initial width of the platform window.
+    // i.e. defaultWidth is the width used to create the platform window.
+
     extern game_window_profile_t defaultWinProfile;
+    /// @brief the width used to create the platform window.
     extern int32_t defaultWidth;
+    /// @brief the height used to create the platform window.
     extern int32_t defaultHeight;
+    /// @brief the title used to create the platform window.
     extern const char *defaultWindowName;
 // ----------- [END SECTION] PreInit settings -----------
 
