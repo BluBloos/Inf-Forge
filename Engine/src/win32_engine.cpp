@@ -626,8 +626,8 @@ public:
         {
             ae::OnVoiceBufferProcess(
                 (ae::game_memory_t *)m_pContext, m_voiceHandle,
-                pInputProcessParameters[0].pBuffer,
-                pOutputProcessParameters[0].pBuffer,
+                (float*)pInputProcessParameters[0].pBuffer,
+                (float*)pOutputProcessParameters[0].pBuffer,
                 pInputProcessParameters[0].ValidFrameCount,
                 m_wfx.nChannels, m_wfx.wBitsPerSample >> 3);
         }

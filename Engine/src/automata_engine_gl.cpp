@@ -32,7 +32,7 @@ namespace automata_engine {
             :
             type(type), count(count) {};
         bool glewIsInit = false;
-        GLuint compileShader(uint32_t type, char *shader) {
+        static GLuint compileShader(uint32_t type, char *shader) {
             uint32_t id = glCreateShader(type);
             glShaderSource(id, 1, &shader, NULL);
             glCompileShader(id);

@@ -8,7 +8,7 @@ void ae::Init(ae::game_memory_t *gameMemory) {}
 void ae::Close(ae::game_memory_t *gameMemory) {}
 void ae::HandleWindowResize(ae::game_memory_t *gameMemory, int newWdith, int newHeight) {}
 void ae::OnVoiceBufferProcess(
-    ae::game_memory_t *gameMemory, intptr_t voiceHandle, void *dst, void *src,
+    ae::game_memory_t *gameMemory, intptr_t voiceHandle, float *dst, float *src,
     uint32_t samplesToWrite, int channels, int bytesPerSample) {}
 void ae::OnVoiceBufferEnd(ae::game_memory_t *gameMemory, intptr_t voiceHandle) {}
 // ---------------------------------------------------

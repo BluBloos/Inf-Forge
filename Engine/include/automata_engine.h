@@ -91,8 +91,8 @@ Index of this file:
 // NOTE: glew must always be before gl.h
 #endif
 
-// TODO: Here we trust that if PI and DEGREES_TO_RADIANS are defined, they are defined correctly.
-// we ought to implement some unit tests to ensure that this is the case.
+// Here we trust that if PI and DEGREES_TO_RADIANS are defined that they are defined correctly.
+// TODO: we ought to implement some compile-time unit tests to ensure that this is the case.
 #if !defined(PI)
 #define PI 3.14159f
 #endif
@@ -140,6 +140,10 @@ namespace automata_engine {
 
 
 // ----------- [SECTION] PreInit settings -----------
+    // These values are meant to be set by the game during its PreInit() function.
+    // Otherwise, they are initialized to default values by the engine source.
+    // These values are used as the initial values for what they respectively represent.
+    // i.e. defaultWidth is the initial width of the platform window.
     extern game_window_profile_t defaultWinProfile;
     extern int32_t defaultWidth;
     extern int32_t defaultHeight;
@@ -148,17 +152,35 @@ namespace automata_engine {
 
 
 // ----------------- [SECTION] GAME BINDING POINTS -----------------
+    
+    // These functions are the binding points for the engine to call the game.
+    // The game must implement these functions.
+
+    /// @brief Called before the platform window is created.
     void PreInit(game_memory_t *gameMemory);
+
+    /// @brief Called after the platform window is created and before the main game loop.
     void Init(game_memory_t *gameMemory);
-    void Close(game_memory_t *gameMemory);
+
+    /// @brief Called when the engine has shut down and is requesting the game to release
+    /// all resources.
+    void Close(game_memory_t *gameMemory);    
+
+    /// @brief Called when the platform window is resized. Games typically use this to resize
+    /// the swapchain.
     void HandleWindowResize(game_memory_t *gameMemory, int newWdith, int newHeight);
 
 
 // ----------------- [SECTION] AUDIO CALLBACKS -----------------
     /// @brief Main audio callback.
+    ///
+    /// This is called by the audio thread. The game must fill
+    /// the dst buffer with the requested number of samples using the src buffer. The channels
+    /// are interleaved. The implementation may not make state changes to the voice.
     void OnVoiceBufferProcess(
-        game_memory_t *gameMemory, intptr_t voiceHandle, void *dst, void *src,
+        game_memory_t *gameMemory, intptr_t voiceHandle, float *dst, float *src,
         uint32_t samplesToWrite, int channels, int bytesPerSample);
+
     /// @brief Called when a submitted buffer has finished playing. The implementation
     /// may make state changes to the voice.
     void OnVoiceBufferEnd(game_memory_t *gameMemory, intptr_t voiceHandle);
@@ -168,37 +190,59 @@ namespace automata_engine {
 // ----------------- [END SECTION] GAME BINDING POINTS -----------------
 
 
-    // engine helper funcs.
-    void setGlobalRunning(bool); // this one enables more of a graceful exit.
+    /// @brief Sets the global running boolean.
+    ///
+    /// Providing a value of false signals to the engine that the game is ready to exit. The program will
+    /// not exit until the next frame.
+    void setGlobalRunning(bool);
+
+    /// @brief Signals to the engine that the game is ready to exit and sets an error exit code.
+    /// 
+    /// The program will not exit until the next frame.
     void setFatalExit();
+
+    /// @brief Sets the update model used by the engine.
     void setUpdateModel(update_model_t updateModel);
+
+    /// @brief Returns the human-readable string representation of the provided update model.
     const char *updateModelToString(update_model_t updateModel);
+
+    /// @brief Helper function to render a math::mat4_t to the ImGui window.
     void ImGuiRenderMat4(const char *matName, math::mat4_t mat);
+
+    /// @brief Helper function to render a math::vec3_t to the ImGui window.
     void ImGuiRenderVec3(const char *vecName, math::vec3_t vec);
 
 #if defined(AUTOMATA_ENGINE_GL_BACKEND)
     namespace GL {
-        // state that the engine exposes
+        /// @brief Clears all OpenGL error flags.
         void GLClearError();
+        /// @brief Checks all OpenGL error flags and prints them to the console.
+        /// @returns false if any error has occurred.
         bool GLCheckError(const char *, const char *, int);
         extern bool glewIsInit;
         void initGlew();
+        /// @brief Returns true if the OpenGL context has been initialized by the engine.
         bool getGLInitialized();
+        /// @brief Converts a priorly parsed .OBJ into a VAO (Vertex Array Object).
         void objToVao(raw_model_t rawModel, ibo_t *iboOut, vbo_t *vboOut, GLuint *vaoOut);
+        /// @brief Load, compile, and upload to GPU a GLSL shader program from disk.
         GLuint createShader(const char *vertFilePath, const char *fragFilePath, const char *geoFilePath = "\0");
         // TODO(Noah): There's got to be a nice and clean way to get rid of the duplication
         // here with the header of the wrapper.
+        /// @brief Load and upload to GPU a texture from disk. This function supports the same file formats as stbi_load.
         GLuint createTextureFromFile(
             const char *filePath,
             GLint minFilter = GL_LINEAR, GLint magFilter = GL_LINEAR,
             bool generateMips = true, GLint wrap = GL_CLAMP_TO_BORDER
         );
+        /// @brief Upload to GPU a texture from memory. The pixel data must be in RGBA (32bpp) format.
         GLuint createTexture(
             unsigned int *pixelPointer, unsigned int width, unsigned int height,
             GLint minFilter = GL_LINEAR, GLint magFilter = GL_LINEAR,
             bool generateMips = true, GLint wrap = GL_CLAMP_TO_BORDER
         );
-        GLuint compileShader(uint32_t type, char *shader);
+        /// @brief Helper function to set a uniform 4x4 matrix in a shader program.
         void setUniformMat4f(GLuint shader, const char *uniformName, math::mat4_t val);
         // TODO(Noah): is there any reason that we cannot use templates for our createAndSetupVbo?
         vbo_t createAndSetupVbo(uint32_t counts, ...);
