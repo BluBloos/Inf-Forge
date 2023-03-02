@@ -1,4 +1,4 @@
-// Automata Engine, v1.0.0-alpha WIP
+// Automata Engine, v0.3.0-alpha WIP
 
 // -------- [SECTION] Preamble --------
 
