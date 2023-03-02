@@ -1,5 +1,6 @@
 // Automata Engine, v0.3.0-alpha WIP
 
+
 // -------- [SECTION] Preamble --------
 
 // Library Version
@@ -10,16 +11,14 @@
 // Y = minor version
 // Z = patch version
 // S = snapshot version
-#define AUTOMATA_ENGINE_VERSION               "v1.0.0-alpha WIP"
+#define AUTOMATA_ENGINE_VERSION_STRING        "v0.3.0-alpha WIP"
 #define AUTOMATA_ENGINE_VERSION_NUM           11000000
 
 // This file is the primary file for the Automata Engine API.
-// The documentation for Automata Engine is effectively this file along with the
-// associated doxygen build.
-
-// TODO: make using automata engine mean including this single .h
+// All documentation for Automata Engine is within this file.
 
 // -------- [END SECTION] Preamble --------
+
 
 /*
 
@@ -37,28 +36,34 @@ Index of this file:
 */
 
 
-// ----------------- [SECTION]     Definable Macros -----------------
+// ----------------- [SECTION] Definable Macros -----------------
 
 // NOTE: these macros must be defined when including this header as well as
 // for the .cpp files that are part of the engine.
 // If you are using the CMake build system, it will define these macros for you.
 
-// #define AUTOMATA_ENGINE_DISABLE_PLATFORM_LOGGING
-// define this macro to disable platform logging.
+#if !defined(AUTOMATA_ENGINE_DISABLE_PLATFORM_LOGGING)
+// define AUTOMATA_ENGINE_DISABLE_PLATFORM_LOGGING to disable platform logging.
+#endif
 
-// #define AUTOMATA_ENGINE_DISABLE_IMGUI
-// define this macro to disable imgui.
+#if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
+// define AUTOMATA_ENGINE_DISABLE_IMGUI to disable ImGui.
+#endif
 
-// #define AUTOMATA_ENGINE_GL_BACKEND
-// define this macro to use the OpenGL backend.
+#if !defined(AUTOMATA_ENGINE_GL_BACKEND)
+// define AUTOMATA_ENGINE_GL_BACKEND to use the OpenGL backend.
+#endif
 
-// #define AUTOMATA_ENGINE_VK_BACKEND
-// define this macro to use the Vulkan backend.
+#if !defined(AUTOMATA_ENGINE_VK_BACKEND)
+// define AUTOMATA_ENGINE_VK_BACKEND to use the Vulkan backend.
+#endif
 
-// #define AUTOMATA_ENGINE_DX12_BACKEND
-// define this macro to use the DirectX 12 backend.
+#if !defined(AUTOMATA_ENGINE_DX12_BACKEND)
+// define AUTOMATA_ENGINE_DX12_BACKEND to use the DirectX 12 backend.
+#endif
 
 // ----------------- [END SECTION] Definable Macros -----------------
+
 
 #pragma once
 
@@ -97,7 +102,8 @@ Index of this file:
 
 namespace automata_engine {
 
-// ----------- [SECTION]     Forward declarations and basic types -----------
+
+// ----------- [SECTION] Forward declarations and basic types -----------
     struct game_memory_t;
     struct game_window_info_t;
     enum   game_window_profile_t;
@@ -130,21 +136,23 @@ namespace automata_engine {
         struct vertex_attrib_desc_t;
     }
 #endif
-
 // ----------- [END SECTION] Forward declarations and basic types -----------
 
-// ----------- [SECTION]    PreInit settings -----------
+
+// ----------- [SECTION] PreInit settings -----------
     extern game_window_profile_t defaultWinProfile;
     extern int32_t defaultWidth;
     extern int32_t defaultHeight;
     extern const char *defaultWindowName;
 // ----------- [END SECTION] PreInit settings -----------
 
+
 // ----------------- [SECTION] GAME BINDING POINTS -----------------
     void PreInit(game_memory_t *gameMemory);
     void Init(game_memory_t *gameMemory);
     void Close(game_memory_t *gameMemory);
     void HandleWindowResize(game_memory_t *gameMemory, int newWdith, int newHeight);
+
 
 // ----------------- [SECTION] AUDIO CALLBACKS -----------------
     /// @brief Main audio callback.
@@ -156,7 +164,9 @@ namespace automata_engine {
     void OnVoiceBufferEnd(game_memory_t *gameMemory, intptr_t voiceHandle);
 // ----------------- [END SECTION] AUDIO CALLBACKS -----------------
 
+
 // ----------------- [END SECTION] GAME BINDING POINTS -----------------
+
 
     // engine helper funcs.
     void setGlobalRunning(bool); // this one enables more of a graceful exit.
@@ -383,7 +393,8 @@ namespace automata_engine {
         bool writeEntireFile(const char *fileName, void *memory, uint32_t memorySize);
         void freeLoadedFile(loaded_file_t file);
 
-// --------- [SECTION]    PLATFORM AUDIO ----------------
+
+// --------- [SECTION] PLATFORM AUDIO ----------------
 //
 // TODO(Noah): allow for multiple buffer submissions to a voice. currently
 // we are doing a single buffer model.
@@ -408,9 +419,11 @@ namespace automata_engine {
 //
 // --------- [END SECTION] PLATFORM AUDIO ------------
 
+
     };
 
 // -------------------- [END SECTION] Platform Layer --------------------
+
 
     namespace __details {
         /// Returns pos of last chr in str.
@@ -434,7 +447,7 @@ namespace automata_engine {
 namespace ae = automata_engine;
 
 #if defined(_AUTOMATA_ENGINE_FILE_RELATIVE_) || defined(AELoggerError) || defined(AELoggerLog) || defined(AELoggerWarn) || defined(AELogger)
-#error "Automata Engine tries to avoid bloat the global namespace, but these cases are unavoidable."
+#error "Automata Engine tries to avoid bloat the global namespace, but these cases are decidedly exceptions."
 #endif
 
 #define _AUTOMATA_ENGINE_FILE_RELATIVE_ (ae::__details::find_last_in_str("\\" __FILE__, '\\') + 1)
@@ -463,6 +476,7 @@ namespace ae = automata_engine;
 #define AELoggerWarn(fmt, ...)
 #define AELogger(fmt, ...)
 #endif
+
 
 // ---------- [SECTION] Type Definitions ------------
 namespace automata_engine {
@@ -548,7 +562,7 @@ namespace automata_engine {
         bool keyDown[(uint32_t)GAME_KEY_COUNT];
     };
 
-    // TODO: Since everything is already namespaced, we won't need to prefix enum IDs with AUTOMATA_ENGINE_ ...
+    // TODO: Since everything is already namespaced, we won't need to prefix enum IDs with `AUTOMATA_ENGINE_...`.
     enum game_window_profile_t {
         AUTOMATA_ENGINE_WINPROFILE_RESIZE,
         AUTOMATA_ENGINE_WINPROFILE_NORESIZE
@@ -649,7 +663,6 @@ namespace automata_engine {
             static aabb_t fromLine(vec3_t p0, vec3_t p1);
         };
     }
-
 #if defined(AUTOMATA_ENGINE_GL_BACKEND)
     namespace GL {
         struct vertex_attrib_t {
