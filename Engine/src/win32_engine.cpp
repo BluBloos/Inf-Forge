@@ -1,3 +1,6 @@
+// TODO(Noah): Understand rvalues. Because, I'm a primitive ape, and,
+// they go right over my head, man.
+
 #include <automata_engine.h>
 #include <win32_engine.h>
 

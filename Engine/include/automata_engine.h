@@ -125,7 +125,7 @@ namespace automata_engine {
         struct vec3_t;
         struct vec4_t;
         struct mat3_t;
-        struct mat4_t;        
+        struct mat4_t;
     };
 
 #if defined(AUTOMATA_ENGINE_GL_BACKEND)
@@ -149,17 +149,20 @@ namespace automata_engine {
     ///
     /// this is used for eg. to set if the window can be resized or not.
     extern game_window_profile_t defaultWinProfile;
+
     /// @brief the width used to create the platform window.
     extern int32_t defaultWidth;
+
     /// @brief the height used to create the platform window.
     extern int32_t defaultHeight;
+
     /// @brief the title used to create the platform window.
     extern const char *defaultWindowName;
 // ----------- [END SECTION] PreInit settings -----------
 
 
 // ----------------- [SECTION] GAME BINDING POINTS -----------------
-    
+
     // These functions are the binding points for the engine to call the game.
     // The game must implement these functions.
 
@@ -171,7 +174,7 @@ namespace automata_engine {
 
     /// @brief Called when the engine has shut down and is requesting the game to release
     /// all resources.
-    void Close(game_memory_t *gameMemory);    
+    void Close(game_memory_t *gameMemory);
 
     /// @brief Called when the platform window is resized. Games typically use this to resize
     /// the swapchain.
@@ -204,7 +207,7 @@ namespace automata_engine {
     void setGlobalRunning(bool);
 
     /// @brief Signals to the engine that the game is ready to exit and sets an error exit code.
-    /// 
+    ///
     /// The program will not exit until the next frame.
     void setFatalExit();
 
@@ -285,99 +288,168 @@ namespace automata_engine {
 #endif
 
     namespace timing {
+        /// @brief Get a high resolution (<1us) time stamp that can be used for time-interval measurements.
         float wallClock();
+
+        /// @brief same as wallClock but the time stamp is relative to the beginning of time for this application.
         float epoch();
     }
-
-// TODO(Noah): Understand rvalues. Because, I'm a primitive ape, and,
-// they go right over my head, man.
 
 // TODO(Noah): Is there any way to expose member funcs for our math stuff
 // (declare them here) so that the documentation is there for what is defined?
 
     namespace math {
 
-        vec4_t operator+=(vec4_t &, vec4_t);
+        /// @brief the functions below are operator overloads for operations between two vectors.
+        /// 3-dim vectors.
         vec3_t operator+=(vec3_t &, vec3_t);
-        vec4_t operator+(vec4_t b, vec4_t a);
         vec3_t operator+(vec3_t b, vec3_t a);
         vec3_t operator-(vec3_t b, vec3_t a);
+        /// 4-dim vectors.
+        vec4_t operator+(vec4_t b, vec4_t a);
+        vec4_t operator+=(vec4_t &, vec4_t);
 
+        /// @brief the functions below are operator overloads for scaling vectors.
+        /// 3-dim vectors.
+        vec3_t operator*(vec3_t b, float a);
+        /// 4-dim vectors.
         vec4_t operator*=(vec4_t &a, float scalar);
         vec4_t operator*(vec4_t b, float a);
-        vec4_t operator*(mat4_t b, vec4_t a);
-        vec3_t operator*(mat3_t b, vec3_t a);
-        mat4_t operator*(mat4_t a, mat4_t b);
-        vec3_t operator*(vec3_t b, float a);
 
+        /// @brief the functions below are operator overloads for matrix-vector multiplication.
+        /// 3-dim vectors.
+        vec3_t operator*(mat3_t b, vec3_t a);
+        /// 4-dim vectors.
+        vec4_t operator*(mat4_t b, vec4_t a);
+
+        /// @brief the functions below are operator overloads for matrix-matrix multiplication.
+        mat4_t operator*(mat4_t a, mat4_t b);
+
+        /// @brief the functions below are for retrieving a pointer to the vector/matrix as a contiguous array of floats.
         float *value_ptr(vec3_t &);
         float *value_ptr(vec4_t &);
         float *value_ptr(mat3_t &);
         float *value_ptr(mat4_t &);
 
+        /// @brief compute the magnitude of a vector.
         float magnitude(vec3_t a);
+
+        /// @brief compute the distance between two points.
         float dist(vec3_t a, vec3_t b);
+
+        /// @brief compute the dot product of two vectors.
         float dot(vec3_t a, vec3_t b);
+
+        /// @brief compute the cross product of two vectors.
         vec3_t cross(vec3_t a, vec3_t b);
-        float project(vec3_t a, vec3_t b);        
-        
-        /// returns the angle in radians between two vectors
+
+        /// @brief compute the magnitude of the projected vector a onto vector b.
+        float project(vec3_t a, vec3_t b);
+
+        /// @brief compute the angle in radians between two vectors.
         float angle(vec3_t a, vec3_t b);
 
-        ///@param N is the normal vector of the plane that A and B are on.
+        /// @brief compute the signed angle in radians between two vectors.
+        /// @param N is the normal vector of the plane that A and B are on.
         float signedAngle(vec3_t a, vec3_t b, vec3_t N);
 
+        /// @brief compute the normalized vector of a vector.
         vec3_t normalize(vec3_t a);
+
+        // TODO: what is the expected initial orientation? does this break down and require a quaternion?
+        /// @brief compute the euler angles required to rotate some body located at origin to look at target.
         vec3_t lookAt(vec3_t origin, vec3_t target);
 
+        /// @brief compute if the infinite ray located at rayOrigin and pointing in rayDir intersects with the AABB.
         /// @param rayDir must be normalized.
         bool doesRayIntersectWithAABB(
             const vec3_t &rayOrigin, const vec3_t &rayDir,
             const aabb_t &candidateBox, bool *exitedEarly=nullptr
         );
 
+        /// @brief build a 4x4 transformation matrix from a transform_t struct.
         mat4_t buildMat4fFromTransform(transform_t trans);
+
+        /// @brief build a 4x4 projection matrix from a camera_t struct.
         mat4_t buildProjMat(camera_t cam);
+
+        /// @brief build a 4x4 view matrix from a camera_t struct.
         mat4_t buildViewMat(camera_t cam);
+
+        /// @brief build a 4x4 orthographic projection matrix from a camera_t struct.
         mat4_t buildOrthoMat(camera_t cam);
+
+        /// @brief build a 4x4 inverse orthographic projection matrix from a camera_t struct.
         mat4_t buildInverseOrthoMat(camera_t cam);
+
+        /// @brief build a 4x4 rotation matrix from a vec3_t of euler angles.
+        /// Euler angles apply in the following rotation order: Z, Y, X.
         mat4_t buildRotMat4(vec3_t eulerAngles);
+
+        /// @brief transpose a 4x4 matrix.
         mat4_t transposeMat4(mat4_t  mat);
 
-        // TODO(Noah): Probably make these constexpr, inline, templates and FAST intrinsics.
+        // TODO(Noah): Probably make many of the math funcs below constexpr, inline, templates, FAST intrinsics, etc.
+
+        /// @brief compute the square root of a float.
         float sqrt(float a);
-        float atan2(float a, float b);
-        float acos(float a);
+
+        /// @brief compute the absolute value of a float.
+        float abs(float a);
+
+        /// @brief compute the ceiling of a float.
+        float ceil(float a);
+
+        /// @brief compute the floor of a float.
+        float floor(float a);
+
+        /// @brief round a float to the nearest integer.
         float round(float a);
+
+        /// @brief compute the base 10 logarithm of a float.
         float log10(float a);
+
+        /// @brief compute the base 2 logarithm of a float.
         float log2(float a);
-        float deg2rad(float deg);
-        float sin(float a);
-        float cos(float a);
+
+        /// @brief compute the division (a/b) followed by a ceiling operation.
+        static uint32_t div_ceil(uint32_t a, uint32_t b) {
+            return (a + (b-1))/b;
+        }
+
+        /// @brief compute the square of a float.
         template <typename T>
         T square(T a) {
             return a * a;
         }
+
+        /// @brief compute the minimum of two values.
         template <typename T>
         T min(T a, T b) {
             return (a < b) ? a : b;
         }
+
+        /// @brief compute the maximum of two values.
         template <typename T>
         T max(T a, T b) {
             return (a > b) ? a : b;
         }
-        float abs(float a);
-        float ceil(float a);
-        float floor(float a);
+
+        /// @brief the functions below are various trig-related and transcendental functions.
+        float atan2(float a, float b);
+        float acos(float a);
+        float deg2rad(float deg);
+        float sin(float a);
+        float cos(float a);
     }
 
     namespace super {
         void init();  // not to be called by the user.
         void close(); // not to be called by the user.
-        
+
         /// @brief presents an ImGui engine overlay
         void updateAndRender(game_memory_t * gameMemory);
-        
+
         /// @brief a bool to control ALL ImGui rendering
         extern bool g_renderImGui;
     }
@@ -434,7 +506,7 @@ namespace automata_engine {
         void fprintf_proxy(int handle, const char *fmt, ...);
 
         /// @brief read an image from disk into memory using stb_image.
-        /// 
+        ///
         /// Must be freed with freeLoadedImage. The pixel data will be in 0xABGR (32bpp) format.
         loaded_image_t stbImageLoad(char *fileName);
 
@@ -474,10 +546,10 @@ namespace automata_engine {
 
         /// @brief Reads an entire file from disk into memory. The memory must be freed later using freeLoadedFile.
         loaded_file_t readEntireFile(const char *fileName);
-        
+
         /// @brief Writes an entire file to disk from memory.
         bool writeEntireFile(const char *fileName, void *memory, uint32_t memorySize);
-        
+
         /// @brief free memory allocated by readEntireFile.
         void freeLoadedFile(loaded_file_t file);
 
