@@ -240,7 +240,7 @@ namespace automata_engine {
             GLint minFilter = GL_LINEAR, GLint magFilter = GL_LINEAR,
             bool generateMips = true, GLint wrap = GL_CLAMP_TO_BORDER
         );
-        /// @brief Upload to GPU a texture from memory. The pixel data must be in RGBA (32bpp) format.
+        /// @brief Upload to GPU a texture from memory. The pixel data must be in 0xABGR (32bpp) format.
         GLuint createTexture(
             unsigned int *pixelPointer, unsigned int width, unsigned int height,
             GLint minFilter = GL_LINEAR, GLint magFilter = GL_LINEAR,
@@ -396,26 +396,31 @@ namespace automata_engine {
         extern int GLOBAL_PROGRAM_RESULT;
         extern update_model_t GLOBAL_UPDATE_MODEL;
 
+        /// @brief prints to the console as if it were a printf call.
+        ///
+        /// STDERR, STDOUT, etc are not file handles but rather levels at which to print.
+        /// This may impact for eg. the color of the text in a terminal.
         /// @param handle is one of AE_STDERR, AE_STDOUT, AE_STDIN
         void fprintf_proxy(int handle, const char *fmt, ...);
 
-        // NOTE(Noah): Does not sit ontop of readEntireFile, so it's actually
-        // a platform thing. BUT, thankfully, we have the impl within the
-        // guts of automata, so no need for platform code to impl.
+        /// @brief read an image from disk into memory using stb_image.
+        /// 
+        /// Must be freed with freeLoadedImage. The pixel data will be in 0xABGR (32bpp) format.
         loaded_image_t stbImageLoad(char *fileName);
 
-        // get functions
+        /// @brief get the lastly polled user input.
         void getUserInput(user_input_t *userInput);
 
-        /// @brief used for getting the width and height of the window.
+        /// @brief get information about the platform window.
         game_window_info_t getWindowInfo();
 
-        /// @brief get the path to directory the executable resides in.
+        /// @brief get the path to the directory the executable resides in.
         /// @param pathOut buffer to write path to.
         /// @param pathSize size of pathOut buffer.
         char *getRuntimeExeDirPath(char *pathOut, uint32_t pathSize);
 
-        /// set the mouse position in client pixel coords.
+        /// Set the mouse position in client pixel coords.
+        /// See https://github.com/BluBloos/Atomation/wiki for client coords definition.
         /// @param yPos y pos in client pixel coords.
         /// @param xPos x pos in client pixel coords.
         void setMousePos(int xPos, int yPos);
@@ -423,22 +428,27 @@ namespace automata_engine {
         /// @brief show or hide the mouse cursor.
         void showMouse(bool shouldShow);
 
-        /// @brief show a window alert.
+        /// @brief show a native OS window alert.
         void showWindowAlert(const char *windowTitle, const char *windowMessage);
 
-        /// @brief Vsync is an OS state and we must make a call to OS to set it.
+        /// @brief Set Vsync behaviour.
         /// @param value true to enable Vsync, false to disable.
         void setVsync(bool value);
 
-        /// @brief free memory allocated by the platform layer.
+        /// @brief free memory allocated by alloc.
         void free(void *memToFree);
 
         /// @brief allocate memory.
         /// @param bytes number of bytes to allocate.
         void *alloc(uint32_t bytes);
 
+        /// @brief Reads an entire file from disk into memory. The memory must be freed later using freeLoadedFile.
         loaded_file_t readEntireFile(const char *fileName);
+        
+        /// @brief Writes an entire file to disk from memory.
         bool writeEntireFile(const char *fileName, void *memory, uint32_t memorySize);
+        
+        /// @brief free memory allocated by readEntireFile.
         void freeLoadedFile(loaded_file_t file);
 
 
@@ -552,7 +562,7 @@ namespace automata_engine {
 
     /// @param pixelPointer pointer to contiguous chunk of memory corresponding to image pixels. Each pixel is
     /// a 32 bit unsigned integer with the RGBA channels packed each as 8 bit unsigned integers. This gives
-    /// each channel 0->255 in possible value. Format is not definitively in RGBA order...
+    /// each channel 0->255 in possible value. Format is typically in 0xABGR order.
     struct loaded_image_t {
         uint32_t *pixelPointer;
         uint32_t width;
