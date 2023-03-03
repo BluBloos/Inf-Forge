@@ -78,11 +78,11 @@ namespace automata_engine {
         return myImage;
     }
     void setGlobalRunning(bool newVal) {
-        platform::GLOBAL_RUNNING = newVal;
+        platform::_globalRunning = newVal;
     }
     void setFatalExit() {
-        platform::GLOBAL_PROGRAM_RESULT = -1;
-        platform::GLOBAL_RUNNING = false;
+        platform::_globalProgramResult = -1;
+        platform::_globalRunning = false;
     }
     // TODO(Noah): Swap this appTable out for something more performant
     // like a hash table. OR, could do the other design pattern where we map
@@ -135,20 +135,20 @@ namespace automata_engine {
             ImGui::Text("lastFrameTimeTotal: %.3f ms (%.1f FPS)",
                 1000.0f * platform::lastFrameTimeTotal, 1.0f / platform::lastFrameTimeTotal);
             ImGui::Text("updateModel: %s", updateModelToString(platform::GLOBAL_UPDATE_MODEL));
-            bool vsync = platform::GLOBAL_VSYNC;
+            bool vsync = platform::_globalVsync;
             ImGui::Checkbox("vsync", &vsync);
-            if (platform::GLOBAL_VSYNC != vsync) {
+            if (platform::_globalVsync != vsync) {
                 platform::setVsync(vsync);
             }
             ImGui::End();
         }
 #endif
     }
-    void super::close() {
+    void super::_close() {
         StretchyBufferFree(appTable_func);
         StretchyBufferFree(appTable_name);
     }
-    void super::init() {
+    void super::_init() {
         stbi_set_flip_vertically_on_load(true);
         stbi_flip_vertically_on_write(true);
     }

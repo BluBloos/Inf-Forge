@@ -68,7 +68,7 @@ For `GL_BACKEND`, the engine will init window + OpenGL context. The engine manag
 Here's how that works:
 ```C++
 // AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC:
-while (GLOBAL_RUNNING) {
+while (_globalRunning) {
   // ... engine polls user input via OS
   // ... engine exec callback from ae::registerApp()
   glFlush();

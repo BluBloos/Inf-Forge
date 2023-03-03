@@ -44,10 +44,10 @@ namespace ae = automata_engine;
 // data about the last frame?
 float ae::platform::lastFrameTime = 1 / 60.0f;
 float ae::platform::lastFrameTimeTotal = 1 / 60.0f;
-bool ae::platform::GLOBAL_RUNNING = true;
+bool ae::platform::_globalRunning = true;
 ae::update_model_t ae::platform::GLOBAL_UPDATE_MODEL =
     ae::AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC; // default.
-bool ae::platform::GLOBAL_VSYNC = false;
+bool ae::platform::_globalVsync = false;
 static LONGLONG g_PerfCountFrequency64;
 
 void ae::platform::setMousePos(int xPos, int yPos) {
@@ -195,7 +195,7 @@ static void InitOpenGL(HWND windowHandle, HDC dc) {
     if(win32_glInitialized) {
         // setup VSYNC
         wglSwapInterval = (wgl_swap_interval_ext *)wglGetProcAddress("wglSwapIntervalEXT");
-        if(wglSwapInterval && ae::platform::GLOBAL_VSYNC) {
+        if(wglSwapInterval && ae::platform::_globalVsync) {
             wglSwapInterval(1);
         }
         // NOTE(Noah): We are permitted to init glew here and expect this to be fine with our game
@@ -218,7 +218,7 @@ bool automata_engine::GL::getGLInitialized() {
 
 // TODO(Noah): Need to also impl for DirectX, and same goes with update models ...
 void ae::platform::setVsync(bool b) {
-    ae::platform::GLOBAL_VSYNC = b;
+    ae::platform::_globalVsync = b;
 #if defined(AUTOMATA_ENGINE_GL_BACKEND)
     if (wglSwapInterval) {
         (b) ? wglSwapInterval(1) : wglSwapInterval(0);
@@ -396,18 +396,14 @@ LRESULT CALLBACK Win32WindowProc(HWND window,
             RAWINPUT* raw = (RAWINPUT*)lpb;
             if (raw->header.dwType == RIM_TYPEMOUSE) {
                 if ( !!(raw->data.mouse.usFlags & MOUSE_MOVE_RELATIVE) ) {
+                    AELoggerError("handle RAWINPUT for devices that provide relative motion");
+                    assert(false);
                     globalUserInput.deltaMouseX += raw->data.mouse.lLastX;
                     globalUserInput.deltaMouseY += raw->data.mouse.lLastY;
                 } else {
                     // TODO(Noah): impl.
-                    //AELoggerWarn("handle RAWINPUT for devices that provide absolute motion");
                     globalUserInput.deltaMouseX += raw->data.mouse.lLastX;
                     globalUserInput.deltaMouseY += raw->data.mouse.lLastY;
-                    /*globalUserInput.deltaMouseX =
-                        raw->data.mouse.lLastX - globalUserInput.rawMouseX;
-                    globalUserInput.deltaMouseY =
-                        raw->data.mouse.lLastY - globalUserInput.rawMouseY;
-                        */
                 }
             }
         } break;
@@ -491,11 +487,11 @@ LRESULT CALLBACK Win32WindowProc(HWND window,
         } break;
         case WM_DESTROY: {
             // TODO(Noah): Handle as error
-            automata_engine::platform::GLOBAL_RUNNING = false;
+            automata_engine::platform::_globalRunning = false;
         } break;
         case WM_CLOSE: {
             //TODO(Noah): Handle as message to user
-            automata_engine::platform::GLOBAL_RUNNING = false;
+            automata_engine::platform::_globalRunning = false;
         } break;
         case WM_NCCREATE: {
             EnableNonClientDpiScaling(window);
@@ -520,7 +516,7 @@ static void CheckSanePlatform(void) {
     assert(sizeof(float64_t) == 8);
 }
 
-int automata_engine::platform::GLOBAL_PROGRAM_RESULT = 0;
+int automata_engine::platform::_globalProgramResult = 0;
 
 namespace automata_engine {
     class IXAudio2VoiceCallback : public ::IXAudio2VoiceCallback  {
@@ -869,7 +865,7 @@ int CALLBACK WinMain(HINSTANCE instance,
   int showCode)
 {
     CheckSanePlatform();
-    automata_engine::super::init();
+    automata_engine::super::_init();
 
     // TODO: Do some hot reloading stuff! Game is a DLL to the engine :)
     {
@@ -896,7 +892,7 @@ int CALLBACK WinMain(HINSTANCE instance,
     g_gameMemory.data =
         automata_engine::platform::alloc(g_gameMemory.dataBytes); // will allocate 64 MB
     if (g_gameMemory.data == nullptr) {
-        automata_engine::platform::GLOBAL_PROGRAM_RESULT = -1;
+        automata_engine::platform::_globalProgramResult = -1;
         return -1;
     }
 
@@ -958,7 +954,7 @@ int CALLBACK WinMain(HINSTANCE instance,
         classAtom = RegisterClassA(&windowClass);
         if(classAtom == 0) {
             AELoggerError("Unable to create window class \"%s\"", windowClass.lpszClassName);
-            automata_engine::platform::GLOBAL_PROGRAM_RESULT = -1;
+            automata_engine::platform::_globalProgramResult = -1;
             break;
         }
 
@@ -1011,7 +1007,7 @@ int CALLBACK WinMain(HINSTANCE instance,
             // TODO(Noah): Remove newline character at the end of lpMsgBuf
             AELoggerError("Unable to create window: %s", lpMsgBuf);
             LocalFree(lpMsgBuf);
-            automata_engine::platform::GLOBAL_PROGRAM_RESULT = -1;
+            automata_engine::platform::_globalProgramResult = -1;
             break;
         }
 
@@ -1052,7 +1048,7 @@ int CALLBACK WinMain(HINSTANCE instance,
             // Initializes the COM library for use by the calling thread.
             if (FAILED(comResult = CoInitializeEx(nullptr, COINIT_MULTITHREADED))) {
                 AELoggerError("Unable to initialize COM library (XAudio2)");
-                automata_engine::platform::GLOBAL_PROGRAM_RESULT = -1;
+                automata_engine::platform::_globalProgramResult = -1;
                 break;
             }
 
@@ -1062,7 +1058,7 @@ int CALLBACK WinMain(HINSTANCE instance,
     #endif
             if (FAILED(XAudio2Create(&g_pXAudio2, 0, flags))) {
                 AELoggerError("Unable to to create an instance of the XAudio2 engine");
-                automata_engine::platform::GLOBAL_PROGRAM_RESULT = -1;
+                automata_engine::platform::_globalProgramResult = -1;
                 break;
             }
 
@@ -1084,7 +1080,7 @@ int CALLBACK WinMain(HINSTANCE instance,
 
             if (FAILED(g_pXAudio2->CreateMasteringVoice(&pMasterVoice))) {
                 AELoggerError("Unable to create a mastering voice (XAudio2)");
-                automata_engine::platform::GLOBAL_PROGRAM_RESULT = -1;
+                automata_engine::platform::_globalProgramResult = -1;
                 break;
             }
 
@@ -1135,7 +1131,7 @@ int CALLBACK WinMain(HINSTANCE instance,
         // add stalling in the CPU model (i.e. the engine does not call game update)
         // as fast as possible. Then make ae::setVsync() control whether this happens, or no.
 
-        while(automata_engine::platform::GLOBAL_RUNNING) {
+        while(automata_engine::platform::_globalRunning) {
             // Reset input
             globalUserInput.deltaMouseX = 0; globalUserInput.deltaMouseY = 0;
             // Process windows messages
@@ -1144,7 +1140,7 @@ int CALLBACK WinMain(HINSTANCE instance,
                 while(PeekMessage(&message, NULL, 0, 0, PM_REMOVE)) {
                     switch (message.message) {
                         case WM_QUIT:
-                        automata_engine::platform::GLOBAL_RUNNING = false;
+                        automata_engine::platform::_globalRunning = false;
                         break;
                         default:
                         TranslateMessage(&message);
@@ -1259,7 +1255,7 @@ int CALLBACK WinMain(HINSTANCE instance,
         if (classAtom != 0) { UnregisterClassA(windowClass.lpszClassName, instance); }
 
         // finally, dealloc automata_engine state
-        automata_engine::super::close();
+        automata_engine::super::_close();
 
         // stall program to allow user to see err.
         
@@ -1280,5 +1276,5 @@ int CALLBACK WinMain(HINSTANCE instance,
         ReadConsoleInput(inputHandle, &record, 1, &inputsRead);
     }
 
-    return automata_engine::platform::GLOBAL_PROGRAM_RESULT;
+    return automata_engine::platform::_globalProgramResult;
 }

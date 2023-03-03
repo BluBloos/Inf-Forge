@@ -444,36 +444,58 @@ namespace automata_engine {
     }
 
     namespace super {
-        void init();  // not to be called by the user.
-        void close(); // not to be called by the user.
+        void _init();  // NOT to be called by the user.
+        void _close(); // NOT to be called by the user.
 
-        /// @brief presents an ImGui engine overlay
+        /// @brief present an ImGui engine overlay.
         void updateAndRender(game_memory_t * gameMemory);
 
-        /// @brief a bool to control ALL ImGui rendering
+        /// @brief a bool to control ALL ImGui rendering.
         extern bool g_renderImGui;
     }
 
     // TODO(Noah): Add GPU adapter device name in updateApp ImGui idea :)
     typedef struct bifrost {
+        /// @brief register an app with the ae::bifrost_t engine.
+        /// @param appName   the name of the app to be registered.
+        /// @param callback  the function to be called every frame by the engine.
+        /// @param transInto the function to be called when the game is transitioned into this app.
+        /// @param transOut  the function to be called when the game is transitioned out of this app.
         static void registerApp(
             const char *appName,
             void (*callback)(game_memory_t *),
             void (*transInto)(game_memory_t *) = nullptr,
             void (*transOut)(game_memory_t *) = nullptr);
+
+        /// @brief transition into an app.
+        /// @param appName the name of the app to transition into.
         static void updateApp(game_memory_t * gameMemory, const char *appName);
+
+        /// @brief get the main update function for the currently selected app. 
         static std::function<void(game_memory_t *)> getCurrentApp();
     } bifrost_t;
 
-    // function that go here are those that are a layer above the read entire file call
-    // these functions do further processing (parse a file format).
+    // AE input/output engine.
     namespace io {
+        /// @brief load a .WAV file into memory. this must be freed with freeWav.
         loaded_wav_t loadWav(const char *);
+
+        /// @brief free a loaded_wav_t.
         void freeWav(loaded_wav_t wavFile);
+
+        /// @brief load a .BMP file into memory. this must be freed with freeLoadedImage.
         loaded_image_t loadBMP(const char *path);
+
+        /// @brief load a .OBJ file into memory. this must be freed with freeObj.
         raw_model_t loadObj(const char *filePath);
+
+        /// @brief free a raw_model_t.
         void freeObj(raw_model_t obj);
+
+        /// @brief free a loaded_image_t.
         void freeLoadedImage(loaded_image_t img);
+
+        /// @brief any .WAV file loaded must have this many samples per second.
         constexpr static uint32_t ENGINE_DESIRED_SAMPLES_PER_SECOND = 44100;
     };
 
@@ -487,22 +509,31 @@ namespace automata_engine {
 //
     namespace platform {
 
+        /// @brief a constant representing an error level of logging.
         static constexpr uint32_t AE_STDERR = 0;
-        static constexpr uint32_t AE_STDOUT = 1;
-        static constexpr uint32_t AE_STDIN = 2;
 
+        /// @brief a constant representing an info level of logging.
+        static constexpr uint32_t AE_STDOUT = 1;
+
+        /// @brief the time in seconds that the last frame took on CPU.
         extern float lastFrameTime;
+
+        /// @brief the time in seconds that the last frame took in total.
+        /// For eg. in ATOMIC update mode, this is the total `CPU -> Present-the-frame` time.
         extern float lastFrameTimeTotal;
-        extern bool GLOBAL_RUNNING;
-        extern bool GLOBAL_VSYNC;
-        extern int GLOBAL_PROGRAM_RESULT;
+
+        extern bool _globalRunning;       // NOT to be set by the user.
+        extern bool _globalVsync;         // NOT to be set by the user.
+        extern int  _globalProgramResult; // NOT to be set by the user.
+
+        /// @brief the update model currently in use.
         extern update_model_t GLOBAL_UPDATE_MODEL;
 
         /// @brief prints to the console as if it were a printf call.
         ///
         /// STDERR, STDOUT, etc are not file handles but rather levels at which to print.
         /// This may impact for eg. the color of the text in a terminal.
-        /// @param handle is one of AE_STDERR, AE_STDOUT, AE_STDIN
+        /// @param handle is one of AE_STDERR, AE_STDOUT
         void fprintf_proxy(int handle, const char *fmt, ...);
 
         /// @brief read an image from disk into memory using stb_image.
@@ -537,7 +568,7 @@ namespace automata_engine {
         /// @param value true to enable Vsync, false to disable.
         void setVsync(bool value);
 
-        /// @brief free memory allocated by alloc.
+        /// @brief free memory allocated by platform::alloc.
         void free(void *memToFree);
 
         /// @brief allocate memory.
@@ -559,19 +590,30 @@ namespace automata_engine {
 // TODO(Noah): allow for multiple buffer submissions to a voice. currently
 // we are doing a single buffer model.
 //
+        /// @brief a constant representing an invalid voice handle.
         static const intptr_t INVALID_VOICE = UINT32_MAX;
 
-        /// @return INVALID_VOICE on failure, a handle to the voice on success.
+        /// @brief create a voice for playing audio.
+        /// @returns INVALID_VOICE on failure, a handle to the voice on success.
         intptr_t createVoice();
 
-        /// @return false on failure.
+        /// @brief submit a loaded_wav_t of sound data to a voice.
+        /// The voice does not begin playing. Once playing, it will play the buffer to completion, then stop.
+        /// @returns false on failure.
         bool voiceSubmitBuffer(intptr_t voiceHandle, loaded_wav_t wavFile);
 
-        /// @return false on failure.
-        bool voiceSubmitBuffer(intptr_t voiceHandle, void *data, uint32_t size, bool shoudLoop = false);
+        /// @brief submit a 16-bit LPCM buffer of sound data to a voice.
+        /// The voice does not begin playing. Once playing, it will play the buffer to completion, then stop.
+        /// @returns false on failure.
+        bool voiceSubmitBuffer(intptr_t voiceHandle, void *data, uint32_t size, bool shouldLoop = false);
 
+        /// @brief begin playing a voice.
         void voicePlayBuffer(intptr_t voiceHandle);
+
+        /// @brief stop playing a voice.
         void voiceStopBuffer(intptr_t voiceHandle);
+
+        /// @brief set the volume of a voice.
         void voiceSetBufferVolume(intptr_t voiceHandle, float volume);
 
         /// @brief given the dB value, return the float multiplier to apply to LPCM float samples.
@@ -614,6 +656,7 @@ namespace ae = automata_engine;
 
 #if defined(AUTOMATA_ENGINE_GL_BACKEND)
     #if !defined(GL_CALL)
+        /// @brief Wrapper macro for OpenGL calls to assert on error.
         #define GL_CALL(code) (ae::GL::GLClearError(), code, assert(ae::GL::GLCheckError(#code, _AUTOMATA_ENGINE_FILE_RELATIVE_, __LINE__)))
     #else
         #error "TODO"
@@ -623,12 +666,20 @@ namespace ae = automata_engine;
 #if !defined(AUTOMATA_ENGINE_DISABLE_PLATFORM_LOGGING)
 // See this page for color code guide:
 // https://stackoverflow.com/questions/4842424/list-of-ansi-color-escape-sequences
+
+/// @brief Log an error message to the console.
 #define AELoggerError(fmt, ...) \
     (ae::platform::fprintf_proxy(ae::platform::AE_STDERR, "\033[0;31m" "[Error on line=%d in file:%s]:\n" fmt "\n" "\033[0m", __LINE__, _AUTOMATA_ENGINE_FILE_RELATIVE_, __VA_ARGS__))
+
+/// @brief Log a message to the console.
 #define AELoggerLog(fmt, ...) \
     (ae::platform::fprintf_proxy(ae::platform::AE_STDOUT, "[Log from line=%d in file:%s]:\n" fmt "\n", __LINE__, _AUTOMATA_ENGINE_FILE_RELATIVE_, __VA_ARGS__))
+
+/// @brief Log a warning message to the console.
 #define AELoggerWarn(fmt, ...) \
     (ae::platform::fprintf_proxy(ae::platform::AE_STDOUT, "\033[0;93m" "[Warn on line=%d in file:%s]:\n" fmt  "\n" "\033[0m", __LINE__, _AUTOMATA_ENGINE_FILE_RELATIVE_, __VA_ARGS__))
+
+/// @brief Log a message to the console without a newline.
 #define AELogger(fmt, ...) (ae::platform::fprintf_proxy(ae::platform::AE_STDOUT, fmt, __VA_ARGS__))
 #else
 #define AELoggerError(fmt, ...)
@@ -641,20 +692,29 @@ namespace ae = automata_engine;
 // ---------- [SECTION] Type Definitions ------------
 namespace automata_engine {
 
-    /// @param data pointer to underlying memory provided by the platform layer.
-    /// @param dataBytes amount of bytes that data takes up.
+    /// @brief a struct allocated by the engine and passed to the game layer.
+    ///
+    /// The game layer can use this to store its own data. This struct is persistent across time.
+    ///
+    /// @param data          pointer to underlying memory provided by the platform layer.
+    /// @param dataBytes     amount of bytes that data takes up.
     /// @param isInitialized this is a boolean used by the game to note that
-    /// the memory has appropriate content
-    /// that we would expect to exist after calling EngineInit.
+    ///                      the memory is in a valid state, where "valid" is defined by we (the game).
     struct game_memory_t {
         void *data;
         uint32_t dataBytes;
         bool isInitialized;
+        /// @brief the fields below are for CPU_BACKEND.
         uint32_t *backbufferPixels;
         uint32_t backbufferWidth;
         uint32_t backbufferHeight;
     };
 
+    /// @brief a struct representing information about a window.
+    /// @param hWnd         opaque OS handle to the window.
+    /// @param hInstance    opaque OS handle to the application instance that created the window.
+    /// @param width        width of the window client rect in pixels.
+    /// @param height       height of the window client rect in pixels.
     struct game_window_info_t {
         uint32_t width;
         uint32_t height;
@@ -662,26 +722,30 @@ namespace automata_engine {
         intptr_t hInstance;
     };
 
+    /// @brief a struct representing image data loaded into memory.
     /// @param pixelPointer pointer to contiguous chunk of memory corresponding to image pixels. Each pixel is
-    /// a 32 bit unsigned integer with the RGBA channels packed each as 8 bit unsigned integers. This gives
-    /// each channel 0->255 in possible value. Format is typically in 0xABGR order.
+    ///                     a 32 bit unsigned integer with the RGBA channels packed each as 8 bit unsigned integers.
+    ///                     This gives each channel 0->255 in possible value. Format is typically in 0xABGR order.
     struct loaded_image_t {
         uint32_t *pixelPointer;
         uint32_t width;
         uint32_t height;
     };
 
-    /// @param contents pointer to unparsed binary data of the loaded file
+    /// @brief a struct representing a file loaded into memory.
+    /// @param contents    pointer to unparsed binary data of the loaded file
+    /// @param contentSize size of the contents in bytes
     struct loaded_file_t {
         const char *fileName;
         void *contents;
         int contentSize;
     };
 
+    /// @brief a struct representing a .WAV file loaded into memory.
     /// @param sampleData pointer to contiguous chunk of memory corresponding to 16-bit LPCM sound samples. When
-    /// there are two channels, the data is interleaved.
+    ///                   there are two channels, the data is interleaved.
     /// @param parentFile internal storage for corresponding loaded_file that contains the unparsed sound data.
-    /// This is retained so that we can ultimately free the loaded file.
+    ///                   This is retained so that we can ultimately free the loaded file.
     struct loaded_wav_t {
         int sampleCount;
         int channels;
@@ -689,31 +753,41 @@ namespace automata_engine {
         struct loaded_file_t parentFile;
     };
 
+    /// @brief a struct representing a 3D model file loaded into memory.
+    /// @param vertexData a stretchy buffer corresponding to 3D model vertices. Each vertex contains
+    ///                   (x,y,z, u,v, nx,ny,nz)
+    /// @param indexData  a stretchy buffer corresponding to indices specifying triplets of triangle vertices.
     struct raw_model_t {
         char modelName[13];
-        float *vertexData; // stretchy buf
-        uint32_t *indexData; // stretchy buf
+        float    *vertexData;   // stretchy buf
+        uint32_t *indexData;    // stretchy buf
     };
 
+    /// @brief an enum for the different types of keys that can be pressed.
     enum game_key_t {
-        GAME_KEY_0 = 0, GAME_KEY_1, GAME_KEY_2, GAME_KEY_3,
-        GAME_KEY_4, GAME_KEY_5, GAME_KEY_6, GAME_KEY_7, GAME_KEY_8,
-        GAME_KEY_9,
-        GAME_KEY_A, GAME_KEY_B, GAME_KEY_C, GAME_KEY_D, GAME_KEY_E,
-        GAME_KEY_F, GAME_KEY_G, GAME_KEY_H, GAME_KEY_I, GAME_KEY_J,
-        GAME_KEY_K, GAME_KEY_L, GAME_KEY_M, GAME_KEY_N, GAME_KEY_O,
-        GAME_KEY_P, GAME_KEY_Q, GAME_KEY_R, GAME_KEY_S, GAME_KEY_T,
-        GAME_KEY_U, GAME_KEY_V, GAME_KEY_W, GAME_KEY_X, GAME_KEY_Y,
-        GAME_KEY_Z,
+        GAME_KEY_0 = 0, GAME_KEY_1, GAME_KEY_2, GAME_KEY_3, GAME_KEY_4, GAME_KEY_5, GAME_KEY_6, GAME_KEY_7, GAME_KEY_8, GAME_KEY_9,
+        GAME_KEY_A, GAME_KEY_B, GAME_KEY_C, GAME_KEY_D, GAME_KEY_E, GAME_KEY_F, 
+        GAME_KEY_G, GAME_KEY_H, GAME_KEY_I, GAME_KEY_J, GAME_KEY_K, GAME_KEY_L,
+        GAME_KEY_M, GAME_KEY_N, GAME_KEY_O, GAME_KEY_P, GAME_KEY_Q, GAME_KEY_R,
+        GAME_KEY_S, GAME_KEY_T, GAME_KEY_U, GAME_KEY_V, GAME_KEY_W, GAME_KEY_X, 
+        GAME_KEY_Y, GAME_KEY_Z,
         GAME_KEY_SHIFT, GAME_KEY_SPACE, GAME_KEY_ESCAPE, GAME_KEY_F5,
         GAME_KEY_COUNT
     };
 
+    /// @brief a struct representing a snapshot of user input.
+    /// @param mouseX         x position of the mouse in pixels.
+    /// @param mouseY         y position of the mouse in pixels.
+    /// @param deltaMouseX    change in x position of the mouse relative to the last snapshot.
+    ///                       units are 0->65,535 : top-left -> bottom-right.
+    /// @param deltaMouseY    change in y position of the mouse relative to the last snapshot.
+    ///                       units are 0->65,535 : top-left -> bottom-right.
+    /// @param mouseLBttnDown state of the left mouse button.
+    /// @param mouseRBttnDown state of the right mouse button.
+    /// @param keyDown        an array of booleans corresponding to the state of each key.
     struct user_input_t {
         int mouseX = 0;
         int mouseY = 0;
-        int rawMouseX = 0;
-        int rawMouseY = 0;
         int deltaMouseX = 0;
         int deltaMouseY = 0;
         bool mouseLBttnDown = false;
@@ -723,11 +797,14 @@ namespace automata_engine {
     };
 
     // TODO: Since everything is already namespaced, we won't need to prefix enum IDs with `AUTOMATA_ENGINE_...`.
+    /// @brief an enum for a window profile.
     enum game_window_profile_t {
         AUTOMATA_ENGINE_WINPROFILE_RESIZE,
         AUTOMATA_ENGINE_WINPROFILE_NORESIZE
     };
 
+    /// @brief an enum for the different types of update models.
+    /// NOTE: AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC is the only one that is currently supported.
     enum update_model_t {
         AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC = 0,
         AUTOMATA_ENGINE_UPDATE_MODEL_FRAME_BUFFERING,
