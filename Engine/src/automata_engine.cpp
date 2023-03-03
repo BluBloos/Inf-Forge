@@ -68,7 +68,8 @@ namespace automata_engine {
         if (data != NULL) {
             myImage.pixelPointer = (uint32_t *)data;
             myImage.width = x;
-            myImage.height = y;   
+            myImage.height = y;
+            assert(n == 4);
         } else {
             // TODO(Noah): Do something intelligent in the case of failure here.
             AELoggerError("automata_engine::platform::stbImageLoad failed");
