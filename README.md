@@ -5,30 +5,36 @@
 
 Build system for generic GUI applications.
 
-P.S. those cool examples seen in the photo above will be released soon!
-- Raytracer: https://github.com/BluBloos/Raytracer
-- MonkeyDemo: https://github.com/BluBloos/MonkeyDemo
+## Supported Platforms
 
-# Steps for Building
+The only supported target platform currently is Windows.
 
-## Preamble
+## How to use this project
 
-You must install MS Visual Studio 2022, Community ed. The engine depends on MSVC (Microsoft Visual Studio Compiler). Specifically, the engine will exec the command below,
+### Requirements
+
+- Python + requests lib.
+- CMake.
+
+Rather unfortunately (I'm hoping to change this in the future!), you must install Python. The engine has been tested
+with Python v3.10.5. Python is a dependency as some of the source tree is remotely sourced from my public gists on
+Github.
+
+The engine has been tested to work with CMake generators for Visual Studio 2019 and 2022.
+
+### Game Setup
+
+Currently, the game is a service to the engine. It must define callbacks for the engine to call. The engine and game
+are statically linked together into a single target executable.
+
+The game project itself is expected to be a CMake project. The engine will be added as a subdirectory in the game
+project's CMakeLists.txt. Like so,
+
+```CMake
+add_subdirectory(Automata-Engine)
 ```
-call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat" x64
-```  
-So, if you have Visual Studio installed but this repo is still giving you trouble, please note that VS should be at the location specified above.
 
-Rather unfortunately (I'm hoping to change this in the future!), you must also install Python. The engine has been tested with Python v3.10.5. Python is a dependency as some of the source tree is remotely sourced from my public gists on Github.
-
-## How
-
-At the moment, it does not make sense to build this engine without some sort of accompanying project. More specifically, this engine is a toolset for building generic GUI apps.
-
-To build a given project with the engine, simply run the build.bat within the cli\ folder.
-
-Now, before I speak on that, here is **how 
-the engine expects the directory structure to be formatted:**
+Here is **how the engine expects the directory structure to be formatted:**
 ```
 <GameFolder>
   src\
@@ -36,31 +42,28 @@ the engine expects the directory structure to be formatted:**
   res\
 ```
 
-When building a project, the engine will recursively copy the res\ folder into the \<GameFolder\>\\bin\\. Any header files are expepcted to be within include\\, and the source code, in, well, src\\
+When building a project, the engine will recursively copy the `res\` folder into the directory where the target .exe
+resides. Source files are recursively searched for within `src\`. And the include path will have `include\` added to it.
 
+Some of these folder settings are defaults and can be overridden by CMake variables. For eg. ProjectResourcesExtraPath
+can be set to copy not only from `res\`, but from some additional folder too.
 
-As promised, here's how to do the build
+### Selecting a backend
+
+Currently, Automata-Engine only supports OpenGL/CPU and for the forseeable future will only support a single backend at
+runtime. To select a backend, you must define a CMake variable `ProjectBackend` to be one of the following:
+
 ```
-cli\build.bat <backendName> <sourceDirs>
-```
-
-Above, \<backendName\> and \<sourceDirs\> are meant to be replaced.
-
-```
-<backendName> ::= "GL_BACKEND" | "DX12_BACKEND" | "CPU_BACKEND"
-
-<sourceDirs> ::= "" | '"' <relativePathList> '"'
-
-<relativePathList> ::= <term> | <term> ":" <relativePathList>
+"GL_BACKEND" | "DX12_BACKEND" | "CPU_BACKEND" | "VK_BACKEND"
 ```
 
-Above, \<term\> is a folder path, which may be relative to the root app directory. The list \<sourceDirs\> specifies to the engine where source files are located. The engine will compile all *.cpp files it can find (the engine will only search the top level directory). If \<sourceDirs\> is empty, the engine will default to searching within src\\.
-
-## Backends
+### CPU_BACKEND
 
 In the `CPU_BACKEND`, the contract between engine and app is that app must populate `gameMemory->backbufferPixels`.
 
-For `GL_BACKEND`, the engine will init window + OpenGL context. The engine manages when presentation happens, and when the application is called to update logic + make draw calls. The application calls `automata_engine::setUpdateModel()` to specify with detail how this works. Currently, `AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC` is the only supported. 
+### GL_BACKEND
+
+For `GL_BACKEND`, the engine will init window + OpenGL context. The engine manages when presentation happens, and when the application is called to update logic + make draw calls. The application calls `automata_engine::setUpdateModel()` to specify with detail how this works. Currently, `AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC` is the only supported update model.
 
 Here's how that works:
 ```C++
@@ -73,11 +76,3 @@ while (GLOBAL_RUNNING) {
   SwapBuffers();
 }
 ```
-
-In the future, the `UpdateAndRender` callback will be split into `Update` and `Render` (to support other update models). The terminology `UpdateAndRender` implicitly refers to the callback given to `ae::registerApp()`, so the actual function name may be anything.
-
-Finally, `DX12_BACKEND` is "in the works".
-
-# Some Notes
-
-The only supported target platform, currently, is Windows. This is not final, and in the future there will be many supported target platforms. The architecture of the codebase is such that these ports to other platforms can be done with ease ... (famous last words, I know).
