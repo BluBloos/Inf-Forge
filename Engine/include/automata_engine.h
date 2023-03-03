@@ -145,6 +145,9 @@ namespace automata_engine {
     // These values are used as the initial values for what they respectively represent.
     // i.e. defaultWidth is the width used to create the platform window.
 
+    /// @brief the profile used to create the platform window.
+    ///
+    /// this is used for eg. to set if the window can be resized or not.
     extern game_window_profile_t defaultWinProfile;
     /// @brief the width used to create the platform window.
     extern int32_t defaultWidth;
@@ -221,17 +224,26 @@ namespace automata_engine {
     namespace GL {
         /// @brief Clears all OpenGL error flags.
         void GLClearError();
+
         /// @brief Checks all OpenGL error flags and prints them to the console.
         /// @returns false if any error has occurred.
         bool GLCheckError(const char *, const char *, int);
+
+        /// @brief if glew is initialized.
         extern bool glewIsInit;
+
+        /// @brief initialize glew.
         void initGlew();
+
         /// @brief Returns true if the OpenGL context has been initialized by the engine.
         bool getGLInitialized();
+
         /// @brief Converts a priorly parsed .OBJ into a VAO (Vertex Array Object).
         void objToVao(raw_model_t rawModel, ibo_t *iboOut, vbo_t *vboOut, GLuint *vaoOut);
+
         /// @brief Load, compile, and upload to GPU a GLSL shader program from disk.
         GLuint createShader(const char *vertFilePath, const char *fragFilePath, const char *geoFilePath = "\0");
+
         // TODO(Noah): There's got to be a nice and clean way to get rid of the duplication
         // here with the header of the wrapper.
         /// @brief Load and upload to GPU a texture from disk. This function supports the same file formats as stbi_load.
@@ -240,16 +252,34 @@ namespace automata_engine {
             GLint minFilter = GL_LINEAR, GLint magFilter = GL_LINEAR,
             bool generateMips = true, GLint wrap = GL_CLAMP_TO_BORDER
         );
+
         /// @brief Upload to GPU a texture from memory. The pixel data must be in 0xABGR (32bpp) format.
         GLuint createTexture(
             unsigned int *pixelPointer, unsigned int width, unsigned int height,
             GLint minFilter = GL_LINEAR, GLint magFilter = GL_LINEAR,
             bool generateMips = true, GLint wrap = GL_CLAMP_TO_BORDER
         );
+
         /// @brief Helper function to set a uniform 4x4 matrix in a shader program.
         void setUniformMat4f(GLuint shader, const char *uniformName, math::mat4_t val);
+
         // TODO(Noah): is there any reason that we cannot use templates for our createAndSetupVbo?
+        /// @brief create and setup an OpenGL VBO (Vertex Buffer Object).
+        ///
+        /// This function takes a variadic list of GL::vertex_attrib_t structs. These are used to specify the layout of
+        /// the vertex data in the VBO. The layout is interpreted as the dense concatenation of the structs in memory.
+        /// For ex) ae::GL::vertex_attrib_t(GL_FLOAT, 3),
+        ///         ae::GL::vertex_attrib_t(GL_FLOAT, 2),
+        ///         ae::GL::vertex_attrib_t(GL_FLOAT, 3)
+        /// would map to the following C struct: struct { float x, y, z, u, v, nx, ny, nz;
+        /// @param counts the number of elements in the variadic argument list.
         vbo_t createAndSetupVbo(uint32_t counts, ...);
+
+        /// @brief create and setup an OpenGL VAO (Vertex Array Object).
+        ///
+        /// This function takes a variadic list of GL::vertex_attrib_desc_t structs. These are used to specify how the
+        /// VAO binds data to the shader program. i.e. this function makes calls to glVertexAttribPointer.
+        /// @param attribCounts the number of elements in the variadic argument list.
         GLuint createAndSetupVao(uint32_t attribCounts, ...);
     }
 #endif
@@ -736,6 +766,14 @@ namespace automata_engine {
             uint32_t count;
             GLuint glHandle;
         };
+
+        /// @brief A struct to describe a set of vertex attributes from a VBO.
+        ///
+        /// This is to be used with a call to createAndSetupVao.
+        /// @param attribIndex  base slot in shader to bind attributes to.
+        /// @param indices      indices of the attributes in the VBO to bind.
+        /// @param vbo          the VBO to bind the attributes from.
+        /// @param iterInstance whether or not to iterate the attributes per instance.
         struct vertex_attrib_desc_t {
             uint32_t attribIndex;
             uint32_t *indices; // stretchy buffer
