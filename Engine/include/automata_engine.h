@@ -814,10 +814,13 @@ namespace automata_engine {
 
     namespace math {
 #pragma pack(push, 4) // align on 4 bytes
+        /// @brief a struct for a 2D vector.
         struct vec2_t {
             float x, y;
         };
         struct vec4_t;
+
+        /// @brief a struct for a 3D vector.
         struct vec3_t {
             float x, y, z;
             constexpr vec3_t() : x(0), y(0), z(0) {};
@@ -827,6 +830,8 @@ namespace automata_engine {
             float &operator[](int index);
 
         };
+
+        /// @brief a struct for a 4D vector.
         struct vec4_t {
             float x, y, z, w;
             constexpr vec4_t() : x(0), y(0), z(0), w(0) {};
@@ -836,6 +841,8 @@ namespace automata_engine {
             float &operator[](int index);
         };
         struct mat4_t;
+
+        /// @brief a struct for a 3x3 matrix.
         struct mat3_t {
             union {
                 float mat[3][3];
@@ -845,6 +852,8 @@ namespace automata_engine {
             mat3_t(std::initializer_list<float>);
             mat3_t(mat4_t);
         };
+
+        /// @brief a struct for a 4x4 matrix.
         struct mat4_t {
             union {
                 float   mat[4][4];
@@ -856,9 +865,10 @@ namespace automata_engine {
         };
 #pragma pack(pop)
 
-        /// @param pos         camera is located by pos
-        /// @param scale       camera is scaled by scale
-        /// @param eulerAngles camera is rotated about its own axis by eulerAngles.
+        /// @brief a struct to define a transform.
+        /// @param pos         the position of the transform.
+        /// @param scale       the scale of the transform.
+        /// @param eulerAngles the rotation of the transform in eulerAngles.
         ///                    Euler angles apply in the following rotation order: Z, Y, X.
         struct transform_t {
             vec3_t pos;
@@ -886,10 +896,10 @@ namespace automata_engine {
         /// The extent of the box is defined by the origin and halfDim, i.e.
         /// xMin=origin.x-halfDim.x, xMax=origin.x+halfDim.x, etc.
         ///
-        /// @param origin is the center of the box.
+        /// @param origin  is the center of the box.
         /// @param halfDim is the half of the dimensions of the box.
-        /// @param min is the bottom left corner of the box.
-        /// @param max is the top right corner of the box.
+        /// @param min     is the bottom left corner of the box.
+        /// @param max     is the top right corner of the box.
         struct aabb_t {
             vec3_t origin;
             vec3_t halfDim;
@@ -902,15 +912,25 @@ namespace automata_engine {
     }
 #if defined(AUTOMATA_ENGINE_GL_BACKEND)
     namespace GL {
+
+        /// @brief A struct to describe a vertex attribute.
+        /// @param type     is the data type of the attribute.
+        /// @param count    is the number of elements in the attribute.
         struct vertex_attrib_t {
             GLenum type;
             uint32_t count;
             vertex_attrib_t(GLenum type, uint32_t count);
         };
+
+        /// @brief A wrapper struct around an OpenGL VBO (Vertex Buffer Object).
+        /// @param attribs is a stretchy buffer of vertex_attrib_t structs describing the VBO.
         struct vbo_t {
             uint32_t glHandle;
             vertex_attrib_t *attribs; // stretchy buffer
         };
+
+        /// @brief A wrapper struct around an OpenGL IBO (Index Buffer Object).
+        /// @param count    is the number of indices in the IBO.
         struct ibo_t {
             uint32_t count;
             GLuint glHandle;
@@ -920,7 +940,7 @@ namespace automata_engine {
         ///
         /// This is to be used with a call to createAndSetupVao.
         /// @param attribIndex  base slot in shader to bind attributes to.
-        /// @param indices      indices of the attributes in the VBO to bind.
+        /// @param indices      stretchy buffer of indices of the attributes in the VBO to bind.
         /// @param vbo          the VBO to bind the attributes from.
         /// @param iterInstance whether or not to iterate the attributes per instance.
         struct vertex_attrib_desc_t {
