@@ -127,6 +127,7 @@ namespace automata_engine {
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
         // Present the ImGui stuff to allow user to switch apps.
         if (super::g_renderImGui) {
+            static bool bShowDemoWindow=false;
             ImGui::Begin("AutomataEngine");
             int item_current = _currentApp;
             ImGui::Combo("App", &item_current, appTable_name, StretchyBufferCount(appTable_name));
@@ -140,7 +141,10 @@ namespace automata_engine {
             if (platform::_globalVsync != vsync) {
                 platform::setVsync(vsync);
             }
+            ImGui::Checkbox("showDemoWindow", &bShowDemoWindow);
             ImGui::End();
+
+            if (bShowDemoWindow) ImGui::ShowDemoWindow();
         }
 #endif
     }
