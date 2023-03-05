@@ -328,38 +328,29 @@ namespace automata_engine {
             // intersect the plane with the box and get back a set of intersection points.
             vec3_t planeCubeHitPoints[24];
             int planeCubeHitPointsCount=0;
-            constexpr ae::math::vec3_t faceNormals[] = {
-                // front, back, left, right, top, bottom.
-                {0.f,0.f,-1.f}, {0.f,0.f,1.f}, {-1.f,0.f,0.f}, {1.f,0.f,0.f}, {0.f,1.f,0.f}, {0.f,-1.f,0.f}
-            };
             typedef struct axis_line_info_t {
                 float x,y,z;
                 int axis; // 0=x, 1=y, 2=z.
-                int connectedFaceIndices[2];
             };
             constexpr size_t boxLineCount=12;
             // TODO: this could be faster if we pull out the candidateBox vals and make this table constexpr.
             // then just do MUL at runtime.
             const axis_line_info_t cbLines[boxLineCount] = {
-                {candidateBox.min.x,0,candidateBox.min.z,1,{0,2}}, //note y=0 doesn't matter as this is a line along Y axis.
-                {candidateBox.max.x,0,candidateBox.min.z,1,{0,3}},
-                {candidateBox.min.x,0,candidateBox.max.z,1,{1,2}},
-                {candidateBox.max.x,0,candidateBox.max.z,1,{1,3}},
-                {0,candidateBox.min.y,candidateBox.min.z,0,{0,5}},
-                {0,candidateBox.max.y,candidateBox.min.z,0,{0,4}},
-                {0,candidateBox.min.y,candidateBox.max.z,0,{1,5}},
-                {0,candidateBox.max.y,candidateBox.max.z,0,{1,4}},
-                {candidateBox.min.x,candidateBox.min.y,0,2,{2,5}},
-                {candidateBox.max.x,candidateBox.min.y,0,2,{3,5}},
-                {candidateBox.min.x,candidateBox.max.y,0,2,{2,4}},
-                {candidateBox.max.x,candidateBox.max.y,0,2,{3,4}},
+                {candidateBox.min.x,0,candidateBox.min.z,1}, //note y=0 doesn't matter as this is a line along Y axis.
+                {candidateBox.max.x,0,candidateBox.min.z,1},
+                {candidateBox.min.x,0,candidateBox.max.z,1},
+                {candidateBox.max.x,0,candidateBox.max.z,1},
+                {0,candidateBox.min.y,candidateBox.min.z,0},
+                {0,candidateBox.max.y,candidateBox.min.z,0},
+                {0,candidateBox.min.y,candidateBox.max.z,0},
+                {0,candidateBox.max.y,candidateBox.max.z,0},
+                {candidateBox.min.x,candidateBox.min.y,0,2},
+                {candidateBox.max.x,candidateBox.min.y,0,2},
+                {candidateBox.min.x,candidateBox.max.y,0,2},
+                {candidateBox.max.x,candidateBox.max.y,0,2},
             };
             for (int i=0;i<boxLineCount;i++){
                 axis_line_info_t al = cbLines[i];
-                float d1 = dot(rayDir, faceNormals[al.connectedFaceIndices[0]]);
-                float d2 = dot(rayDir, faceNormals[al.connectedFaceIndices[1]]);
-                // skip all faces facing away from the ray.
-                if (  !((d1<0)||(d2<0))  ) continue;
                 // TODO: below looks RIPE for optimization.
                 switch(al.axis){
                     case 0: // x axis
