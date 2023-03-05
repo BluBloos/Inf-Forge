@@ -361,12 +361,21 @@ namespace automata_engine {
         vec3_t lookAt(vec3_t origin, vec3_t target);
 
         /// @brief compute if the infinite ray located at rayOrigin and pointing in rayDir intersects with the AABB.
+        /// DEPRECATED. faceHitIdx is not used.
         /// @param rayDir must be normalized.
         bool doesRayIntersectWithAABB(
             const vec3_t &rayOrigin, const vec3_t &rayDir,
             const aabb_t &candidateBox, bool *exitedEarly=nullptr,
             int *faceHitIdx=nullptr
         );
+
+        /// @brief compute if the infinite ray located at rayOrigin and pointing in rayDir intersects with the AABB.
+        /// @param rayDir must be normalized.
+        bool doesRayIntersectWithAABB2(const vec3_t &rayOrigin,
+                                       const vec3_t &rayDir,
+                                       const aabb_t &candidateBox,
+                                       bool *exitedEarly = nullptr,
+                                       int *faceHitIdx = nullptr);
 
         /// @brief build a 4x4 transformation matrix from a transform_t struct.
         mat4_t buildMat4fFromTransform(transform_t trans);

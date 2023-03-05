@@ -304,6 +304,108 @@ namespace automata_engine {
                 a.x * b.y - a.y * b.x
             };
         }
+
+        bool doesRayIntersectWithAABB2(
+            const vec3_t &rayOrigin, const vec3_t &rayDir,
+            const aabb_t &candidateBox, bool *exitedEarly, int*faceHitIdx
+        ) {
+            assert(rayDir.x != 0.f || rayDir.y != 0.f || rayDir.z != 0.f);
+            // simplified version of the original function.
+            // maybe faster. maybe slower.
+
+            // how it works:
+
+            // find all planes that are "facing us". should at most be three.
+            // intersect ray with these.
+            // check if point is in bounds.
+
+            // if the ray somehow intersects two planes (hits precisely vertex of AABB),
+            // then deterministically give back some Idx to ensure no visual jitter frame-frame
+            // if a consumer were to use faceHitIdx to render something. this is to say given a constant
+            // ray, the result of this function should be temporally stable.
+
+            int potentialFaces[3]={};  //stores face Idx's.
+            int faceCount=0;
+
+            // find faces.
+            constexpr int aabbFaceCount=6;
+            constexpr ae::math::vec3_t faceNormals[] = {
+                // front, back, left, right, top, bottom.
+                {0.f,0.f,-1.f}, {0.f,0.f,1.f}, {-1.f,0.f,0.f}, {1.f,0.f,0.f}, {0.f,1.f,0.f}, {0.f,-1.f,0.f}
+            };
+            assert(sizeof(faceNormals)/sizeof(ae::math::vec3_t)==aabbFaceCount);
+            for (int i=0;i<aabbFaceCount;i++){
+                float d = dot(rayDir, faceNormals[i]);
+                if (d<0) {
+                    potentialFaces[faceCount++]=i;
+                }
+            }
+            assert(faceCount<=3);
+            assert(aabbFaceCount==6);
+
+            for (int i=0;i<faceCount;i++) {
+
+                float planeCord;
+                auto checkPointInBounds = [&](const vec3_t &p) {
+                    return p.x >= candidateBox.min.x && p.x <= candidateBox.max.x &&
+                           p.y >= candidateBox.min.y && p.y <= candidateBox.max.y &&
+                           p.z >= candidateBox.min.z && p.z <= candidateBox.max.z;
+                };
+                const int j=potentialFaces[i];
+                switch(j) {
+                    case 0: // front, back: (which Z).
+                    case 1:
+                    {
+                        planeCord = (j==0)?candidateBox.min.z:candidateBox.max.z;
+                        if (rayDir.z==0.f) continue; // TODO: maybe.
+                        float tHit = (planeCord - rayOrigin.z) / rayDir.z;
+                        if (tHit<0.f) continue;
+                        float y=rayOrigin.y + rayDir.y * tHit;
+                        float x=rayOrigin.x + rayDir.x * tHit;
+                        if (checkPointInBounds(vec3_t(x,y,planeCord))) {
+                            if (faceHitIdx) *faceHitIdx=potentialFaces[i];
+                            return true;
+                        }
+                    }
+                    break;
+                    case 2: // left, right: (which X).
+                    case 3:
+                    {
+                        planeCord = (j==2)?candidateBox.min.x:candidateBox.max.x;
+                        if (rayDir.x==0.f) continue;
+                        float tHit = (planeCord - rayOrigin.x) / rayDir.x;
+                        if (tHit<0.f) continue;
+                        float y=rayOrigin.y + rayDir.y * tHit;
+                        float z=rayOrigin.z + rayDir.z * tHit;
+                        if (checkPointInBounds(vec3_t(planeCord,y,z))) {
+                            if (faceHitIdx) *faceHitIdx=potentialFaces[i];
+                            return true;
+                        }
+                    }
+                    break;
+                    case 4: // top, bottom: (which Y).
+                    case 5:
+                    {
+                        planeCord = (j==4)?candidateBox.max.y:candidateBox.min.y;
+                        if (rayDir.y==0.f) continue;
+                        float tHit = (planeCord - rayOrigin.y) / rayDir.y;
+                        if (tHit<0.f) continue;
+                        float x=rayOrigin.x + rayDir.x * tHit;
+                        float z=rayOrigin.z + rayDir.z * tHit;
+                        if (checkPointInBounds(vec3_t(x,planeCord,z))) {
+                            if (faceHitIdx) *faceHitIdx=potentialFaces[i];
+                            return true;
+                        }
+                    }
+                    break;
+                }
+
+            }
+
+            return false;
+
+        }
+
         // TODO: Seems I made something slow. in a way, it's almost like a rube goldberg machine.
         //       it was fun, anyways.
         bool doesRayIntersectWithAABB(
