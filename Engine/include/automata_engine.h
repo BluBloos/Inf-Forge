@@ -574,6 +574,7 @@ namespace automata_engine {
         loaded_file_t readEntireFile(const char *fileName);
 
         /// @brief Writes an entire file to disk from memory.
+        /// @returns true on success, false on failure.
         bool writeEntireFile(const char *fileName, void *memory, uint32_t memorySize);
 
         /// @brief free memory allocated by readEntireFile.
