@@ -121,6 +121,7 @@ namespace automata_engine {
         struct transform_t;
         struct camera_t;
         struct aabb_t;
+        struct rect_t;
         struct vec2_t;
         struct vec3_t;
         struct vec4_t;
@@ -900,6 +901,18 @@ namespace automata_engine {
             vec3_t pos;
             vec3_t eulerAngles;
             vec3_t scale;
+        };
+
+        /// @brief a struct to define a rectangle.
+        /// @param x      is the bottom-left x position of the rectangle.
+        /// @param y      is the bottom-left y position of the rectangle.
+        /// @param width  is the width of the rectangle.
+        /// @param height is the height of the rectangle.
+        struct rect_t {
+            float x;
+            float y;
+            float width;
+            float height;
         };
 
         /// @brief a struct to define a frustrum.
