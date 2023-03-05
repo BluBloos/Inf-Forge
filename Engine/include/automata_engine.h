@@ -364,7 +364,8 @@ namespace automata_engine {
         /// @param rayDir must be normalized.
         bool doesRayIntersectWithAABB(
             const vec3_t &rayOrigin, const vec3_t &rayDir,
-            const aabb_t &candidateBox, bool *exitedEarly=nullptr
+            const aabb_t &candidateBox, bool *exitedEarly=nullptr,
+            int *faceHitIdx=nullptr
         );
 
         /// @brief build a 4x4 transformation matrix from a transform_t struct.
@@ -836,7 +837,7 @@ namespace automata_engine {
         struct vec3_t {
             float x, y, z;
             constexpr vec3_t() : x(0), y(0), z(0) {};
-            vec3_t(float, float, float);
+            constexpr vec3_t(float x, float y, float z) : x(x), y(y), z(z) {};
             vec3_t(vec4_t);
             vec3_t operator-();
             float &operator[](int index);
