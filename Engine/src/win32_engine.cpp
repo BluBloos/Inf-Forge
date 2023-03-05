@@ -236,6 +236,52 @@ inline void GetAssetsPath(_Out_writes_(pathSize) WCHAR* path, UINT pathSize)
     
 }
 
+bool ae::platform::pathExists(const char *path) {
+    // TODO: ensure path is less than MAX_PATH
+    DWORD dwAttrib = GetFileAttributesA((LPCSTR)path);
+    return (dwAttrib != INVALID_FILE_ATTRIBUTES);
+}
+
+bool ae::platform::createDirectory(const char *dirPath) {
+    // create directory
+    if (CreateDirectoryA((LPCSTR)dirPath, NULL/*TODO: curr using default security descriptor*/) ||
+        ERROR_ALREADY_EXISTS == GetLastError()) {
+        return true;
+    }
+    return false;
+}
+
+#include <Knownfolders.h>
+#include <shlobj_core.h>
+
+#include <combaseapi.h>
+
+// for multi-byte / wide string conversions.
+#include <stringapiset.h>
+
+std::string ae::platform::getAppDataPath() {
+  // TODO: for prev OS support need use another call.
+  // this only works for Windows 10, version 1709 and newer.
+  std::string r = "";
+  WCHAR *path = nullptr;
+  char path2[MAX_PATH] = {};  // TODO:
+  if (S_OK == SHGetKnownFolderPath(FOLDERID_RoamingAppData,
+                                   0,  // no flags.
+                                   NULL, (PWSTR*)&path)) {
+    // TODO: WideCharToMultiByte is failing.
+      if (WideCharToMultiByte(CP_ACP,  // TODO: codepage.
+                            0,       // no flags.
+                            path,
+                            -1,  // path is null terminated.
+                            (LPSTR)path2, MAX_PATH,
+                            NULL,  // function uses system default char.
+                            NULL   // TODO: maybe we care about this info.
+                            ))
+      r += std::string((const char *)path2) + '\\';
+  }
+  CoTaskMemFree(path);  // always (as per win32 docs).
+  return r;
+}
 
 char *ae::platform::getRuntimeExeDirPath(char *pathOut, uint32_t pathSize)
 {

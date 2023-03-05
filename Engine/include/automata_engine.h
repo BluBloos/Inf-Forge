@@ -547,11 +547,6 @@ namespace automata_engine {
         /// @brief get information about the platform window.
         game_window_info_t getWindowInfo();
 
-        /// @brief get the path to the directory the executable resides in.
-        /// @param pathOut buffer to write path to.
-        /// @param pathSize size of pathOut buffer.
-        char *getRuntimeExeDirPath(char *pathOut, uint32_t pathSize);
-
         /// Set the mouse position in client pixel coords.
         /// See https://github.com/BluBloos/Atomation/wiki for client coords definition.
         /// @param yPos y pos in client pixel coords.
@@ -583,6 +578,22 @@ namespace automata_engine {
 
         /// @brief free memory allocated by readEntireFile.
         void freeLoadedFile(loaded_file_t file);
+
+        /// @brief get the path to the directory the executable resides in.
+        /// @param pathOut buffer to write path to.
+        /// @param pathSize size of pathOut buffer.
+        char *getRuntimeExeDirPath(char *pathOut, uint32_t pathSize);
+
+        /// @brief get the path to the directory where the user's data should be stored.
+        /// on a platform like Windows for eg. this maps to %APPDATA%.
+        std::string getAppDataPath();
+
+        /// @brief check if a path exists.
+        bool pathExists(const char *path);
+
+        /// @brief create a directory at the given absolute path.
+        /// @returns false on failure, true otherwise.
+        bool createDirectory(const char *dirPath);
 
 
 // --------- [SECTION] PLATFORM AUDIO ----------------
