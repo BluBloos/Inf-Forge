@@ -523,9 +523,10 @@ namespace automata_engine {
         /// For eg. in ATOMIC update mode, this is the total `CPU -> Present-the-frame` time.
         extern float lastFrameTimeTotal;
 
-        extern bool _globalRunning;       // NOT to be set by the user.
-        extern bool _globalVsync;         // NOT to be set by the user.
-        extern int  _globalProgramResult; // NOT to be set by the user.
+        extern bool _globalRunning;                      // NOT to be set by the user.
+        extern bool _globalVsync;                        // NOT to be set by the user.
+        extern int  _globalProgramResult;                // NOT to be set by the user.
+        extern void (*_redirectedFprintf)(const char *); // NOT to be set by the user.
 
         /// @brief the update model currently in use.
         extern update_model_t GLOBAL_UPDATE_MODEL;
@@ -536,6 +537,9 @@ namespace automata_engine {
         /// This may impact for eg. the color of the text in a terminal.
         /// @param handle is one of AE_STDERR, AE_STDOUT
         void fprintf_proxy(int handle, const char *fmt, ...);
+
+        /// @brief redirect the output of fprintf_proxy to fn.
+        void redirectFprintfProxy(void (*fn)(const char *));
 
         /// @brief read an image from disk into memory using stb_image.
         ///

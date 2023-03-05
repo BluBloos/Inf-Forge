@@ -14,6 +14,13 @@
 
 namespace automata_engine {
 
+    namespace platform {
+        void (*_redirectedFprintf)(const char *) = nullptr;
+        void redirectFprintfProxy(void (*fn)(const char *)) {
+            _redirectedFprintf = fn;
+        }
+    }
+
     bool super::g_renderImGui = true;
 
     // if both are UINT32_MAX, window maximizes. else it uses the OS defined default
@@ -53,10 +60,10 @@ namespace automata_engine {
     }
 #endif
 
-    static update_model_t updateModel;
     void setUpdateModel(update_model_t newModel) {
-        updateModel = newModel;
+        platform::GLOBAL_UPDATE_MODEL = newModel;
     }
+
     loaded_image_t platform::stbImageLoad(char *fileName) {
         loaded_image_t myImage = {};
         int x, y, n;
@@ -171,4 +178,4 @@ namespace automata_engine {
             return "UNKNOWN";
         }
     }
-};
+    };  // namespace automata_engine
