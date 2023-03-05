@@ -852,8 +852,8 @@ namespace automata_engine {
         struct vec4_t {
             float x, y, z, w;
             constexpr vec4_t() : x(0), y(0), z(0), w(0) {};
-            vec4_t operator-();
-            vec4_t(float, float, float, float);
+            constexpr vec4_t(float x, float y, float z, float w) : x(x), y(y), z(z), w(w) {};
+            vec4_t operator-();            
             vec4_t(vec3_t, float);
             float &operator[](int index);
         };

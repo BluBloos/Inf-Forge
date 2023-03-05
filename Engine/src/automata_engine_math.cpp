@@ -66,8 +66,6 @@ namespace automata_engine {
         vec4_t vec4_t::operator-() {
             return vec4_t(-this->x, -this->y, -this->z, -this->w);
         }
-        vec4_t::vec4_t(float a, float b, float c, float d) :
-            x(a), y(b), z(c), w(d) {}
         vec4_t::vec4_t(vec3_t a, float b) : x(a.x), y(a.y), z(a.z), w(b) {}
         vec3_t operator+=(vec3_t &a, vec3_t b) {
             return a = vec3_t(a.x + b.x, a.y + b.y, a.z + b.z);
@@ -388,6 +386,7 @@ namespace automata_engine {
                     break;
                 }
             }
+            //assert(planeCubeHitPointsCount<=3);
             // then make rays from the rayOrigin to all the intersection points.
             // find of those rays those that give the min/max angle.
                 // the angle in this case is that of the ray and R.
