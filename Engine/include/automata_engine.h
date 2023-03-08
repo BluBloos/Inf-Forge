@@ -749,23 +749,26 @@ namespace automata_engine {
         intptr_t hInstance;
     };
 
-    /// @brief a struct representing image data loaded into memory.
-    /// @param pixelPointer pointer to contiguous chunk of memory corresponding to image pixels. Each pixel is
-    ///                     a 32 bit unsigned integer with the RGBA channels packed each as 8 bit unsigned integers.
-    ///                     This gives each channel 0->255 in possible value. Format is typically in 0xABGR order.
-    struct loaded_image_t {
-        uint32_t *pixelPointer;
-        uint32_t width;
-        uint32_t height;
-    };
-
     /// @brief a struct representing a file loaded into memory.
     /// @param contents    pointer to unparsed binary data of the loaded file
     /// @param contentSize size of the contents in bytes
     struct loaded_file_t {
-        const char *fileName;
-        void *contents;
-        int contentSize;
+      const char *fileName;
+      void *contents;
+      int contentSize;
+    };
+
+    /// @brief a struct representing image data loaded into memory.
+    /// @param pixelPointer pointer to contiguous chunk of memory corresponding to image pixels. Each pixel is
+    ///                     a 32 bit unsigned integer with the RGBA channels packed each as 8 bit unsigned integers.
+    ///                     This gives each channel 0->255 in possible value. Format is typically in 0xABGR order.
+    /// @param parentFile   internal storage for corresponding loaded_file that contains the unparsed image data.
+    ///                     This is retained so that we can ultimately free the loaded file.
+    struct loaded_image_t {
+        uint32_t *pixelPointer;
+        uint32_t width;
+        uint32_t height;
+        struct loaded_file_t parentFile;
     };
 
     /// @brief a struct representing a .WAV file loaded into memory.

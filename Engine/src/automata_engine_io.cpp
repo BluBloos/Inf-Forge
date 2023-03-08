@@ -203,6 +203,7 @@ namespace automata_engine {
     
     void freeLoadedImage(loaded_image_t img) {
       ae::platform::free(img.pixelPointer);
+      ae::platform::freeLoadedFile(img.parentFile);
     }
 
     // TODO(Noah): We probably even want unit tests for this sort of thing.

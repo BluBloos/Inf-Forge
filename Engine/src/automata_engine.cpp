@@ -65,22 +65,31 @@ namespace automata_engine {
     }
 
     loaded_image_t platform::stbImageLoad(char *fileName) {
-        loaded_image_t myImage = {};
         int x, y, n;
-        // NOTE(Noah): For now, let's avoid .jpg.
-        // seems stb image loader has troubles with a subset of .jpg,
-        // and I would rather not put any effort into determining precisely
-        // which .jpg I have.
-        unsigned char *data = stbi_load(fileName, &x, &y, &n, 0);
-        if (data != NULL) {
-            myImage.pixelPointer = (uint32_t *)data;
-            myImage.width = x;
-            myImage.height = y;
-            assert(n == 4);
-        } else {
-            // TODO(Noah): Do something intelligent in the case of failure here.
-            AELoggerError("automata_engine::platform::stbImageLoad failed");
-            assert(false);
+        int desired_channels=4;
+        loaded_image_t myImage = {};
+        loaded_file_t myFile = platform::readEntireFile(fileName);
+        if (myFile.contents) {
+            myImage.parentFile = myFile;
+            // NOTE(Noah): For now, let's avoid .jpg.
+            // seems stb image loader has troubles with a subset of .jpg,
+            // and I would rather not put any effort into determining precisely
+            // which .jpg I have.
+            
+            //unsigned char *data = stbi_load(fileName, &x, &y, &n, 0);
+            unsigned char *data = stbi_load_from_memory((stbi_uc*)myFile.contents, myFile.contentSize, &x,
+                                      &y, &n, desired_channels);
+            if (data != NULL) {
+              myImage.pixelPointer = (uint32_t *)data;
+              myImage.width = x;
+              myImage.height = y;
+              // assert(n == 4);
+            } else {
+              // TODO(Noah): Do something intelligent in the case of failure
+              // here.
+              AELoggerError("ae::platform::stbImageLoad failed");
+              assert(false);
+            }
         }
         return myImage;
     }
