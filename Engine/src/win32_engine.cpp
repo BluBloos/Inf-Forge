@@ -66,6 +66,26 @@ void ae::platform::freeLoadedFile(loaded_file_t file) {
     VirtualFree(file.contents, 0, MEM_RELEASE);
 }
 
+static void LogLastError(DWORD lastError, const char *message) {
+    char *lpMsgBuf;
+    FormatMessage(
+        // FORMAT_MESSAGE_FROM_SYSTEM     -> search the system message-table resource(s) for the requested message
+        // FORMAT_MESSAGE_ALLOCATE_BUFFER -> allocates buffer, places pointer at the address specified by lpBuffer
+        // FORMAT_MESSAGE_IGNORE_INSERTS  -> Insert sequences in the message definition such as %1 are to be
+        //                                   ignored and passed through to the output buffer unchanged.
+        FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+        NULL,
+        lastError,  // dwMessageId
+        MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+        (LPTSTR) &lpMsgBuf, // lpBuffer
+        0, // no need for nSize with FORMAT_MESSAGE_ALLOCATE_BUFFER
+        NULL // not using any insert values such as %1
+    );
+    // TODO(Noah): Remove newline character at the end of lpMsgBuf
+    AELoggerError("%s with error=%s", message, lpMsgBuf);
+    LocalFree(lpMsgBuf);
+}
+
 bool ae::platform::writeEntireFile(
     const char *fileName, void *memory, uint32_t memorySize)
 {
@@ -94,6 +114,7 @@ bool ae::platform::writeEntireFile(
 }
 
 ae::loaded_file_t ae::platform::readEntireFile(const char *fileName) {
+    AELoggerLog("Reading file: %s", fileName);
 	void *result = 0;
 	int fileSize32 = 0;
 	HANDLE fileHandle = CreateFileA(fileName, GENERIC_READ,
@@ -114,18 +135,32 @@ ae::loaded_file_t ae::platform::readEntireFile(const char *fileName) {
 				{
 					// File read succesfully!
 				}
-				else {
+				else
+                {
+                    DWORD error = GetLastError();
+                    LogLastError(error, "Could not read file");
 					VirtualFree(result, 0, MEM_RELEASE);
 					result = 0;
 				}
-			}
-		}
+			} else {
+                AELoggerError("Could not allocate memory for file %s", fileName);
+            }
+		} else {
+            DWORD error = GetLastError();
+            LogLastError(error, "Could not read file");
+        }
 		CloseHandle(fileHandle);
-	}
+	} else {
+        DWORD error = GetLastError();
+        LogLastError(error, "Could not read file");
+    }
 	ae::loaded_file_t fileResult = {};
 	fileResult.contents = result;
 	fileResult.contentSize = fileSize32;
     fileResult.fileName = fileName;
+    if (fileResult.contents) {
+        AELoggerLog("File %s read successfully", fileName);
+    }
 	return fileResult;
 }
 
@@ -178,6 +213,7 @@ static bool CreateContext(HWND windowHandle, HDC dc) {
 
     return false;
 }
+
 static void InitOpenGL(HWND windowHandle, HDC dc) {
     PIXELFORMATDESCRIPTOR desiredPixelFormat = {};
     desiredPixelFormat.nSize = sizeof(desiredPixelFormat);
@@ -1045,22 +1081,7 @@ int CALLBACK WinMain(HINSTANCE instance,
         if (windowHandle == NULL) {
             DWORD resultCode = GetLastError();
             char *lpMsgBuf;
-            FormatMessage(
-                // FORMAT_MESSAGE_FROM_SYSTEM -> search the system message-table resource(s) for the requested message
-                // FORMAT_MESSAGE_ALLOCATE_BUFFER -> allocates buffer, places pointer at the address specified by lpBuffer
-                // FORMAT_MESSAGE_IGNORE_INSERTS -> Insert sequences in the message definition such as %1 are to be
-                //   ignored and passed through to the output buffer unchanged.
-                FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-                NULL,
-                resultCode, // dwMessageId
-                MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-                (LPTSTR) &lpMsgBuf, // lpBuffer
-                0, // no need for nSize with FORMAT_MESSAGE_ALLOCATE_BUFFER
-                NULL // not using any insert values such as %1
-            );
-            // TODO(Noah): Remove newline character at the end of lpMsgBuf
-            AELoggerError("Unable to create window: %s", lpMsgBuf);
-            LocalFree(lpMsgBuf);
+            LogLastError(resultCode, "Unable to create window");
             automata_engine::platform::_globalProgramResult = -1;
             break;
         }

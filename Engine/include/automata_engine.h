@@ -696,15 +696,15 @@ namespace ae = automata_engine;
 
 /// @brief Log an error message to the console.
 #define AELoggerError(fmt, ...) \
-    (ae::platform::fprintf_proxy(ae::platform::AE_STDERR, "\033[0;31m" "[Error on line=%d in file:%s]:\n" fmt "\n" "\033[0m", __LINE__, _AUTOMATA_ENGINE_FILE_RELATIVE_, __VA_ARGS__))
+    (ae::platform::fprintf_proxy(ae::platform::AE_STDERR, "\033[0;31m" "\n[Error on line=%d in file:%s]:\n" fmt "\n" "\033[0m", __LINE__, _AUTOMATA_ENGINE_FILE_RELATIVE_, __VA_ARGS__))
 
 /// @brief Log a message to the console.
 #define AELoggerLog(fmt, ...) \
-    (ae::platform::fprintf_proxy(ae::platform::AE_STDOUT, "[Log from line=%d in file:%s]:\n" fmt "\n", __LINE__, _AUTOMATA_ENGINE_FILE_RELATIVE_, __VA_ARGS__))
+    (ae::platform::fprintf_proxy(ae::platform::AE_STDOUT, "\n[Log from line=%d in file:%s]:\n" fmt "\n", __LINE__, _AUTOMATA_ENGINE_FILE_RELATIVE_, __VA_ARGS__))
 
 /// @brief Log a warning message to the console.
 #define AELoggerWarn(fmt, ...) \
-    (ae::platform::fprintf_proxy(ae::platform::AE_STDOUT, "\033[0;93m" "[Warn on line=%d in file:%s]:\n" fmt  "\n" "\033[0m", __LINE__, _AUTOMATA_ENGINE_FILE_RELATIVE_, __VA_ARGS__))
+    (ae::platform::fprintf_proxy(ae::platform::AE_STDOUT, "\033[0;93m" "\n[Warn on line=%d in file:%s]:\n" fmt  "\n" "\033[0m", __LINE__, _AUTOMATA_ENGINE_FILE_RELATIVE_, __VA_ARGS__))
 
 /// @brief Log a message to the console without a newline.
 #define AELogger(fmt, ...) (ae::platform::fprintf_proxy(ae::platform::AE_STDOUT, fmt, __VA_ARGS__))
