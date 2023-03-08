@@ -63,7 +63,8 @@ void ae::platform::showMouse(bool show) {
 // TODO: this looks dangerous. why does loaded_file_t work
 // here without being qualified?
 void ae::platform::freeLoadedFile(loaded_file_t file) {
-    VirtualFree(file.contents, 0, MEM_RELEASE);
+    if (file.contents)
+        VirtualFree(file.contents, 0, MEM_RELEASE);
 }
 
 static void LogLastError(DWORD lastError, const char *message) {
@@ -334,7 +335,8 @@ char *ae::platform::getRuntimeExeDirPath(char *pathOut, uint32_t pathSize)
 }
 
 void automata_engine::platform::free(void *data) {
-    VirtualFree((void *)data, 0, MEM_RELEASE);
+    if (data)
+        VirtualFree((void *)data, 0, MEM_RELEASE);
 }
 
 void *automata_engine::platform::alloc(uint32_t bytes) {
