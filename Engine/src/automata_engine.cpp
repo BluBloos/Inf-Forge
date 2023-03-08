@@ -16,7 +16,7 @@ namespace automata_engine {
 
     namespace platform {
         void (*_redirectedFprintf)(const char *) = nullptr;
-        void redirectFprintfProxy(void (*fn)(const char *)) {
+        void setAdditionalLogger(void (*fn)(const char *)) {
             _redirectedFprintf = fn;
         }
     }

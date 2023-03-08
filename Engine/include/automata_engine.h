@@ -548,8 +548,8 @@ namespace automata_engine {
         /// @param handle is one of AE_STDERR, AE_STDOUT
         void fprintf_proxy(int handle, const char *fmt, ...);
 
-        /// @brief redirect the output of fprintf_proxy to fn.
-        void redirectFprintfProxy(void (*fn)(const char *));
+        /// @brief set the additional logger. fprintf_proxy will also print to fn.
+        void setAdditionalLogger(void (*fn)(const char *));
 
         /// @brief read an image from disk into memory using stb_image.
         ///
