@@ -1,4 +1,6 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.21)
+
+cmake_policy(SET CMP0126 NEW)
 
 set(ProjectName "AutomataApp" CACHE STRING "game EXE / target name")
 set(ProjectResourcesExtraPath "" CACHE STRING "absolute path to some dir with runtime game resources")
