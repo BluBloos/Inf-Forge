@@ -91,6 +91,10 @@ Index of this file:
 // NOTE: glew must always be before gl.h
 #endif
 
+// NOTE: The printf and scanf family of functions are now defined inline.
+// therefore we link otherwise XAPOBase.lib has an unresolved external symbol.
+#pragma comment(lib, "legacy_stdio_definitions.lib")
+
 // Here we trust that if PI and DEGREES_TO_RADIANS are defined that they are defined correctly.
 // TODO: we ought to implement some compile-time unit tests to ensure that this is the case.
 #if !defined(PI)
@@ -446,6 +450,9 @@ namespace automata_engine {
             return (a > b) ? a : b;
         }
 
+        /// @brief get the sign of X and return -1 or 1.
+        int sign(int x);
+
         /// @brief the functions below are various trig-related and transcendental functions.
         float atan2(float a, float b);
         float acos(float a);
@@ -696,15 +703,15 @@ namespace ae = automata_engine;
 
 /// @brief Log an error message to the console.
 #define AELoggerError(fmt, ...) \
-    (ae::platform::fprintf_proxy(ae::platform::AE_STDERR, "\033[0;31m" "\n[Error on line=%d in file:%s]:\n" fmt "\n" "\033[0m", __LINE__, _AUTOMATA_ENGINE_FILE_RELATIVE_, __VA_ARGS__))
+    (ae::platform::fprintf_proxy(ae::platform::AE_STDERR, "\033[0;31m" "\n[error] on line=%d in file=%s\n" fmt "\n" "\033[0m", __LINE__, _AUTOMATA_ENGINE_FILE_RELATIVE_, __VA_ARGS__))
 
 /// @brief Log a message to the console.
 #define AELoggerLog(fmt, ...) \
-    (ae::platform::fprintf_proxy(ae::platform::AE_STDOUT, "\n[Log from line=%d in file:%s]:\n" fmt "\n", __LINE__, _AUTOMATA_ENGINE_FILE_RELATIVE_, __VA_ARGS__))
+    (ae::platform::fprintf_proxy(ae::platform::AE_STDOUT, "\n[log] from line=%d in file:%s\n" fmt "\n", __LINE__, _AUTOMATA_ENGINE_FILE_RELATIVE_, __VA_ARGS__))
 
 /// @brief Log a warning message to the console.
 #define AELoggerWarn(fmt, ...) \
-    (ae::platform::fprintf_proxy(ae::platform::AE_STDOUT, "\033[0;93m" "\n[Warn on line=%d in file:%s]:\n" fmt  "\n" "\033[0m", __LINE__, _AUTOMATA_ENGINE_FILE_RELATIVE_, __VA_ARGS__))
+    (ae::platform::fprintf_proxy(ae::platform::AE_STDOUT, "\033[0;93m" "\n[warn] on line=%d in file:%s\n" fmt  "\n" "\033[0m", __LINE__, _AUTOMATA_ENGINE_FILE_RELATIVE_, __VA_ARGS__))
 
 /// @brief Log a message to the console without a newline.
 #define AELogger(fmt, ...) (ae::platform::fprintf_proxy(ae::platform::AE_STDOUT, fmt, __VA_ARGS__))

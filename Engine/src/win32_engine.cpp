@@ -720,10 +720,10 @@ public:
 private:
     // Registration properties defining this xAPO class.
     static XAPO_REGISTRATION_PROPERTIES m_regProps;
-    WORD m_uChannels;
-    WORD m_uBytesPerSample;
+    //WORD m_uChannels;
+    //WORD m_uBytesPerSample;
     // Format of the audio we're processing
-    WAVEFORMATEX    m_wfx;
+    WAVEFORMATEX m_wfx = {};
     void *m_pContext;
     intptr_t m_voiceHandle;
 };
@@ -906,7 +906,8 @@ ae::game_window_info_t automata_engine::platform::getWindowInfo() {
     RECT rect;
     if (GetClientRect(globalWin32Handle, &rect)) {
         winInfo.width = rect.right - rect.left;
-        winInfo.height = fabs(rect.top - rect.bottom);
+        int signedHeight = rect.top - rect.bottom;
+        winInfo.height = ae::math::sign(signedHeight) * signedHeight;
     }
     return winInfo;
 }
@@ -992,7 +993,7 @@ int CALLBACK WinMain(HINSTANCE instance,
 #if !defined(AUTOMATA_ENGINE_DISABLE_PLATFORM_LOGGING)
     {
         int hConHandle;
-        intptr_t lStdHandle;
+        //intptr_t lStdHandle;
         CONSOLE_SCREEN_BUFFER_INFO coninfo;
         FILE *fp;
 
@@ -1082,7 +1083,6 @@ int CALLBACK WinMain(HINSTANCE instance,
         // TODO(Noah): Can abstract this type of windows error print code.
         if (windowHandle == NULL) {
             DWORD resultCode = GetLastError();
-            char *lpMsgBuf;
             LogLastError(resultCode, "Unable to create window");
             automata_engine::platform::_globalProgramResult = -1;
             break;

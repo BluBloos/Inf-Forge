@@ -175,8 +175,8 @@ namespace automata_engine {
             // Colors in .bmp are stored as ARGB (MSB -> LSB), i.e. 0xAARRGGBB
             // below code to convert to 0xRRGGBBAA.
             unsigned int *SourceDest = bitmap.pixelPointer;
-            for (int y = 0; y < bitmap.height; ++y) {
-              for (int x = 0; x < bitmap.width; ++x) {
+            for (uint32_t y = 0; y < bitmap.height; ++y) {
+              for (uint32_t x = 0; x < bitmap.width; ++x) {
                 unsigned int pixel_val = *SourceDest;
                 unsigned int R = (pixel_val >> 16) & 0x000000FF;
                 unsigned int G = (pixel_val >> 8) & 0x000000FF;

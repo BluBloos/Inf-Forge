@@ -254,6 +254,11 @@ namespace automata_engine {
         float dot(vec3_t a, vec3_t b) {
             return a.x * b.x + a.y * b.y + a.z * b.z;
         }
+        int sign(int x) {
+            // NOTE: this is branchless. that makes it fast because branch prediction is expensive to fail.
+            // TODO: how does branch prediction work?
+            return (x > 0) - (x < 0);
+        }
         float round(float a) {
             return std::round(a);
         }
@@ -280,7 +285,7 @@ namespace automata_engine {
             return std::ceil(a);
         }
         float floor(float a) {
-            return int64_t(a);
+            return float(int64_t(a));
         }
         float deg2rad(float deg) {
             return deg * DEGREES_TO_RADIANS;
@@ -433,7 +438,7 @@ namespace automata_engine {
             typedef struct axis_line_info_t {
                 float x,y,z;
                 int axis; // 0=x, 1=y, 2=z.
-            };
+            } axis_line_info_t;
             constexpr size_t boxLineCount=12;
             // TODO: this could be faster if we pull out the candidateBox vals and make this table constexpr.
             // then just do MUL at runtime.
