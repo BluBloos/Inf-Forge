@@ -293,12 +293,15 @@ namespace automata_engine {
 #endif
 
     namespace timing {
-        /// @brief Get a high resolution (<1us) time stamp that can be used for time-interval measurements.
-        // the units of time returned are in seconds.
-        float wallClock();
+
+        /// @brief Get the frequency of the timer in ticks.
+        uint64_t getTimerFrequency();
+        
+        /// @brief Get a high resolution (<1us) time stamp that can be used for time-interval measurements. The units of time returned are in ticks.
+        uint64_t wallClock();
 
         /// @brief same as wallClock but the time stamp is relative to the beginning of time for this application.
-        float epoch();
+        uint64_t epoch();
     }
 
 // TODO(Noah): Is there any way to expose member funcs for our math stuff

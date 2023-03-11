@@ -912,17 +912,18 @@ ae::game_window_info_t automata_engine::platform::getWindowInfo() {
     return winInfo;
 }
 
-LARGE_INTEGER g_epochCounter;
+LARGE_INTEGER g_epochCounter = {};
 
-float ae::timing::epoch() {
+uint64_t ae::timing::getTimerFrequency() { return g_PerfCountFrequency64; }
+
+uint64_t ae::timing::epoch() {
     LARGE_INTEGER counter = Win32GetWallClock();
-    return Win32GetSecondsElapsed(g_epochCounter, counter, g_PerfCountFrequency64);
+    return counter.QuadPart - g_epochCounter.QuadPart;
 }
 
-float ae::timing::wallClock() {
+uint64_t ae::timing::wallClock() {
     LARGE_INTEGER counter = Win32GetWallClock();
-    float Result = float(counter.QuadPart) / g_PerfCountFrequency64;
-	return (Result);
+    return counter.QuadPart;
 }
 
 void automata_engine::platform::fprintf_proxy(int h, const char *fmt, ...) {
