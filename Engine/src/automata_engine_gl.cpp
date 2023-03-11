@@ -44,7 +44,7 @@ namespace automata_engine {
                 char *message = (char *)automata_engine::platform::alloc(length * sizeof(char));
                 if (message != NULL) {
                     glGetShaderInfoLog(id, length, &length, message);
-                    AELoggerError("Failed to comile shader!\n");
+                    AELoggerError("Failed to compile shader!\n");
                     AELoggerError("%s\n", message);
                     automata_engine::platform::free(message);
                 }
