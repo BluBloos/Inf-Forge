@@ -294,6 +294,7 @@ namespace automata_engine {
 
     namespace timing {
         /// @brief Get a high resolution (<1us) time stamp that can be used for time-interval measurements.
+        // the units of time returned are in seconds.
         float wallClock();
 
         /// @brief same as wallClock but the time stamp is relative to the beginning of time for this application.
