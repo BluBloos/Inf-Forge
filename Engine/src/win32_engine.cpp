@@ -388,10 +388,12 @@ void ae::platform::getGpuInfos(gpu_info_t *pInfo, uint32_t numGpus)
 
 void ae::platform::freeGpuInfos(gpu_info_t *pInfo, uint32_t numGpus)
 {
-    for (uint32_t i = 0; i < numGpus; i++) { ((IDXGIAdapter3 *)pInfo[i].adapter)->Release(); }
+    for (uint32_t i = 0; i < numGpus; i++) {
+        if (pInfo[i].adapter) ((IDXGIAdapter3 *)pInfo[i].adapter)->Release();
+    }
 }
 
-size_t ae::platform::getGpuAvailableMemory(intptr_t gpuAdapter)
+size_t ae::platform::getGpuCurrentMemoryUsage(intptr_t gpuAdapter)
 {
     IDXGIAdapter3               *dxgiAdapter = (IDXGIAdapter3 *)gpuAdapter;
     DXGI_QUERY_VIDEO_MEMORY_INFO info        = {};
@@ -399,11 +401,12 @@ size_t ae::platform::getGpuAvailableMemory(intptr_t gpuAdapter)
                     // TODO:
                     0,
                     DXGI_MEMORY_SEGMENT_GROUP_LOCAL,  // local is the dedicated VRAM.
-                    &info))
-    // TODO: implement error checking if this does not work.
-    {
+                    &info)) {
         return info.CurrentUsage;
     }
+    // TODO: implement error checking if above does not work.
+    assert(false);
+    return 0;
 }
 
 static ae::user_input_t globalUserInput = {};

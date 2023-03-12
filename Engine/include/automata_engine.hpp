@@ -630,9 +630,9 @@ namespace automata_engine {
         /// @param numGpus 
         void freeGpuInfos(gpu_info_t *pInfo, uint32_t numGpus);
 
-        /// @brief  get the current available dedicated video memory for a GPU.
+        /// @brief  get the current dedicated video memory usage for a GPU.
         /// @param gpuAdapter the GPU to get the memory for.
-        size_t getGpuAvailableMemory(intptr_t gpuAdapter);
+        size_t getGpuCurrentMemoryUsage(intptr_t gpuAdapter);
 
 
 // --------- [SECTION] PLATFORM AUDIO ----------------
