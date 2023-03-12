@@ -76,6 +76,7 @@ Index of this file:
 #include <iterator>
 #include <string>
 #include <initializer_list>
+#include <mutex>
 
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
 #include <imgui.h>
@@ -766,13 +767,28 @@ namespace automata_engine {
     /// @param isInitialized this is a boolean used by the game to note that
     ///                      the memory is in a valid state, where "valid" is defined by we (the game).
     struct game_memory_t {
-        void *data;
+        // TODO: data may be written to from multiple threads.
+        void    *data;
         uint32_t dataBytes;
-        bool isInitialized;
+
         /// @brief the fields below are for CPU_BACKEND.
-        uint32_t *backbufferPixels;
-        uint32_t backbufferWidth;
-        uint32_t backbufferHeight;
+        uint32_t  *backbufferPixels;
+        uint32_t   backbufferWidth;
+        uint32_t   backbufferHeight;
+        std::mutex m_mutex;
+        void       setInitialized(bool newVal)
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            isInitialized = newVal;
+        }
+        bool getInitialized()
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            return isInitialized;
+        }
+
+    private:
+        bool isInitialized=false;
     };
 
     /// @brief a struct representing information about a window.

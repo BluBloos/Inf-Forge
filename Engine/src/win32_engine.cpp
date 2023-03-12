@@ -24,6 +24,10 @@
 #include <shellscalingapi.h>
 #include <shtypes.h>
 
+#include <timeapi.h> // for timeBeginPeriod.
+
+#pragma comment(lib, "Winmm.lib")
+
 #define MAX_CONSOLE_LINES 500
 
 static HWND globalWin32Handle = NULL;
@@ -625,6 +629,7 @@ LRESULT CALLBACK Win32WindowProc(HWND window,
                 AELoggerLog("WARN: (GameHandleWindowResize == nullptr) OR\n"
                     "(g_gameMemory.data == nullptr)");
             }
+            Win32ResizeBackbuffer(&globalBackBuffer, width,height);
         } break;
         
         case WM_PAINT: {
@@ -1046,6 +1051,9 @@ int CALLBACK WinMain(HINSTANCE instance,
 
     g_epochCounter = Win32GetWallClock();
 
+    UINT DesiredSchedularGranularity = 1;
+	bool SleepGranular = (timeBeginPeriod(DesiredSchedularGranularity) == TIMERR_NOERROR);
+
     // NOTE(Noah): There is a reason that when you read C code, all the variables are defined
     // at the top of the function. I'm just guessing here, but maybe back in the day people
     // liked to use "goto" a lot. It's a dangerous play because you might skip over the initialization
@@ -1056,7 +1064,7 @@ int CALLBACK WinMain(HINSTANCE instance,
     WNDCLASS windowClass = {};
 
     // Before doing ANYTHING, we alloc memory.
-    g_gameMemory.isInitialized = false;
+    g_gameMemory.setInitialized(false);
     g_gameMemory.dataBytes = 67108864;
     g_gameMemory.data =
         automata_engine::platform::alloc(g_gameMemory.dataBytes); // will allocate 64 MB
@@ -1178,13 +1186,12 @@ int CALLBACK WinMain(HINSTANCE instance,
         UpdateWindow(windowHandle);
 
         // Create the globalBackBuffer
-    #if defined(AUTOMATA_ENGINE_CPU_BACKEND)
         {
             ae::game_window_info_t winInfo =
                 automata_engine::platform::getWindowInfo();
             Win32ResizeBackbuffer(&globalBackBuffer, winInfo.width, winInfo.height);
         }
-    #endif
+
 
         // Register mouse for raw input capture
         RAWINPUTDEVICE Rid[1];
@@ -1313,55 +1320,92 @@ int CALLBACK WinMain(HINSTANCE instance,
             }
     #endif
 
-            auto gameUpdateAndRender = automata_engine::bifrost::getCurrentApp();
-            if (gameUpdateAndRender != nullptr) {
-                gameUpdateAndRender(&g_gameMemory);
+            static bool bRenderFallbackFirstTime = true;
+            bool        bRenderFallback          = false;
+            if (g_gameMemory.getInitialized()) {
+                auto gameUpdateAndRender = automata_engine::bifrost::getCurrentApp();
+                if ((gameUpdateAndRender != nullptr)) {
+                    gameUpdateAndRender(&g_gameMemory);
+                } else {
+                    AELoggerLog("WARN: gameUpdateAndRender == nullptr");
+                }
+                bRenderFallback = false;
             } else {
-                AELoggerLog("WARN: gameUpdateAndRender == nullptr");
+                // Fallback (i.e. Automata Engine loading scene).
+                bRenderFallback = true;
+
+                // TODO: for now gonna render a solid white color to the entire backbuffer.
+                uint32_t *pp = (uint32_t *)globalBackBuffer.memory;
+                for (uint32_t y = 0; y < globalBackBuffer.height; y++) {
+                    for (uint32_t x = 0; x < globalBackBuffer.width; x++) { *(pp + x) = 0xFFFFFFFF; }
+                    pp += globalBackBuffer.width;
+                }
+
+                if (bRenderFallbackFirstTime) {}
+
+                bRenderFallbackFirstTime = false;
             }
 
-    #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
-                ImGui::Render();
-    #if defined(AUTOMATA_ENGINE_GL_BACKEND)
-                ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-    #endif
-    #endif
+#if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
+            ImGui::Render();
+#if defined(AUTOMATA_ENGINE_GL_BACKEND)
+            ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+#endif
+#endif
 
             {
-                LARGE_INTEGER WorkCounter = Win32GetWallClock();
-                float WorkSecondsElapsed =
-                    Win32GetSecondsElapsed(LastCounter, WorkCounter, g_PerfCountFrequency64);
+                LARGE_INTEGER WorkCounter   = Win32GetWallClock();
+                float WorkSecondsElapsed    = Win32GetSecondsElapsed(LastCounter, WorkCounter, g_PerfCountFrequency64);
                 ae::platform::lastFrameTime = WorkSecondsElapsed;
             }
 
-    #if defined(AUTOMATA_ENGINE_GL_BACKEND)
+#if defined(AUTOMATA_ENGINE_GL_BACKEND)
             if (ae::platform::GLOBAL_UPDATE_MODEL == ae::AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC) {
-                glFlush(); // push all buffered commands to GPU
-                glFinish(); // block until GPU is complete
+                glFlush();   // push all buffered commands to GPU
+                glFinish();  // block until GPU is complete
             }
             SwapBuffers(gHdc);
-    #endif
+#endif
 
-            // TODO(Noah): for CPU backend, add sleep if vsync = ON.
-            // and I suppose figure out how to sync with the monitor?
-    #if defined(AUTOMATA_ENGINE_CPU_BACKEND)
-            // NOTE(Noah): Here we are going to call our custom windows platform layer function that
-            // will write our custom buffer to the screen.
-            HDC deviceContext = GetDC(windowHandle);
-            ae::game_window_info_t winInfo =
-                automata_engine::platform::getWindowInfo();
-            Win32DisplayBufferWindow(deviceContext, winInfo);
-            ReleaseDC(windowHandle, deviceContext);
-    #endif  
-
+            static constexpr float TargetSecondsElapsedPerFrame = 1 / 60.f;
             {
+                LARGE_INTEGER WorkCounter = Win32GetWallClock();
+                float WorkSecondsElapsed  = Win32GetSecondsElapsed(LastCounter, WorkCounter, g_PerfCountFrequency64);
+
+                float SecondsElapsedForFrame = WorkSecondsElapsed;
+                if (SecondsElapsedForFrame < TargetSecondsElapsedPerFrame) {
+                    if (SleepGranular && ae::platform::_globalVsync) {
+                        DWORD SleepMS = (DWORD)(1000.0f * (TargetSecondsElapsedPerFrame - WorkSecondsElapsed));
+                        if (SleepMS > 0) { Sleep(SleepMS); }
+                    }
+                    while ((SecondsElapsedForFrame < TargetSecondsElapsedPerFrame) && ae::platform::_globalVsync) {
+                        SecondsElapsedForFrame =
+                            Win32GetSecondsElapsed(LastCounter, Win32GetWallClock(), g_PerfCountFrequency64);
+                    }
+                } else {
+                    AELoggerWarn("missed target framerate!");
+                }
+
                 LARGE_INTEGER EndCounter = Win32GetWallClock();
-                float TotalFrameTime =
+                ae::platform::lastFrameTimeTotal =
                     (Win32GetSecondsElapsed(LastCounter, EndCounter, g_PerfCountFrequency64));
-                ae::platform::lastFrameTimeTotal = TotalFrameTime;
                 LastCounter = EndCounter;
             }
 
+            // TODO(Noah): for CPU backend, add sleep if vsync = ON.
+            // and I suppose figure out how to sync with the monitor?
+            bool bCpuBackendEnabled = false;
+#if defined(AUTOMATA_ENGINE_CPU_BACKEND)
+            bCpuBackendEnabled = true;
+#endif
+            if (bCpuBackendEnabled || bRenderFallback) {
+                // NOTE(Noah): Here we are going to call our custom windows platform layer function that
+                // will write our custom buffer to the screen.
+                HDC                    deviceContext = GetDC(windowHandle);
+                ae::game_window_info_t winInfo       = automata_engine::platform::getWindowInfo();
+                Win32DisplayBufferWindow(deviceContext, winInfo);
+                ReleaseDC(windowHandle, deviceContext);
+            }
         }
 
     } while(0); // WinMainEnd
