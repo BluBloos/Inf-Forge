@@ -1037,6 +1037,126 @@ void automata_engine::platform::fprintf_proxy(int h, const char *fmt, ...)
     if (automata_engine::platform::_redirectedFprintf) { automata_engine::platform::_redirectedFprintf(_buf); }
 }
 
+// TODO: back into .EXE
+static ae::loaded_image_t g_engineLogo = {};
+
+static int FloatToInt(float Value)
+{
+    //TODO: Intrisnic
+    //apparently there is a lot more complexity than just this.
+    int Result = (int)(Value + 0.5f);
+    if (Value < 0.0f) { Result = (int)(Value - 0.5f); }
+    return Result;
+}
+
+static void DrawBitmapScaled(win32_backbuffer_t *buffer,
+    ae::loaded_image_t                           Bitmap,
+    float                                        RealMinX,
+    float                                        RealMaxX,
+    float                                        RealMinY,
+    float                                        RealMaxY,
+    unsigned int                                 Scalar)
+{
+    if (Scalar < 0.f) return;
+    float DrawHeight = (RealMaxY - RealMinY) / (float)Scalar;
+    RealMaxY         = RealMinY + DrawHeight;
+
+    int MinX = FloatToInt(RealMinX);
+    int MaxX = FloatToInt(RealMaxX);
+    int MinY = FloatToInt(RealMinY);
+    int MaxY = FloatToInt(RealMaxY);
+
+    unsigned int PitchShift = 0;
+    unsigned int PixelShift = 0;
+
+    if (MaxX > buffer->width) { MaxX = buffer->width; }
+
+    if ((MinY + (int)Bitmap.height) < MaxY) { MaxY = MinY + Bitmap.height; }
+
+    if ((MinX + (int)Bitmap.width * (int)Scalar) < MaxX) { MaxX = MinX + Bitmap.width * (int)Scalar; }
+
+    int MaxDrawY = (MaxY - MinY) * (int)Scalar + MinY;
+    if (MaxDrawY > buffer->height) { MaxY = (buffer->height - MinY) / (int)Scalar + MinY; }
+
+    if (MinX < 0) {
+        PixelShift = (unsigned int)ae::math::abs((float)MinX / (float)Scalar);
+        MinX       = 0;
+    }
+
+    if (MinY < 0) {
+        PitchShift = (unsigned int)ae::math::abs((float)MinY / (float)Scalar);
+        MaxY += FloatToInt(ae::math::abs((float)MinY / (float)Scalar));
+        MinY = 0;
+    }
+
+    unsigned char *Row = ((unsigned char *)buffer->memory) + MinX * buffer->bytesPerPixel + MinY * buffer->pitch;
+
+    unsigned int *SourceRow = Bitmap.pixelPointer + Bitmap.width * (Bitmap.height - 1 - PitchShift) + PixelShift;
+    int           Counter   = 1;
+
+    for (int Y = MinY; Y < MaxY; ++Y) {
+        unsigned int *Pixel       = (unsigned int *)Row;
+        unsigned int *SourcePixel = SourceRow;
+        for (int X = MinX; X < MaxX; ++X) {
+            if ((*SourcePixel >> 24) & 1) {
+                *Pixel = *SourcePixel;
+                for (unsigned int j = 1; j < (int)Scalar; j++) {
+                    unsigned int *PixelBelow = Pixel + buffer->width * j;
+                    *PixelBelow              = *SourcePixel;
+                }
+            }
+
+            Pixel++;
+
+            if (Counter % (int)Scalar == 0) { SourcePixel += 1; }
+            Counter++;
+        }
+
+        SourceRow -= Bitmap.width;
+        Row     = Row + buffer->pitch * (int)Scalar;
+        Counter = 1;
+    }
+}
+
+// for drawing images loaded from .BMP
+static void DrawBitmap(win32_backbuffer_t *buffer,
+    ae::loaded_image_t                     Bitmap,
+    float                                  RealMinX,
+    float                                  RealMaxX,
+    float                                  RealMinY,
+    float                                  RealMaxY)
+{
+    int MinX = FloatToInt(RealMinX);
+    int MaxX = FloatToInt(RealMaxX);
+    int MinY = FloatToInt(RealMinY);
+    int MaxY = FloatToInt(RealMaxY);
+
+    if (MinX < 0) { MinX = 0; }
+    if (MinY < 0) { MinY = 0; }
+    if (MaxX > buffer->width) { MaxX = buffer->width; }
+    if (MaxY > buffer->height) { MaxY = buffer->height; }
+    if (MinX + (int)Bitmap.width < MaxX) { MaxX = MinX + Bitmap.width; }
+    if (MinY + (int)Bitmap.height < MaxY) { MaxY = MinY + Bitmap.height; }
+
+    unsigned char *Row = ((unsigned char *)buffer->memory) + MinX * buffer->bytesPerPixel + MinY * buffer->pitch;
+
+    unsigned int *SourceRow = (unsigned int *)Bitmap.pixelPointer + Bitmap.width * (Bitmap.height - 1);
+    for (int Y = MinY; Y < MaxY; ++Y) {
+        unsigned int *Pixel       = (unsigned int *)Row;
+        unsigned int *SourcePixel = SourceRow;
+        for (int X = MinX; X < MaxX; ++X) {
+            if ((*SourcePixel >> 24) & 1) { *Pixel = *SourcePixel; }
+            Pixel++;
+            SourcePixel += 1;
+        }
+        SourceRow -= Bitmap.width;
+        Row += buffer->pitch;
+    }
+}
+
+static ae::loaded_wav_t g_engineSound = {};
+static intptr_t         g_engineVoice = {};
+
 int CALLBACK WinMain(HINSTANCE instance,
   HINSTANCE prevInstance,
   LPSTR cmdLine,
@@ -1057,6 +1177,10 @@ int CALLBACK WinMain(HINSTANCE instance,
 
     UINT DesiredSchedularGranularity = 1;
 	bool SleepGranular = (timeBeginPeriod(DesiredSchedularGranularity) == TIMERR_NOERROR);
+
+    // load the engine logo.
+    g_engineLogo = ae::platform::stbImageLoad("logo.png");
+    defer(ae::io::freeLoadedImage(g_engineLogo));
 
     // NOTE(Noah): There is a reason that when you read C code, all the variables are defined
     // at the top of the function. I'm just guessing here, but maybe back in the day people
@@ -1259,6 +1383,11 @@ int CALLBACK WinMain(HINSTANCE instance,
             g_xa2Buffer.pContext = (void *)&g_gameMemory;
         }
 
+        // load the engine sound.
+        g_engineSound = ae::io::loadWav("engine.wav"); // TODO: Actually make this asset copy via the CMake.
+        defer(ae::io::freeWav(g_engineSound));
+        g_engineVoice = ae::platform::createVoice();
+
         if (GameInit != nullptr) {
             GameInit(&g_gameMemory);
         } else {
@@ -1293,6 +1422,7 @@ int CALLBACK WinMain(HINSTANCE instance,
 
 
         LARGE_INTEGER LastCounter = Win32GetWallClock();
+        LARGE_INTEGER IntroCounter = Win32GetWallClock();
 
         // TODO(Noah):
         // add stalling in the CPU model (i.e. the engine does not call game update)
@@ -1317,8 +1447,21 @@ int CALLBACK WinMain(HINSTANCE instance,
                 }
             }
 
+            static bool            bEngineIntroOver    = false;
+            static constexpr float engineIntroDuration = 4.f;
+
+            // is engine intro over?
+            float introElapsed;
+            if (!bEngineIntroOver) {
+                if (engineIntroDuration < (introElapsed=Win32GetSecondsElapsed(IntroCounter, Win32GetWallClock(), g_PerfCountFrequency64))) {
+                    bEngineIntroOver = true;
+                }
+            }
+
+            bool bAppOkNow = g_gameMemory.getInitialized() && bEngineIntroOver;
+
     #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
-            if (isImGuiInitialized) {
+            if (isImGuiInitialized && bAppOkNow) {
     #if defined(AUTOMATA_ENGINE_GL_BACKEND)
                 ImGui_ImplOpenGL3_NewFrame();
     #endif
@@ -1329,34 +1472,73 @@ int CALLBACK WinMain(HINSTANCE instance,
 
             static bool bRenderFallbackFirstTime = true;
             bool        bRenderFallback          = false;
-            if (g_gameMemory.getInitialized()) {
+            if (bAppOkNow) {
                 auto gameUpdateAndRender = automata_engine::bifrost::getCurrentApp();
                 if ((gameUpdateAndRender != nullptr)) {
                     gameUpdateAndRender(&g_gameMemory);
                 } else {
                     AELoggerLog("WARN: gameUpdateAndRender == nullptr");
                 }
-                bRenderFallback = false;
             } else {
                 // Fallback (i.e. Automata Engine loading scene).
                 bRenderFallback = true;
 
+                if (bRenderFallbackFirstTime) {
+                    IntroCounter = Win32GetWallClock();
+                    srand(automata_engine::timing::wallClock());
+                    ae::platform::voiceSubmitBuffer(g_engineVoice, g_engineSound);
+                    ae::platform::voicePlayBuffer(g_engineVoice);
+                }
+
                 // TODO: for now gonna render a solid white color to the entire backbuffer.
                 uint32_t *pp = (uint32_t *)globalBackBuffer.memory;
                 for (uint32_t y = 0; y < globalBackBuffer.height; y++) {
-                    for (uint32_t x = 0; x < globalBackBuffer.width; x++) { *(pp + x) = 0xFFFFFFFF; }
+                    for (uint32_t x = 0; x < globalBackBuffer.width; x++) { *(pp + x) = 0; }
                     pp += globalBackBuffer.width;
                 }
 
-                if (bRenderFallbackFirstTime) {}
+                if (!bRenderFallbackFirstTime) {
+                    // draw the logo in the middle and scale over time.
+                    uint32_t scaleFactor     = (1.0f) + 4.f * ae::math::sqrt(introElapsed);
+                    float    scaledImgWidth  = g_engineLogo.width * scaleFactor;
+                    float    scaledImgHeight = g_engineLogo.height * scaleFactor;
+
+                    // TODO: factor out.
+                    auto RandomUINT32 = [](uint32_t lower, uint32_t upper) {
+                        assert(upper >= lower);
+                        if (upper == lower) return upper;
+                        uint64_t diff = upper - lower;
+                        assert((uint32_t)RAND_MAX >= diff);
+                        return (uint32_t)((uint64_t)rand() % (diff + 1) + (uint64_t)lower);
+                    };
+
+                    float offsetX = (introElapsed > 0.9f) ? (int)RandomUINT32(0, 100) - 50 : 0;
+                    float offsetY = (introElapsed > 0.9f) ? (int)RandomUINT32(0, 100) - 50 : 0;
+
+                    offsetX /= (0.1f + introElapsed * 2.f);
+                    offsetY /= (0.1f + introElapsed * 2.f);
+
+                    float posX = offsetX + globalBackBuffer.width / 2.f - scaledImgWidth / 2.f;
+                    float posY = offsetY + globalBackBuffer.height / 2.f - scaledImgHeight / 2.f;
+
+                    DrawBitmapScaled(&globalBackBuffer,
+                        g_engineLogo,
+                        posX,
+                        posX + scaledImgWidth,
+                        posY,
+                        posY + scaledImgHeight,
+                        scaleFactor);
+                }
 
                 bRenderFallbackFirstTime = false;
             }
 
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
-            ImGui::Render();
+            if (isImGuiInitialized && bAppOkNow) {
+                ImGui::Render();
 #if defined(AUTOMATA_ENGINE_GL_BACKEND)
-            ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+                ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+            }
 #endif
 #endif
 
@@ -1367,11 +1549,13 @@ int CALLBACK WinMain(HINSTANCE instance,
             }
 
 #if defined(AUTOMATA_ENGINE_GL_BACKEND)
-            if (ae::platform::GLOBAL_UPDATE_MODEL == ae::AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC) {
-                glFlush();   // push all buffered commands to GPU
-                glFinish();  // block until GPU is complete
+            if (!bRenderFallback) {
+                if (ae::platform::GLOBAL_UPDATE_MODEL == ae::AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC) {
+                    glFlush();   // push all buffered commands to GPU
+                    glFinish();  // block until GPU is complete
+                }
+                SwapBuffers(gHdc);
             }
-            if (!bRenderFallback) {SwapBuffers(gHdc);}
 #endif
 
             static constexpr float TargetSecondsElapsedPerFrame = 1 / 60.f;
