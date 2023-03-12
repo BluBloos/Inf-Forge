@@ -1,4 +1,6 @@
-#include <automata_engine.h>
+
+#define NC_STR_IMPL
+#include <automata_engine.hpp>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h" 

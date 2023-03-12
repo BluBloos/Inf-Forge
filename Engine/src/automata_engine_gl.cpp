@@ -1,4 +1,4 @@
-#include <automata_engine.h>
+#include <automata_engine.hpp>
 #include <cstdarg>
 
 // TODO(Noah): impl dealloc unfunction for vbo_t

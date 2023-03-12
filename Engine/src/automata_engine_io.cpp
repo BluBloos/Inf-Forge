@@ -1,7 +1,6 @@
-#include <automata_engine.h>
+#include <automata_engine.hpp>
 
-#define NC_STR_IMPL
-#include <gist/github/nc_strings.h>
+#include <automata_engine_utils.hpp>
 
 #define STB_DS_IMPLEMENTATION
 #include "stb_ds.h"

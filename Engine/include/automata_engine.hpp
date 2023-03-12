@@ -67,10 +67,7 @@ Index of this file:
 
 #pragma once
 
-// TODO: Cleanup this gist stuff.
-#include <gist/github/nc_types.h>
-#include <gist/github/nc_defer.h>
-#include <gist/github/nc_stretchy_buffers.h>
+#include <automata_engine_utils.hpp>
 
 #include <functional>
 // TODO: We need to check cases where we assert but ought to replace with runtime logic.
@@ -108,6 +105,7 @@ namespace automata_engine {
 
 
 // ----------- [SECTION] Forward declarations and basic types -----------
+    struct gpu_info_t;
     struct game_memory_t;
     struct game_window_info_t;
     enum   game_window_profile_t;
@@ -622,6 +620,20 @@ namespace automata_engine {
         /// @returns false on failure, true otherwise.
         bool createDirectory(const char *dirPath);
 
+        /// @brief  get numGpus many GPU infos. the infos _MUST_ be provided back to AE to free the enumerated adapters.
+        /// @param pInfo   output array with size numGpus to receive the gpu info into.
+        /// @param numGpus the size of the pInfo array.
+        void getGpuInfos(gpu_info_t *pInfo, uint32_t numGpus);
+
+        /// @brief  free the priorly enumerated adapters.
+        /// @param pInfo 
+        /// @param numGpus 
+        void freeGpuInfos(gpu_info_t *pInfo, uint32_t numGpus);
+
+        /// @brief  get the current available dedicated video memory for a GPU.
+        /// @param gpuAdapter the GPU to get the memory for.
+        size_t getGpuAvailableMemory(intptr_t gpuAdapter);
+
 
 // --------- [SECTION] PLATFORM AUDIO ----------------
 //
@@ -729,6 +741,20 @@ namespace ae = automata_engine;
 
 // ---------- [SECTION] Type Definitions ------------
 namespace automata_engine {
+
+    /// @brief a structure for information about a GPU.
+    /// @param description          the human-readable description of the GPU.
+    /// @param vendorId             the PCI ID of the hardware vendor for this GPU.
+    /// @param deviceId             the PCI ID of the GPU.
+    /// @param dedicatedVideoMemory the total amount of dedicated video memory of the GPU.
+    /// @param adapter              the handle to the adapter for this GPU.
+    typedef struct gpu_info_t {
+        const char description[128];
+        uint32_t vendorId;
+        uint32_t deviceId;
+        size_t   dedicatedVideoMemory;
+        intptr_t adapter;
+    } gpu_info_t;
 
     /// @brief a struct allocated by the engine and passed to the game layer.
     ///

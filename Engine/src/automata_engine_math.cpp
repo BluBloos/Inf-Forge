@@ -1,4 +1,4 @@
-#include <automata_engine.h>
+#include <automata_engine.hpp>
 
 // TODO(Noah): roll out our own intrinsics for these things below.
 // we want to remove dependency on std:: and math.h.

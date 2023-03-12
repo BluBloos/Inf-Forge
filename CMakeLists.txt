@@ -112,12 +112,10 @@ if ( NOT "${ProjectExplicitResOutputDir}" EQUAL "" )
     set(output_directory "${ProjectExplicitResOutputDir}")
 endif()
 
-# Setup pre-build step of Python hook.
+# Setup pre-build step.
 add_custom_command(
     TARGET ${ProjectName} PRE_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:${ProjectName}>/${output_directory}"
-    COMMAND python "${ENGINE_ROOT}/cli/build.py" "${ENGINE_ROOT}"
-    COMMAND python "${ENGINE_ROOT}/cli/build.py" "${ProjectRoot}")
+    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:${ProjectName}>/${output_directory}")
 
 # Copy game resources into build_dir.
 file(GLOB_RECURSE ProjectResources

@@ -1,7 +1,7 @@
 // TODO(Noah): Understand rvalues. Because, I'm a primitive ape, and,
 // they go right over my head, man.
 
-#include <automata_engine.h>
+#include <automata_engine.hpp>
 #include <win32_engine.h>
 
 #include <windows.h>
@@ -341,6 +341,68 @@ void automata_engine::platform::free(void *data) {
 
 void *automata_engine::platform::alloc(uint32_t bytes) {
     return VirtualAlloc(0, bytes, MEM_COMMIT, PAGE_READWRITE);
+}
+
+#include <dxgi1_4.h>
+#pragma comment(lib, "dxgi.lib")
+
+// TODO: make _these_ work for when the adapter has multiple nodes attached.
+// i.e. https://learn.microsoft.com/en-us/windows/win32/direct3d12/multi-engine#:~:text=Multi%2Dadapter%20APIs,single%20IDXGIAdapter3%20object.
+void ae::platform::getGpuInfos(gpu_info_t *pInfo, uint32_t numGpus)
+{
+    uint32_t currGpu = 0;
+    if (pInfo == nullptr) return;
+    IDXGIFactory4 *dxgiFactory = nullptr;
+    if (S_OK != CreateDXGIFactory1(IID_PPV_ARGS(&dxgiFactory))) return;
+    defer(dxgiFactory->Release());
+
+    IDXGIAdapter1 *dxgiAdapter = nullptr;
+    IDXGIAdapter3 *dxgiAdapter3 = nullptr;
+    for (UINT adapterIndex = 0; S_OK == dxgiFactory->EnumAdapters1(adapterIndex, &dxgiAdapter); ++adapterIndex) {
+        DXGI_ADAPTER_DESC1 desc;
+        if (S_OK != dxgiAdapter->GetDesc1(&desc)) {
+            dxgiAdapter->Release();
+            continue;
+        }
+        defer(dxgiAdapter->Release());
+        if(!SUCCEEDED(dxgiAdapter->QueryInterface(IID_PPV_ARGS(&dxgiAdapter3)))) {
+            continue;
+        }
+        auto &info                = pInfo[currGpu++];
+        info.adapter              = intptr_t(dxgiAdapter);
+        info.dedicatedVideoMemory = desc.DedicatedVideoMemory;
+        info.deviceId             = desc.DeviceId;
+        info.vendorId             = desc.VendorId;
+        WideCharToMultiByte(CP_ACP,  // TODO: codepage.
+            0,                       // no flags.
+            desc.Description,
+            -1,  // path is null terminated.
+            (LPSTR)info.description,
+            sizeof(info.description),
+            NULL,  // function uses system default char.
+            NULL   // TODO: maybe we care about this info.
+        );
+    }
+}
+
+void ae::platform::freeGpuInfos(gpu_info_t *pInfo, uint32_t numGpus)
+{
+    for (uint32_t i = 0; i < numGpus; i++) { ((IDXGIAdapter3 *)pInfo[i].adapter)->Release(); }
+}
+
+size_t ae::platform::getGpuAvailableMemory(intptr_t gpuAdapter)
+{
+    IDXGIAdapter3               *dxgiAdapter = (IDXGIAdapter3 *)gpuAdapter;
+    DXGI_QUERY_VIDEO_MEMORY_INFO info        = {};
+    if (S_OK == dxgiAdapter->QueryVideoMemoryInfo(
+                    // TODO:
+                    0,
+                    DXGI_MEMORY_SEGMENT_GROUP_LOCAL,  // local is the dedicated VRAM.
+                    &info))
+    // TODO: implement error checking if this does not work.
+    {
+        return info.CurrentUsage;
+    }
 }
 
 static ae::user_input_t globalUserInput = {};
