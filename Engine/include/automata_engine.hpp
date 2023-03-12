@@ -749,11 +749,11 @@ namespace automata_engine {
     /// @param dedicatedVideoMemory the total amount of dedicated video memory of the GPU.
     /// @param adapter              the handle to the adapter for this GPU.
     typedef struct gpu_info_t {
-        const char description[128];
-        uint32_t vendorId;
-        uint32_t deviceId;
-        size_t   dedicatedVideoMemory;
-        intptr_t adapter;
+        char     description[128]     = {};
+        uint32_t vendorId             = 0;
+        uint32_t deviceId             = 0;
+        size_t   dedicatedVideoMemory = 0;
+        intptr_t adapter              = (intptr_t)nullptr;
     } gpu_info_t;
 
     /// @brief a struct allocated by the engine and passed to the game layer.

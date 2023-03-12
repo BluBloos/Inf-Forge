@@ -382,6 +382,7 @@ void ae::platform::getGpuInfos(gpu_info_t *pInfo, uint32_t numGpus)
             NULL,  // function uses system default char.
             NULL   // TODO: maybe we care about this info.
         );
+        if(currGpu==numGpus) break; //don't go over what user said.
     }
 }
 
