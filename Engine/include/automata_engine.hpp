@@ -174,7 +174,18 @@ namespace automata_engine {
     void PreInit(game_memory_t *gameMemory);
 
     /// @brief Called after the platform window is created and before the main game loop.
+    /// Called on the main thread of execution and for eg. OpenGL calls are permitted here.
+    /// This function should do the minimal graphics API work needed so that after it is complete,
+    /// if the Update function is called the game is able to draw _at least something_ to the screen
+    /// _without delay_.
     void Init(game_memory_t *gameMemory);
+
+    /// @brief Called after Init and before the first Update call is made to any registered app.
+    /// The execution thread is not the main thread and therefore for eg. OpenGL calls CANNOT be made.
+    /// This callback is useful for the game to do any general setup work that may take some time.
+    /// It occurs during the engine intro sequence if any. Once complete, this function should set the
+    /// gameMemory to initialized, after which the first call to some Update is permitted to occur.
+    void InitAsync(game_memory_t *gameMemory);
 
     /// @brief Called when the engine has shut down and is requesting the game to release
     /// all resources.

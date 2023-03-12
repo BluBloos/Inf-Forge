@@ -808,7 +808,7 @@ typedef struct {
 static XAUDIO2_BUFFER g_xa2Buffer = {0};
 
 /// stretchy buffer.
-static win32_voice_t* ppSourceVoices = nullptr;
+static win32_voice_t* g_ppSourceVoices = nullptr;
 
 // Xaudio2 callbacks.
 
@@ -826,21 +826,21 @@ __declspec(selectany) XAPO_REGISTRATION_PROPERTIES AutomataXAPO::m_regProps = {
 
 // TODO(Noah): What happens if there is no buffer to play?? -_-
 void automata_engine::platform::voicePlayBuffer(intptr_t voiceHandle) {
-    auto pSourceVoice = (IXAudio2SourceVoice *)ppSourceVoices[voiceHandle].voice;
+    auto pSourceVoice = (IXAudio2SourceVoice *)g_ppSourceVoices[voiceHandle].voice;
     if (pSourceVoice != nullptr) {
         pSourceVoice->Start( 0 );
     }
 }
 
 void automata_engine::platform::voiceStopBuffer(intptr_t voiceHandle) {
-    auto pSourceVoice = (IXAudio2SourceVoice *)ppSourceVoices[voiceHandle].voice;
+    auto pSourceVoice = (IXAudio2SourceVoice *)g_ppSourceVoices[voiceHandle].voice;
     if (pSourceVoice != nullptr) {
         pSourceVoice->Stop( 0 );
     }
 }
 
 void automata_engine::platform::voiceSetBufferVolume(intptr_t voiceHandle, float volume) {
-    auto pSourceVoice = (IXAudio2SourceVoice *)ppSourceVoices[voiceHandle].voice;
+    auto pSourceVoice = (IXAudio2SourceVoice *)g_ppSourceVoices[voiceHandle].voice;
     if (pSourceVoice != nullptr) {
         pSourceVoice->SetVolume( volume );
     }
@@ -869,7 +869,7 @@ static IXAudio2* g_pXAudio2 = nullptr;
 // when voice creation fails.
 intptr_t automata_engine::platform::createVoice() {
 
-    uint32_t newVoiceIdx = StretchyBufferCount(ppSourceVoices);
+    uint32_t newVoiceIdx = StretchyBufferCount(g_ppSourceVoices);
     IXAudio2SourceVoice* newVoice = nullptr;
     
     auto voiceCallback = new ae::IXAudio2VoiceCallback(newVoiceIdx); 
@@ -909,7 +909,7 @@ intptr_t automata_engine::platform::createVoice() {
     }
 
     win32_voice_t w32NewVoice = {newVoice, voiceCallback, atoXAPO};
-    StretchyBufferPush(ppSourceVoices, w32NewVoice);
+    StretchyBufferPush(g_ppSourceVoices, w32NewVoice);
     return (intptr_t)newVoiceIdx;
 }
 
@@ -935,7 +935,7 @@ intptr_t automata_engine::platform::createVoice() {
 // compilation. i.e. file might not exist and shader could have syntax errs.
 // in these cases, the game has to deal with such errors.
 bool automata_engine::platform::voiceSubmitBuffer(intptr_t voiceHandle, void *data, uint32_t size, bool shouldLoop) {
-    auto pSourceVoice = (IXAudio2SourceVoice *)ppSourceVoices[voiceHandle].voice;
+    auto pSourceVoice = (IXAudio2SourceVoice *)g_ppSourceVoices[voiceHandle].voice;
     if (pSourceVoice != nullptr) {
         if (FAILED(pSourceVoice->Stop(0))) { return false; }
         if (FAILED(pSourceVoice->FlushSourceBuffers())) { return false; }
@@ -1006,6 +1006,10 @@ uint64_t ae::timing::wallClock() {
 
 void automata_engine::platform::fprintf_proxy(int h, const char *fmt, ...)
 {
+    static std::mutex mut={};
+    // only one person printing at a time. very important...
+    std::lock_guard<std::mutex> lock(mut);
+
     constexpr auto maxSize = 4096;
     char           _buf[maxSize];
 
@@ -1261,6 +1265,9 @@ int CALLBACK WinMain(HINSTANCE instance,
             AELoggerLog("WARN: GameInit == nullptr");
         }
 
+        // kick-off async init.
+        std::thread([&]{ ae::InitAsync(&g_gameMemory);}).detach();
+
     #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
         // ImGUI initialization code :)
         {
@@ -1364,7 +1371,7 @@ int CALLBACK WinMain(HINSTANCE instance,
                 glFlush();   // push all buffered commands to GPU
                 glFinish();  // block until GPU is complete
             }
-            SwapBuffers(gHdc);
+            if (!bRenderFallback) {SwapBuffers(gHdc);}
 #endif
 
             static constexpr float TargetSecondsElapsedPerFrame = 1 / 60.f;
@@ -1413,12 +1420,12 @@ int CALLBACK WinMain(HINSTANCE instance,
     // TODO(Noah): Can we leverage our new nc_defer.h to replace this code below?
     {
         // before kill Xaudio2, stop all audio and flush, for all voices.
-        for (uint32_t i = 0; i < StretchyBufferCount(ppSourceVoices); i++) {
-            if (ppSourceVoices[i].voice != nullptr) {
+        for (uint32_t i = 0; i < StretchyBufferCount(g_ppSourceVoices); i++) {
+            if (g_ppSourceVoices[i].voice != nullptr) {
                 // wait for audio thread to finish.
-                ppSourceVoices[i].voice->DestroyVoice();
-                delete ppSourceVoices[i].callback;
-                delete ppSourceVoices[i].xapo;
+                g_ppSourceVoices[i].voice->DestroyVoice();
+                delete g_ppSourceVoices[i].callback;
+                delete g_ppSourceVoices[i].xapo;
             }
         }
 
