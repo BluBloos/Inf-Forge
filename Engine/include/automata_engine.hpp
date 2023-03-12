@@ -581,7 +581,8 @@ namespace automata_engine {
         void showMouse(bool shouldShow);
 
         /// @brief show a native OS window alert.
-        void showWindowAlert(const char *windowTitle, const char *windowMessage);
+        /// @param bAsync if true the calling thread is not blocked.
+        void showWindowAlert(const char *windowTitle, const char *windowMessage, bool bAsync=false);
 
         /// @brief Set Vsync behaviour.
         /// @param value true to enable Vsync, false to disable.

@@ -958,8 +958,15 @@ bool ae::platform::voiceSubmitBuffer(intptr_t voiceHandle, loaded_wav_t wavFile)
 
 static HINSTANCE g_hInstance = NULL;
 
-void ae::platform::showWindowAlert(const char *windowTitle, const char *windowMessage) {
-    MessageBoxA(globalWin32Handle, windowMessage, windowTitle, MB_OK);
+#include <thread>
+
+void ae::platform::showWindowAlert(const char *windowTitle, const char *windowMessage, bool bAsync) {
+    auto job=[=]{MessageBoxA(NULL, windowMessage, windowTitle, MB_OK);};
+    if (bAsync) {
+        std::thread( job ).detach();
+    } else {
+        MessageBoxA(globalWin32Handle?globalWin32Handle: NULL, windowMessage, windowTitle, MB_OK);
+    }
 }
 
 ae::game_window_info_t automata_engine::platform::getWindowInfo() {
