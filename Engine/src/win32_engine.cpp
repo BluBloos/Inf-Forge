@@ -999,31 +999,33 @@ uint64_t ae::timing::wallClock() {
     return counter.QuadPart;
 }
 
-void automata_engine::platform::fprintf_proxy(int h, const char *fmt, ...) {
-    
-    char _buf[4096];
-    
+void automata_engine::platform::fprintf_proxy(int h, const char *fmt, ...)
+{
+    constexpr auto maxSize = 4096;
+    char           _buf[maxSize];
+
     va_list args;
-    va_start (args, fmt);
-    vsprintf(_buf, fmt, args);
-    va_end (args);
+    va_start(args, fmt);
+    auto written = 1 + vsnprintf(_buf, maxSize, fmt, args);
+    va_end(args);
+
+    // TODO: in cases like this, alloc dynamic buffer to print with.
+    assert(written != maxSize);
 
     HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
     switch (h) {
-    case ae::platform::AE_STDERR:
-        handle = GetStdHandle(STD_ERROR_HANDLE);
-        break;
-    case ae::platform::AE_STDOUT:
-        handle = GetStdHandle(STD_OUTPUT_HANDLE);
-        break;
-    default:
-        handle = GetStdHandle(STD_OUTPUT_HANDLE);
+        case ae::platform::AE_STDERR:
+            handle = GetStdHandle(STD_ERROR_HANDLE);
+            break;
+        case ae::platform::AE_STDOUT:
+            handle = GetStdHandle(STD_OUTPUT_HANDLE);
+            break;
+        default:
+            handle = GetStdHandle(STD_OUTPUT_HANDLE);
     }
     WriteConsoleA(handle, (void *)_buf, strlen(_buf), NULL, NULL);
 
-    if (automata_engine::platform::_redirectedFprintf) {
-        automata_engine::platform::_redirectedFprintf(_buf);
-    }
+    if (automata_engine::platform::_redirectedFprintf) { automata_engine::platform::_redirectedFprintf(_buf); }
 }
 
 int CALLBACK WinMain(HINSTANCE instance,
