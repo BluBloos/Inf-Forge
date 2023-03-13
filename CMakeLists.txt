@@ -127,7 +127,7 @@ if( NOT "${ProjectResourcesExtraPath}"  EQUAL "" )
         "${ProjectResourcesExtraPath}/*")
 endif()
 
-set( ProjectResourcesList ${ProjectResources} ${ProjectResourcesExtra} )
+set( ProjectResourcesList ${ProjectResources} ${ProjectResourcesExtra} "${ENGINE_ROOT}/assets/engine.WAV" "${ENGINE_ROOT}/assets/logo.png" )
 list( FILTER ProjectResourcesList EXCLUDE REGEX "\\.ini" )
 message(STATUS "found ProjectResourcesList=${ProjectResourcesList}")
 

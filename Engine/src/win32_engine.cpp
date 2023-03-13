@@ -1179,7 +1179,7 @@ int CALLBACK WinMain(HINSTANCE instance,
 	bool SleepGranular = (timeBeginPeriod(DesiredSchedularGranularity) == TIMERR_NOERROR);
 
     // load the engine logo.
-    g_engineLogo = ae::platform::stbImageLoad("logo.png");
+    g_engineLogo = ae::platform::stbImageLoad("res\\logo.png");
     defer(ae::io::freeLoadedImage(g_engineLogo));
 
     // NOTE(Noah): There is a reason that when you read C code, all the variables are defined
@@ -1384,7 +1384,7 @@ int CALLBACK WinMain(HINSTANCE instance,
         }
 
         // load the engine sound.
-        g_engineSound = ae::io::loadWav("engine.wav"); // TODO: Actually make this asset copy via the CMake.
+        g_engineSound = ae::io::loadWav("res\\engine.wav"); // TODO: Actually make this asset copy via the CMake.
         defer(ae::io::freeWav(g_engineSound));
         g_engineVoice = ae::platform::createVoice();
 
