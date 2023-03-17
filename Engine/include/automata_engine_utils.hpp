@@ -187,9 +187,13 @@ namespace nc {
 }
 #endif  // NC_STR_IMPL
 
-
 typedef float                  float32_t;
 typedef double                 float64_t;
 
+namespace automata_engine {
+  enum game_key_t;
+  // TODO: do this better, please.
+  const char *gameKeyToString(game_key_t keyIdx);
+}  // namespace automata_engine
 
 #endif  // AUTOMATA_ENGINE_UTILS_HPP

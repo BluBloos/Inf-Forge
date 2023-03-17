@@ -30,7 +30,7 @@
 
 #define MAX_CONSOLE_LINES 500
 
-static HWND globalWin32Handle = NULL;
+static HWND g_hwnd = NULL;
 
 // TODO(Noah): Hot reloading 😎 baby!.
 
@@ -54,9 +54,10 @@ ae::update_model_t ae::platform::GLOBAL_UPDATE_MODEL =
 bool ae::platform::_globalVsync = false;
 static LONGLONG g_PerfCountFrequency64;
 
-void ae::platform::setMousePos(int xPos, int yPos) {
+void ae::platform::setMousePos(int xPos, int yPos)
+{
     POINT pt = {xPos, yPos};
-    ClientToScreen(globalWin32Handle, &pt);
+    ClientToScreen(g_hwnd, &pt);
     SetCursorPos(pt.x, pt.y);
 }
 
@@ -418,9 +419,10 @@ static ae::game_memory_t g_gameMemory = {};
 static win32_backbuffer_t globalBackBuffer = {};
 
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
-void ScaleImGui() {
+void ScaleImGui()
+{
     if (isImGuiInitialized) {
-        HMONITOR hMonitor = MonitorFromWindow(globalWin32Handle, MONITOR_DEFAULTTONEAREST);
+        HMONITOR            hMonitor = MonitorFromWindow(g_hwnd, MONITOR_DEFAULTTONEAREST);
         DEVICE_SCALE_FACTOR scaleFactor;
         if (SUCCEEDED(GetScaleFactorForMonitor(hMonitor, &scaleFactor))) {
             float SCALE = (int)scaleFactor / 100.f;
@@ -503,27 +505,32 @@ void automata_engine::platform::getUserInput(user_input_t *userInput) {
     *userInput = globalUserInput;
 }
 
-static void ProccessKeyboardMessage(unsigned int vkCode, bool down) {
-  if (vkCode >= 'A' && vkCode <= 'Z') {
-    globalUserInput.keyDown[(uint32_t)ae::GAME_KEY_A + (vkCode - 'A')] = down;
-  } else if (vkCode >= '0' && vkCode <= '9') {
-    globalUserInput.keyDown[(uint32_t)ae::GAME_KEY_0 + (vkCode - '0')] = down;
-  } else {
-    switch(vkCode) {
-        case VK_SPACE:
-        globalUserInput.keyDown[ae::GAME_KEY_SPACE] = down;
-            break;
-        case VK_SHIFT:
-          globalUserInput.keyDown[ae::GAME_KEY_SHIFT] = down;
-            break;
-        case VK_ESCAPE:
-          globalUserInput.keyDown[ae::GAME_KEY_ESCAPE] = down;
-            break;
-        case VK_F5:
-          globalUserInput.keyDown[ae::GAME_KEY_F5] = down;
-            break;
+static void ProccessKeyboardMessage(unsigned int vkCode, bool down)
+{
+    if (vkCode >= 'A' && vkCode <= 'Z') {
+        globalUserInput.keyDown[(uint32_t)ae::GAME_KEY_A + (vkCode - 'A')] = down;
+    } else if (vkCode >= '0' && vkCode <= '9') {
+        globalUserInput.keyDown[(uint32_t)ae::GAME_KEY_0 + (vkCode - '0')] = down;
+    } else {
+        switch (vkCode) {
+            // TODO: this looks like copy-pasta. can be this be more expressive ???
+            case VK_SPACE:
+                globalUserInput.keyDown[ae::GAME_KEY_SPACE] = down;
+                break;
+            case VK_SHIFT:
+                globalUserInput.keyDown[ae::GAME_KEY_SHIFT] = down;
+                break;
+            case VK_ESCAPE:
+                globalUserInput.keyDown[ae::GAME_KEY_ESCAPE] = down;
+                break;
+            case VK_F5:
+                globalUserInput.keyDown[ae::GAME_KEY_F5] = down;
+                break;
+            case VK_TAB:
+                globalUserInput.keyDown[ae::GAME_KEY_TAB] = down;
+                break;
+        }
     }
-  }
 }
 
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
@@ -970,22 +977,21 @@ void ae::platform::showWindowAlert(const char *windowTitle, const char *windowMe
     if (bAsync) {
         std::thread( job ).detach();
     } else {
-        MessageBoxA(globalWin32Handle?globalWin32Handle: NULL, windowMessage, windowTitle, MB_OK);
+        MessageBoxA(g_hwnd ? g_hwnd : NULL, windowMessage, windowTitle, MB_OK);
     }
 }
 
-ae::game_window_info_t automata_engine::platform::getWindowInfo() {
-  ae::game_window_info_t winInfo;
-    winInfo.hWnd = (intptr_t)globalWin32Handle;
+ae::game_window_info_t automata_engine::platform::getWindowInfo()
+{
+    ae::game_window_info_t winInfo;
+    winInfo.hWnd      = (intptr_t)g_hwnd;
     winInfo.hInstance = (intptr_t)g_hInstance;
-    if (globalWin32Handle == NULL) {
-        AELoggerError("globalWin32Handle == NULL");
-    }
+    if (g_hwnd == NULL) { AELoggerError("g_hwnd == NULL"); }
     RECT rect;
-    if (GetClientRect(globalWin32Handle, &rect)) {
-        winInfo.width = rect.right - rect.left;
+    if (GetClientRect(g_hwnd, &rect)) {
+        winInfo.width    = rect.right - rect.left;
         int signedHeight = rect.top - rect.bottom;
-        winInfo.height = ae::math::sign(signedHeight) * signedHeight;
+        winInfo.height   = ae::math::sign(signedHeight) * signedHeight;
     }
     return winInfo;
 }
@@ -1154,6 +1160,29 @@ static void DrawBitmap(win32_backbuffer_t *buffer,
     }
 }
 
+static bool g_bIsWindowFocused = true;
+
+bool ae::platform::isWindowFocused() { return g_bIsWindowFocused; }
+
+HWINEVENTHOOK g_windowEventHookProc = {};
+void          Wineventproc(HWINEVENTHOOK hWinEventHook,
+             DWORD                       event,
+             HWND                        hwnd,
+             LONG                        idObject,
+             LONG                        idChild,
+             DWORD                       idEventThread,
+             DWORD                       dwmsEventTime)
+{
+    if (hwnd != g_hwnd) {
+        // TODO: it would be cool to have differnt print contexts. Print from either the game or the engine.
+        //AELoggerLog("focus leaving _this_ window.");
+        g_bIsWindowFocused = false;
+    } else if (hwnd == g_hwnd) {
+        //AELoggerLog("focus entering _this_ window.");
+        g_bIsWindowFocused = true;
+    }
+}
+
 static ae::loaded_wav_t g_engineSound = {};
 static intptr_t         g_engineVoice = {};
 
@@ -1200,6 +1229,25 @@ int CALLBACK WinMain(HINSTANCE instance,
         automata_engine::platform::_globalProgramResult = -1;
         return -1;
     }
+
+    // register event hook for checking when window is focused or not.
+    g_windowEventHookProc = SetWinEventHook(
+    // [eventMin, eventMax]
+// NOTE: these two work only for the OLD windows alt+tab thing.
+// you need to hold LEFT_ALT, button press RIGHT_ALT, then finally while still holding LEFT_ALT tap TAB.
+#if 0
+        EVENT_SYSTEM_SWITCHSTART,
+        EVENT_SYSTEM_SWITCHEND,
+#endif
+        EVENT_SYSTEM_FOREGROUND,
+        EVENT_SYSTEM_FOREGROUND,
+
+        NULL,  // hook function is not located in a DLL.
+        Wineventproc,
+        0,  // recieve events from all process on desktop.
+        0,  // associated with     all threads on desktop.
+        WINEVENT_OUTOFCONTEXT);
+    defer(UnhookWinEvent(g_windowEventHookProc));
 
     // Create a console.
 #if !defined(AUTOMATA_ENGINE_DISABLE_PLATFORM_LOGGING)
@@ -1300,13 +1348,13 @@ int CALLBACK WinMain(HINSTANCE instance,
             break;
         }
 
-        globalWin32Handle = windowHandle;
+        g_hwnd = windowHandle;
         g_hInstance = instance;
 
         if (!beginMaximized && GameHandleWindowResize) {
             // get height and width of window
             RECT rect;
-            GetWindowRect(globalWin32Handle, &rect);
+            GetWindowRect(g_hwnd, &rect);
             GameHandleWindowResize(&g_gameMemory, rect.right - rect.left, rect.bottom - rect.top);
         }
 
@@ -1424,9 +1472,7 @@ int CALLBACK WinMain(HINSTANCE instance,
         LARGE_INTEGER LastCounter = Win32GetWallClock();
         LARGE_INTEGER IntroCounter = Win32GetWallClock();
 
-        // TODO(Noah):
-        // add stalling in the CPU model (i.e. the engine does not call game update)
-        // as fast as possible. Then make ae::setVsync() control whether this happens, or no.
+        g_bIsWindowFocused = true;//TODO: is this needed?
 
         while(automata_engine::platform::_globalRunning) {
             // Reset input

@@ -648,6 +648,10 @@ namespace automata_engine {
         size_t getGpuCurrentMemoryUsage(intptr_t gpuAdapter);
 
 
+        /// @brief  get if the platform window is focused.
+        bool isWindowFocused();
+
+
 // --------- [SECTION] PLATFORM AUDIO ----------------
 //
 // TODO(Noah): allow for multiple buffer submissions to a voice. currently
@@ -866,7 +870,7 @@ namespace automata_engine {
         GAME_KEY_M, GAME_KEY_N, GAME_KEY_O, GAME_KEY_P, GAME_KEY_Q, GAME_KEY_R,
         GAME_KEY_S, GAME_KEY_T, GAME_KEY_U, GAME_KEY_V, GAME_KEY_W, GAME_KEY_X, 
         GAME_KEY_Y, GAME_KEY_Z,
-        GAME_KEY_SHIFT, GAME_KEY_SPACE, GAME_KEY_ESCAPE, GAME_KEY_F5,
+        GAME_KEY_SHIFT, GAME_KEY_SPACE, GAME_KEY_ESCAPE, GAME_KEY_TAB, GAME_KEY_F5,
         GAME_KEY_COUNT
     };
 
