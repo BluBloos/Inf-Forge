@@ -429,7 +429,17 @@ void ScaleImGui()
             //ImFontConfig cfg; // = {};
             float size_in_pixels = float(uint32_t(16 * SCALE));
             ImGui::GetIO().Fonts->Clear();
+            ImGui::GetStyle() = ImGuiStyle();  // reset
             ImGui::GetIO().Fonts->AddFontFromFileTTF("ProggyVector Regular.ttf", size_in_pixels);
+            //#if 0
+            if (SCALE >= 1.f)
+            {
+                float adjustedScale = 1.f + (SCALE - 1.f) * 0.5f;
+                ImGui::GetStyle().ScaleAllSizes(adjustedScale);
+            }
+            //#endif
+            //ImGui::GetStyle().ScaleAllSizes(SCALE);
+
 #if defined(AUTOMATA_ENGINE_GL_BACKEND)
             ImGui_ImplOpenGL3_DestroyFontsTexture();
             ImGui_ImplOpenGL3_CreateFontsTexture();
