@@ -446,6 +446,12 @@ namespace automata_engine {
             return (a + (b-1))/b;
         }
 
+        /// @brief return a as the next multiple of b. a is returned if it is already a multiple of b.
+        static uint32_t align_up(uint32_t a, uint32_t b)
+        {
+            return div_ceil(a, b) * b;  //TODO: there are bit tricks to do this.
+        }
+
         /// @brief compute the square of a float.
         template <typename T>
         T square(T a) {
