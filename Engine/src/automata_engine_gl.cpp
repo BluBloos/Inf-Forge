@@ -264,18 +264,31 @@ namespace automata_engine {
                         vertex_attrib_t attrib = pVbo->attribs[k];
                         uint32_t offset = 0;
                         for (uint32_t w = 0; w < (uint32_t)ceilf(attrib.count / 4.0f); w++) {
-                            uint32_t attribCount = attrib.count - (w * 4); 
+                            uint32_t attribCount    = attrib.count - (w * 4);
                             uint32_t componentCount = (attribCount > 4) ? 4 : attribCount;
-                            intptr_t ptr;
-                            glVertexAttribPointer(
-                                attribIndex,
-                                componentCount,
-                                attrib.type,
-                                // NOTE: we are basically going to be making this a default - glfalse.
-                                GL_FALSE,
-                                vbo_GetStride(*pVbo),
-                                (const void *)(ptr = (intptr_t)offset + vbo_GetOffset(*pVbo, k))
-                            );
+                            intptr_t ptr            = (intptr_t)offset + vbo_GetOffset(*pVbo, k);
+                            switch (attrib.type) {
+                                case GL_BYTE:
+                                case GL_UNSIGNED_BYTE:
+                                case GL_SHORT:
+                                case GL_UNSIGNED_SHORT:
+                                case GL_INT:
+                                case GL_UNSIGNED_INT:
+                                    glVertexAttribIPointer(attribIndex,
+                                        componentCount,
+                                        attrib.type,
+                                        vbo_GetStride(*pVbo),
+                                        (const void *)ptr);
+                                    break;
+                                default:
+                                    glVertexAttribPointer(attribIndex,
+                                        componentCount,
+                                        attrib.type,
+                                        // NOTE: we are basically going to be making this a default - glfalse.
+                                        GL_FALSE,
+                                        vbo_GetStride(*pVbo),
+                                        (const void *)ptr);
+                            }
                             AELoggerLog(
                                 "did glVertexAttribPointer(%d, %d, type, GL_FALSE, %d, %d);",
                                 attribIndex, componentCount, vbo_GetStride(*pVbo), ptr);
