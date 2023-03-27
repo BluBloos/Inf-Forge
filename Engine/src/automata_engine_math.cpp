@@ -357,6 +357,7 @@ namespace automata_engine {
                            p.z >= candidateBox.min.z && p.z <= candidateBox.max.z;
                 };
                 const int j=potentialFaces[i];
+                // TODO: need faceHitIdx to use enum for face Idx's. make this standard.
                 switch(j) {
                     case 0: // front, back: (which Z).
                     case 1:
