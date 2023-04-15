@@ -34,6 +34,8 @@ if (NOT ${ProjectExplicitSources})
 endif()
 file(GLOB_RECURSE ENGINE_SOURCES
     "${ENGINE_ROOT}/src/*.cpp")
+    
+# george w3as here
 
 if (NOT ${ProjectDisableImGui})
     file(GLOB IMGUI_SOURCES
