@@ -1455,7 +1455,7 @@ int CALLBACK WinMain(HINSTANCE instance,
         // kick-off async init.
         std::thread([&]{ ae::InitAsync(&g_gameMemory);}).detach();
 
-    #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
+#if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
         // ImGUI initialization code :)
         {
             // Setup Dear ImGui context
@@ -1466,16 +1466,16 @@ int CALLBACK WinMain(HINSTANCE instance,
             ImGui::StyleColorsDark();
             // Setup Platform/Renderer backends
             ImGui_ImplWin32_Init(windowHandle);
-    #if defined(AUTOMATA_ENGINE_GL_BACKEND)
+#if defined(AUTOMATA_ENGINE_GL_BACKEND)
         const char* glsl_version = "#version 330";
             ImGui_ImplOpenGL3_Init(glsl_version);
-    #endif
+#endif
 
             isImGuiInitialized = true;
 
             ScaleImGui();
         }
-    #endif
+#endif
         // TODO(Noah): Look into what the imGUI functions are going to return on failure!
 
 
@@ -1594,8 +1594,9 @@ int CALLBACK WinMain(HINSTANCE instance,
                 ImGui::Render();
 #if defined(AUTOMATA_ENGINE_GL_BACKEND)
                 ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-            }
 #endif
+            }
+
 #endif
 
             {
