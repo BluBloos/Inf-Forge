@@ -44,6 +44,7 @@ privDefer<F> defer_func(F f) {
 // All stretchy buffers must begin as a null pointer.
 
 // Inits the stretchy buffer.
+#define StretchyBufferInitWithCount(a,n)  (StretchyBuffer_Grow(a,n), StretchyBuffer_GetCount(a)=n)
 #define StretchyBufferInit(a)             (StretchyBuffer_Grow(a,1))
 // Frees the strechy buffer. Warning: the array a will be a dangling pointer after this call.
 #define StretchyBufferFree(a)             ((a) ? free(StretchyBuffer_GetMetadataPtr(a)), 0 : 0)
