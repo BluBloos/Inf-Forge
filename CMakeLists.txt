@@ -13,11 +13,11 @@ set(ProjectDisableImGui OFF CACHE BOOL "if true, disables imgui")
 
 # TODO: What if we want to make a multiple gfx-API application?
 
-if (${ProjectRoot} EQUAL "")
+if ( "${ProjectRoot}" STREQUAL "" )
     message(FATAL_ERROR "Must supply ProjectRoot var")
 endif()
 
-if (${ProjectBackend} EQUAL "")
+if ( "${ProjectBackend}" STREQUAL "" )
     message(FATAL_ERROR "Must supply ProjectBackend var")
 else()
     message(STATUS "Project backend set to ${ProjectBackend}")
@@ -109,8 +109,9 @@ elseif( ${ProjectBackend} MATCHES "VK_BACKEND" )
     target_compile_definitions(${ProjectName} PRIVATE -DAUTOMATA_ENGINE_VK_BACKEND)
 endif()
 
-set(output_directory "res")
-if ( NOT "${ProjectExplicitResOutputDir}" EQUAL "" )
+if ( "${ProjectExplicitResOutputDir}" STREQUAL "" )
+    set(output_directory "res")
+else()
     set(output_directory "${ProjectExplicitResOutputDir}")
 endif()
 
@@ -123,7 +124,7 @@ add_custom_command(
 file(GLOB_RECURSE ProjectResources
     LIST_DIRECTORIES false
     "${ProjectRoot}/res/*")
-if( NOT "${ProjectResourcesExtraPath}"  EQUAL "" )
+if( NOT "${ProjectResourcesExtraPath}" STREQUAL "" )
     file(GLOB_RECURSE ProjectResourcesExtra
         LIST_DIRECTORIES false
         "${ProjectResourcesExtraPath}/*")
