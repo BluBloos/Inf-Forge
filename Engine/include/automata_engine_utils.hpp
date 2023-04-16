@@ -56,7 +56,7 @@ privDefer<F> defer_func(F f) {
 #define StretchyBufferLast(a)             ((a)[StretchyBuffer_GetCount(a)-1])
 
 // Returns and deletes the last element from inside the stretchy buffer.
-#define StretchyBufferPop(a)              ((a)[StretchyBuffer_GetCount(a)--]) 
+#define StretchyBufferPop(a) ((a)[--StretchyBuffer_GetCount(a)])
 
 #define StretchyBuffer_GetMetadataPtr(a)  ((int *) (a) - 2)
 #define StretchyBuffer_GetBufferSize(a)   StretchyBuffer_GetMetadataPtr(a)[0]
