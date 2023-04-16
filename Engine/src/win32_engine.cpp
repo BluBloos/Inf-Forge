@@ -1,3 +1,7 @@
+// TODO: Any better way here to block against compilation of this file
+// only when on Windows?
+#if _MSC_VER
+
 // TODO(Noah): Understand rvalues. Because, I'm a primitive ape, and,
 // they go right over my head, man.
 
@@ -174,6 +178,10 @@ static bool isImGuiInitialized = false;
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
 #include "imgui.h"
 #include "imgui_impl_win32.h" // includes Windows.h for us
+#endif
+
+#if defined(AUTOMATA_ENGINE_VK_BACKEND)
+#include "imgui_impl_vulkan.h"
 #endif
 
 #if defined(AUTOMATA_ENGINE_GL_BACKEND)
@@ -444,6 +452,18 @@ void ScaleImGui()
             ImGui_ImplOpenGL3_DestroyFontsTexture();
             ImGui_ImplOpenGL3_CreateFontsTexture();
 #endif
+
+            // TODO:
+#if defined(AUTOMATA_ENGINE_VK_BACKEND)
+            // TODO: need to destroy whatever VK resources that are already there.
+            // the current ImGui impl just overrides them without destroy.
+
+            // TODO: get VK command buffer.
+            // ImGui_ImplVulkan_CreateFontsTexture();
+            // TODO: execute the command lists.
+            // TODO: stall the pipeline until the texture is uploaded.
+#endif
+
         }
     }
 }
@@ -1723,3 +1743,5 @@ int CALLBACK WinMain(HINSTANCE instance,
 
     return automata_engine::platform::_globalProgramResult;
 }
+
+#endif // _MSC_VER

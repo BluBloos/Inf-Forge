@@ -62,6 +62,10 @@ Index of this file:
 // define AUTOMATA_ENGINE_DX12_BACKEND to use the DirectX 12 backend.
 #endif
 
+#if !defined(AUTOMATA_ENGINE_METAL_BACKEND)
+// define AUTOMATA_ENGINE_METAL_BACKEND to use the Metal backend.
+#endif
+
 // ----------------- [END SECTION] Definable Macros -----------------
 
 
@@ -109,8 +113,6 @@ namespace automata_engine {
     struct gpu_info_t;
     struct game_memory_t;
     struct game_window_info_t;
-    enum   game_window_profile_t;
-    enum   game_key_t;
     struct user_input_t; // TODO: prob change to game_user_input_t;
 
     // TODO: Types such as loaded_image_t, etc, ought to be scoped in the IO namespace.
@@ -118,7 +120,36 @@ namespace automata_engine {
     struct loaded_file_t;
     struct loaded_wav_t;
     struct raw_model_t;
-    enum   update_model_t;
+
+    // enums. Clang doesn't allow forward declarations of enums.
+
+    // TODO: Since everything is already namespaced, we won't need to prefix enum IDs with `AUTOMATA_ENGINE_...`.
+    /// @brief an enum for a window profile.
+    enum game_window_profile_t {
+        AUTOMATA_ENGINE_WINPROFILE_RESIZE,
+        AUTOMATA_ENGINE_WINPROFILE_NORESIZE
+    };
+
+    /// @brief an enum for the different types of keys that can be pressed.
+    enum game_key_t {
+        GAME_KEY_0 = 0, GAME_KEY_1, GAME_KEY_2, GAME_KEY_3, GAME_KEY_4, GAME_KEY_5, GAME_KEY_6, GAME_KEY_7, GAME_KEY_8, GAME_KEY_9,
+        GAME_KEY_A, GAME_KEY_B, GAME_KEY_C, GAME_KEY_D, GAME_KEY_E, GAME_KEY_F, 
+        GAME_KEY_G, GAME_KEY_H, GAME_KEY_I, GAME_KEY_J, GAME_KEY_K, GAME_KEY_L,
+        GAME_KEY_M, GAME_KEY_N, GAME_KEY_O, GAME_KEY_P, GAME_KEY_Q, GAME_KEY_R,
+        GAME_KEY_S, GAME_KEY_T, GAME_KEY_U, GAME_KEY_V, GAME_KEY_W, GAME_KEY_X, 
+        GAME_KEY_Y, GAME_KEY_Z,
+        GAME_KEY_SHIFT, GAME_KEY_SPACE, GAME_KEY_ESCAPE, GAME_KEY_TAB, GAME_KEY_F5,
+        GAME_KEY_COUNT
+    };
+
+    /// @brief an enum for the different types of update models.
+    /// NOTE: AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC is the only one that is currently supported.
+    enum update_model_t {
+        AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC = 0,
+        AUTOMATA_ENGINE_UPDATE_MODEL_FRAME_BUFFERING,
+        AUTOMATA_ENGINE_UPDATE_MODEL_ONE_LATENT_FRAME,
+        AUTOMATA_ENGINE_UPDATE_MODEL_COUNT
+    };
 
     namespace math {
         struct transform_t;
@@ -142,6 +173,8 @@ namespace automata_engine {
 #endif
 // ----------- [END SECTION] Forward declarations and basic types -----------
 
+    // TODO: put this somewhere it belongs.
+    const char *gameKeyToString(game_key_t keyIdx);
 
 // ----------- [SECTION] PreInit settings -----------
     // These values are meant to be set by the game during its PreInit() function.
@@ -742,18 +775,18 @@ namespace ae = automata_engine;
 
 /// @brief Log an error message to the console.
 #define AELoggerError(fmt, ...) \
-    (ae::platform::fprintf_proxy(ae::platform::AE_STDERR, "\033[0;31m" "\n[error] on line=%d in file=%s\n" fmt "\n" "\033[0m", __LINE__, _AUTOMATA_ENGINE_FILE_RELATIVE_, __VA_ARGS__))
+    (ae::platform::fprintf_proxy(ae::platform::AE_STDERR, "\033[0;31m" "\n[error] on line=%d in file=%s\n" fmt "\n" "\033[0m", __LINE__, _AUTOMATA_ENGINE_FILE_RELATIVE_, ##__VA_ARGS__))
 
 /// @brief Log a message to the console.
 #define AELoggerLog(fmt, ...) \
-    (ae::platform::fprintf_proxy(ae::platform::AE_STDOUT, "\n[log] from line=%d in file:%s\n" fmt "\n", __LINE__, _AUTOMATA_ENGINE_FILE_RELATIVE_, __VA_ARGS__))
+    (ae::platform::fprintf_proxy(ae::platform::AE_STDOUT, "\n[log] from line=%d in file:%s\n" fmt "\n", __LINE__, _AUTOMATA_ENGINE_FILE_RELATIVE_, ##__VA_ARGS__))
 
 /// @brief Log a warning message to the console.
 #define AELoggerWarn(fmt, ...) \
-    (ae::platform::fprintf_proxy(ae::platform::AE_STDOUT, "\033[0;93m" "\n[warn] on line=%d in file:%s\n" fmt  "\n" "\033[0m", __LINE__, _AUTOMATA_ENGINE_FILE_RELATIVE_, __VA_ARGS__))
+    (ae::platform::fprintf_proxy(ae::platform::AE_STDOUT, "\033[0;93m" "\n[warn] on line=%d in file:%s\n" fmt  "\n" "\033[0m", __LINE__, _AUTOMATA_ENGINE_FILE_RELATIVE_, ##__VA_ARGS__))
 
 /// @brief Log a message to the console without a newline.
-#define AELogger(fmt, ...) (ae::platform::fprintf_proxy(ae::platform::AE_STDOUT, fmt, __VA_ARGS__))
+#define AELogger(fmt, ...) (ae::platform::fprintf_proxy(ae::platform::AE_STDOUT, fmt, ##__VA_ARGS__))
 #else
 #define AELoggerError(fmt, ...)
 #define AELoggerLog(fmt, ...)
@@ -868,18 +901,6 @@ namespace automata_engine {
         uint32_t *indexData;    // stretchy buf
     };
 
-    /// @brief an enum for the different types of keys that can be pressed.
-    enum game_key_t {
-        GAME_KEY_0 = 0, GAME_KEY_1, GAME_KEY_2, GAME_KEY_3, GAME_KEY_4, GAME_KEY_5, GAME_KEY_6, GAME_KEY_7, GAME_KEY_8, GAME_KEY_9,
-        GAME_KEY_A, GAME_KEY_B, GAME_KEY_C, GAME_KEY_D, GAME_KEY_E, GAME_KEY_F, 
-        GAME_KEY_G, GAME_KEY_H, GAME_KEY_I, GAME_KEY_J, GAME_KEY_K, GAME_KEY_L,
-        GAME_KEY_M, GAME_KEY_N, GAME_KEY_O, GAME_KEY_P, GAME_KEY_Q, GAME_KEY_R,
-        GAME_KEY_S, GAME_KEY_T, GAME_KEY_U, GAME_KEY_V, GAME_KEY_W, GAME_KEY_X, 
-        GAME_KEY_Y, GAME_KEY_Z,
-        GAME_KEY_SHIFT, GAME_KEY_SPACE, GAME_KEY_ESCAPE, GAME_KEY_TAB, GAME_KEY_F5,
-        GAME_KEY_COUNT
-    };
-
     /// @brief a struct representing a snapshot of user input.
     /// @param mouseX         x position of the mouse in pixels.
     /// @param mouseY         y position of the mouse in pixels.
@@ -899,22 +920,6 @@ namespace automata_engine {
         bool mouseRBttnDown = false;
         // TODO(Noah): We will prolly want to change how we represent keys.
         bool keyDown[(uint32_t)GAME_KEY_COUNT];
-    };
-
-    // TODO: Since everything is already namespaced, we won't need to prefix enum IDs with `AUTOMATA_ENGINE_...`.
-    /// @brief an enum for a window profile.
-    enum game_window_profile_t {
-        AUTOMATA_ENGINE_WINPROFILE_RESIZE,
-        AUTOMATA_ENGINE_WINPROFILE_NORESIZE
-    };
-
-    /// @brief an enum for the different types of update models.
-    /// NOTE: AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC is the only one that is currently supported.
-    enum update_model_t {
-        AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC = 0,
-        AUTOMATA_ENGINE_UPDATE_MODEL_FRAME_BUFFERING,
-        AUTOMATA_ENGINE_UPDATE_MODEL_ONE_LATENT_FRAME,
-        AUTOMATA_ENGINE_UPDATE_MODEL_COUNT
     };
 
     namespace math {

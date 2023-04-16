@@ -9,6 +9,8 @@
 // NOTE(Noah): Matrices are being stored in column-major form ...
 // the math below is representative of this.
 
+#include <cmath>
+
 namespace automata_engine {
     namespace math {
         float *value_ptr(vec3_t &a) {

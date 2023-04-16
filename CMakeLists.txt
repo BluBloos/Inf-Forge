@@ -6,7 +6,7 @@ set(ProjectName "AutomataApp" CACHE STRING "game EXE / target name")
 set(ProjectResourcesExtraPath "" CACHE STRING "absolute path to some dir with runtime game resources")
 set(ProjectExplicitSources OFF CACHE BOOL "if true, the app shall set PROJ_SOURCES as those to compile")
 set(ProjectExplicitResOutputDir "" CACHE STRING "if set, the app shall copy resources to this dir instead of default res/")
-set(ProjectBackend "CPU_BACKEND" CACHE STRING "can be any of {GL_BACKEND, CPU_BACKEND, DX12_BACKEND, VK_BACKEND}")
+set(ProjectBackend "CPU_BACKEND" CACHE STRING "can be any of {GL_BACKEND, CPU_BACKEND, DX12_BACKEND, VK_BACKEND, METAL_BACKEND}")
 set(ProjectRoot "${CMAKE_CURRENT_SOURCE_DIR}" CACHE STRING "set to where the folder src/ and res/ can be found")
 set(ProjectDisableLogging OFF CACHE BOOL "if true, disables logging")
 set(ProjectDisableImGui OFF CACHE BOOL "if true, disables imgui")
@@ -23,9 +23,11 @@ else()
     message(STATUS "Project backend set to ${ProjectBackend}")
 endif()
 
-set(ENV{CMAKE_GENERATOR} "Visual Studio 17 2022")
 set(ENGINE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/Engine")
 set(ENGINE_EXTERNAL "${CMAKE_CURRENT_SOURCE_DIR}/external")
+
+message( STATUS "ENGINE_ROOT = ${ENGINE_ROOT}" )
+message( STATUS "ENGINE_EXTERNAL = ${ENGINE_EXTERNAL}" )
 
 # find sources
 if (NOT ${ProjectExplicitSources})
@@ -40,12 +42,15 @@ file(GLOB_RECURSE ENGINE_SOURCES
 if (NOT ${ProjectDisableImGui})
     file(GLOB IMGUI_SOURCES
         "${ENGINE_EXTERNAL}/imgui-1.87/imgui*.cpp"
-        "${ENGINE_EXTERNAL}/imgui-1.87/backends/imgui_impl_win32.cpp"
         "${ENGINE_EXTERNAL}/imgui-1.87/misc/freetype/imgui_freetype.cpp")
-    # TODO: We're kind of assuming Win32 all over the place right now.
     if ("${ProjectBackend}" MATCHES "GL_BACKEND")
         set(IMGUI_SOURCES
             "${ENGINE_EXTERNAL}/imgui-1.87/backends/imgui_impl_opengl3.cpp"
+            ${IMGUI_SOURCES})
+    endif()
+    if ( WIN32 )
+        set(IMGUI_SOURCES
+            "${ENGINE_EXTERNAL}/imgui-1.87/backends/imgui_impl_win32.cpp"
             ${IMGUI_SOURCES})
     endif()
 endif()
@@ -74,21 +79,24 @@ target_compile_features(AutomataTests PRIVATE cxx_std_17)
 set_target_properties(${ProjectName}
     PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY $<TARGET_FILE_DIR:${ProjectName}>)
 
-set(COMMON_LIB gdi32 user32 kernel32 Xaudio2 XAPOBase ole32 Shcore)
+set(WIN32_COMMON_LIB gdi32 user32 kernel32 Xaudio2 XAPOBase ole32 Shcore)
 
 if (${ProjectDisableLogging})
     target_compile_definitions(${ProjectName} PUBLIC -DAUTOMATA_ENGINE_DISABLE_PLATFORM_LOGGING)
 endif()
 
-target_link_libraries(AutomataTests ${COMMON_LIB})
 target_compile_definitions( AutomataTests PUBLIC -DAUTOMATA_ENGINE_DISABLE_IMGUI)
 if (${ProjectDisableImGui})
     target_compile_definitions(${ProjectName} PUBLIC -DAUTOMATA_ENGINE_DISABLE_IMGUI)
 endif()
 
+# TODO: In the backends below we unconditionally use the Win32 one. but for some backends,
+#       there is more than one Graphics API possible.
+
 if ( ${ProjectBackend} MATCHES "GL_BACKEND" )
+
     target_link_libraries(${ProjectName}
-        ${COMMON_LIB}
+        ${WIN32_COMMON_LIB}
         opengl32 Glu32
         "${ENGINE_EXTERNAL}/glew-2.2.0/lib/Release/x64/glew32s.lib")
     target_compile_definitions(${ProjectName}
@@ -98,15 +106,47 @@ if ( ${ProjectBackend} MATCHES "GL_BACKEND" )
         PRIVATE "${ENGINE_EXTERNAL}/glm-0.9.9.8" "${ENGINE_EXTERNAL}/glew-2.2.0/include/GL")
 
 elseif( ${ProjectBackend} MATCHES "DX12_BACKEND" )
+
     target_link_libraries(${ProjectName}
-        ${COMMON_LIB} D3D12 DXGI D3DCompiler)
+        ${WIN32_COMMON_LIB} D3D12 DXGI D3DCompiler)
     target_compile_definitions(${ProjectName} PRIVATE -DAUTOMATA_ENGINE_DX12_BACKEND)
+
 elseif( ${ProjectBackend} MATCHES "CPU_BACKEND" )
-    target_link_libraries(${ProjectName} ${COMMON_LIB})
+
+    target_link_libraries(${ProjectName} ${WIN32_COMMON_LIB})
     target_compile_definitions(${ProjectName} PRIVATE -DAUTOMATA_ENGINE_CPU_BACKEND)
+
 elseif( ${ProjectBackend} MATCHES "VK_BACKEND" )
-    target_link_libraries(${ProjectName} ${COMMON_LIB})
+
+    find_package( Vulkan 1.2 )
+
+    if ( NOT Vulkan_FOUND )
+        message( FATAL_ERROR "VK backend request made but unable to find Vulkan SDK on this machine." )
+    endif()
+
+    target_include_directories(${ProjectName} PRIVATE ${Vulkan_INCLUDE_DIRS} )
+    target_link_libraries( ${ProjectName} ${COMMON_LIB} )
+
     target_compile_definitions(${ProjectName} PRIVATE -DAUTOMATA_ENGINE_VK_BACKEND)
+
+elseif( ${ProjectBackend} MATCHES "METAL_BACKEND" )
+
+    # Metal cpp headers
+    target_include_directories( ${ProjectName} PRIVATE
+            "${ENGINE_EXTERNAL}/metal-cpp"
+            "${ENGINE_EXTERNAL}/metal-cpp-extensions"
+            )
+
+    # Metal cpp library (linker)
+    target_link_libraries( ${ProjectName}
+            "-framework Metal"
+            "-framework MetalKit"
+            "-framework AppKit"
+            "-framework Foundation"
+            "-framework QuartzCore")
+
+    target_compile_definitions(${ProjectName} PRIVATE -DAUTOMATA_ENGINE_METAL_BACKEND)
+
 endif()
 
 if ( "${ProjectExplicitResOutputDir}" STREQUAL "" )

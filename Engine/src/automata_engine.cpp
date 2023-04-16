@@ -7,8 +7,6 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h" 
 
-#include <windows.h>
-#include <win32_engine.h>
 
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
 #include "imgui.h"
@@ -189,4 +187,4 @@ namespace automata_engine {
             return "UNKNOWN";
         }
     }
-    };  // namespace automata_engine
+};  // namespace automata_engine

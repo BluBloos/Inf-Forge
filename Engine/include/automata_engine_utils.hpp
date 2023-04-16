@@ -191,10 +191,13 @@ namespace nc {
 typedef float                  float32_t;
 typedef double                 float64_t;
 
-namespace automata_engine {
-  enum game_key_t;
-  // TODO: do this better, please.
-  const char *gameKeyToString(game_key_t keyIdx);
-}  // namespace automata_engine
+
+// portable _countof
+#if _MSC_VER
+#else
+// TODO: pretty sure this could be better. works for now...
+#define _countof(x) (sizeof(x) / sizeof(x[0]))
+#endif
+
 
 #endif  // AUTOMATA_ENGINE_UTILS_HPP
