@@ -4,6 +4,7 @@
 #include <automata_engine.hpp>
 // ------------ stubs required to mock a game ----------------
 void ae::PreInit(ae::game_memory_t *gameMemory) {}
+void ae::InitAsync(ae::game_memory_t *gameMemory) {}
 void ae::Init(ae::game_memory_t *gameMemory) {}
 void ae::Close(ae::game_memory_t *gameMemory) {}
 void ae::HandleWindowResize(ae::game_memory_t *gameMemory, int newWdith, int newHeight) {}
