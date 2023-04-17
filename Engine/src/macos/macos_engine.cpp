@@ -72,6 +72,53 @@ void ae::platform::setVsync(bool b) {
 When an object's `retainCount` reaches `0`, the object is immediately deallocated. It is illegal to call methods on a deallocated object and it may lead to an application crash.
 */
 
+class MyMTKViewDelegate : public MTK::ViewDelegate
+{
+    public:
+        MyMTKViewDelegate( MTL::Device &device ) : m_device( device ) {
+            m_pCommandQueue = device.newCommandQueue();
+        }
+        virtual ~MyMTKViewDelegate() override
+        {
+            m_pCommandQueue->release();
+        }
+        virtual void drawInMTKView( MTK::View* pView ) override;
+
+    private:
+        MTL::Device &m_device;
+        MTL::CommandQueue* m_pCommandQueue;
+};
+
+void MyMTKViewDelegate::drawInMTKView( MTK::View* pView )
+{
+    // _pRenderer->draw( pView );
+
+    NS::AutoreleasePool* pPool = NS::AutoreleasePool::alloc()->init();
+
+    // this is a beautiful API. I like.
+    MTL::CommandBuffer* pCmd = m_pCommandQueue->commandBuffer();
+
+    // maybe there is a default render pass.
+    MTL::RenderPassDescriptor* pRpd = pView->currentRenderPassDescriptor();
+
+    // this is the object to use for "encoding" commands for a render pass.
+    MTL::RenderCommandEncoder* pEnc = pCmd->renderCommandEncoder( pRpd );
+    // ... "encode" commands here.
+    // this writes GPU commands into a command buffer.
+    pEnc->endEncoding();
+
+    // TODO: check that the RT is not null.
+    // otherwise, no RTs are available (GPU bound, all work is on GPU and CPU is waiting).
+    pCmd->presentDrawable( 
+        pView->currentDrawable() // render target for this frame.
+    );
+
+    // I guess this means "CPU is officially done, go off GPU."
+    pCmd->commit();
+
+    pPool->release();
+}
+
 class MyAppDelegate : public NS::ApplicationDelegate
 {
     public:
@@ -83,21 +130,19 @@ class MyAppDelegate : public NS::ApplicationDelegate
 
     private:
 
-        NS::Window* m_pWindow;
+        NS::Window*  m_pWindow;
+        MTK::View*   m_pMtkView; // mtk = metal kit.
+        MTL::Device* m_pDevice;
+        MyMTKViewDelegate* m_pViewDelegate = nullptr;
 
-#if 0 
-        MTK::View* _pMtkView;
-        MTL::Device* _pDevice;
-        MyMTKViewDelegate* _pViewDelegate = nullptr;
-#endif
 };
 
 MyAppDelegate::~MyAppDelegate()
 {
-    //_pMtkView->release();
+    m_pMtkView->release();
     m_pWindow->release();
-    //_pDevice->release();
-    //delete _pViewDelegate;
+    m_pDevice->release();
+    delete m_pViewDelegate;
 }
 
 // Returns a Boolean value that indicates if the app terminates once the last window closes.
@@ -125,10 +170,10 @@ void MyAppDelegate::applicationDidFinishLaunching( NS::Notification* pNotificati
     // TODO: is there a better default for width/height?
     float width = (ae::defaultWidth == UINT32_MAX) ? 512.0f : ae::defaultWidth;
     float height = (ae::defaultHeight == UINT32_MAX) ? 512.0f : ae::defaultHeight;    
-    bool bDefer = false; // defers creating the window device until the window is moved onscreen.
+    bool  bDefer = false; // defers creating the window device until the window is moved onscreen.
     CGRect frame = (CGRect){ {0.0, 0.0}, {width, height} };
 
-// TODO: handle begin maximized.
+    // TODO: handle begin maximized.
 
     m_pWindow = NS::Window::alloc()->init(
         frame,
@@ -136,16 +181,21 @@ void MyAppDelegate::applicationDidFinishLaunching( NS::Notification* pNotificati
         NS::BackingStoreBuffered, // yeah this is like the double buffering thing, right?
         bDefer );
 
-#if 0
-   _pDevice = MTL::CreateSystemDefaultDevice();
-    _pMtkView = MTK::View::alloc()->init( frame, _pDevice );
-    _pMtkView->setColorPixelFormat( MTL::PixelFormat::PixelFormatBGRA8Unorm_sRGB );
-    _pMtkView->setClearColor( MTL::ClearColor::Make( 1.0, 0.0, 0.0, 1.0 ) );
+    // NOTE(Noah): This is beautiful. Half the time you just want to create a default device.
+    // so let me have some API surface area to do that!!
+    m_pDevice  = MTL::CreateSystemDefaultDevice(); // API call has Create in name and therefore we own it.
+    m_pMtkView = MTK::View::alloc()->init( frame, m_pDevice );
 
-    _pViewDelegate = new MyMTKViewDelegate( _pDevice );
-    _pMtkView->setDelegate( _pViewDelegate );
-    m_pWindow->setContentView( _pMtkView );
-#endif
+    // TODO: so what is _actually_ going on when I set the color pixel format like this?
+    m_pMtkView->setColorPixelFormat( MTL::PixelFormat::PixelFormatBGRA8Unorm_sRGB );
+
+    // this clear color is used as the color in the load action for the render pass that the view creates.
+    m_pMtkView->setClearColor( MTL::ClearColor::Make( 1.0, 0.0, 0.0, 1.0 ) );
+
+    m_pViewDelegate = new MyMTKViewDelegate( *m_pDevice );
+    m_pMtkView->setDelegate( m_pViewDelegate );
+
+    m_pWindow->setContentView( m_pMtkView );
 
     const char *windowName=ae::defaultWindowName;
     m_pWindow->setTitle( NS::String::string( windowName, NS::StringEncoding::UTF8StringEncoding ) );
@@ -154,11 +204,11 @@ void MyAppDelegate::applicationDidFinishLaunching( NS::Notification* pNotificati
     // TODO: why does this take a sender?
     m_pWindow->makeKeyAndOrderFront( nullptr );
 
-    // TODO: do I need to activate the app explicitly like this? docs said it don't matter.
-#if 0
+    // here we activate the app explicitly. it was found that if this was not done,
+    // it would not show to user when open app.
     NS::Application* pApp = reinterpret_cast< NS::Application* >( pNotification->object() );
     pApp->activateIgnoringOtherApps( true );
-#endif
+
 }
 
 int main( int argc, char* argv[] )
