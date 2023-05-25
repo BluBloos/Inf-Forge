@@ -181,7 +181,7 @@ namespace automata_engine {
     void Init(game_memory_t *gameMemory);
 
     /// @brief Called after Init and before the first Update call is made to any registered app.
-    /// The execution thread is not the main thread and therefore for eg. OpenGL calls CANNOT be made.
+    /// The execution thread is not the main thread and therefore for e.g. OpenGL calls CANNOT be made.
     /// This callback is useful for the game to do any general setup work that may take some time.
     /// It occurs during the engine intro sequence if any. Once complete, this function should set the
     /// gameMemory to initialized, after which the first call to some Update is permitted to occur.

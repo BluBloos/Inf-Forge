@@ -6,7 +6,7 @@ set(ProjectName "AutomataApp" CACHE STRING "game EXE / target name")
 set(ProjectResourcesExtraPath "" CACHE STRING "absolute path to some dir with runtime game resources")
 set(ProjectExplicitSources OFF CACHE BOOL "if true, the app shall set PROJ_SOURCES as those to compile")
 set(ProjectExplicitResOutputDir "" CACHE STRING "if set, the app shall copy resources to this dir instead of default res/")
-set(ProjectBackend "CPU_BACKEND" CACHE STRING "can be any of {GL_BACKEND, CPU_BACKEND, DX12_BACKEND, VK_BACKEND}")
+set(ProjectBackend "CPU_BACKEND" CACHE STRING "a space separated string list of any of {GL_BACKEND, CPU_BACKEND, DX12_BACKEND, VK_BACKEND}")
 set(ProjectRoot "${CMAKE_CURRENT_SOURCE_DIR}" CACHE STRING "set to where the folder src/ and res/ can be found")
 set(ProjectDisableLogging OFF CACHE BOOL "if true, disables logging")
 set(ProjectDisableImGui OFF CACHE BOOL "if true, disables imgui")
@@ -43,7 +43,8 @@ if (NOT ${ProjectDisableImGui})
         "${ENGINE_EXTERNAL}/imgui-1.87/backends/imgui_impl_win32.cpp"
         "${ENGINE_EXTERNAL}/imgui-1.87/misc/freetype/imgui_freetype.cpp")
     # TODO: We're kind of assuming Win32 all over the place right now.
-    if ("${ProjectBackend}" MATCHES "GL_BACKEND")
+    string(FIND ${ProjectBackend} "GL_BACKEND" STRING_MATCH)
+    if ( NOT ${STRING_MATCH} EQUAL -1 )
         set(IMGUI_SOURCES
             "${ENGINE_EXTERNAL}/imgui-1.87/backends/imgui_impl_opengl3.cpp"
             ${IMGUI_SOURCES})
@@ -86,7 +87,8 @@ if (${ProjectDisableImGui})
     target_compile_definitions(${ProjectName} PUBLIC -DAUTOMATA_ENGINE_DISABLE_IMGUI)
 endif()
 
-if ( ${ProjectBackend} MATCHES "GL_BACKEND" )
+string(FIND ${ProjectBackend} "GL_BACKEND" STRING_MATCH)
+if ( NOT ${STRING_MATCH} EQUAL -1 )
     target_link_libraries(${ProjectName}
         ${COMMON_LIB}
         opengl32 Glu32
@@ -96,15 +98,23 @@ if ( ${ProjectBackend} MATCHES "GL_BACKEND" )
     # TODO(Noah): We can probably get rid of glm here.
     target_include_directories(${ProjectName}
         PRIVATE "${ENGINE_EXTERNAL}/glm-0.9.9.8" "${ENGINE_EXTERNAL}/glew-2.2.0/include/GL")
+endif()
 
-elseif( ${ProjectBackend} MATCHES "DX12_BACKEND" )
+string(FIND ${ProjectBackend} "DX12_BACKEND" STRING_MATCH)
+if ( NOT ${STRING_MATCH} EQUAL -1 )
     target_link_libraries(${ProjectName}
         ${COMMON_LIB} D3D12 DXGI D3DCompiler)
     target_compile_definitions(${ProjectName} PRIVATE -DAUTOMATA_ENGINE_DX12_BACKEND)
-elseif( ${ProjectBackend} MATCHES "CPU_BACKEND" )
+endif()
+
+string(FIND ${ProjectBackend} "CPU_BACKEND" STRING_MATCH)
+if ( NOT ${STRING_MATCH} EQUAL -1 )
     target_link_libraries(${ProjectName} ${COMMON_LIB})
     target_compile_definitions(${ProjectName} PRIVATE -DAUTOMATA_ENGINE_CPU_BACKEND)
-elseif( ${ProjectBackend} MATCHES "VK_BACKEND" )
+endif()
+
+string(FIND ${ProjectBackend} "VK_BACKEND" STRING_MATCH)
+if ( NOT ${STRING_MATCH} EQUAL -1 )
     target_link_libraries(${ProjectName} ${COMMON_LIB})
     target_compile_definitions(${ProjectName} PRIVATE -DAUTOMATA_ENGINE_VK_BACKEND)
 endif()
