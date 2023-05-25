@@ -89,6 +89,7 @@ endif()
 
 string(FIND ${ProjectBackend} "GL_BACKEND" STRING_MATCH)
 if ( NOT ${STRING_MATCH} EQUAL -1 )
+    message(STATUS "gl backend enabled")
     target_link_libraries(${ProjectName}
         ${COMMON_LIB}
         opengl32 Glu32
@@ -102,6 +103,7 @@ endif()
 
 string(FIND ${ProjectBackend} "DX12_BACKEND" STRING_MATCH)
 if ( NOT ${STRING_MATCH} EQUAL -1 )
+    message(STATUS "dx12 backend enabled")
     target_link_libraries(${ProjectName}
         ${COMMON_LIB} D3D12 DXGI D3DCompiler)
     target_compile_definitions(${ProjectName} PRIVATE -DAUTOMATA_ENGINE_DX12_BACKEND)
@@ -109,12 +111,14 @@ endif()
 
 string(FIND ${ProjectBackend} "CPU_BACKEND" STRING_MATCH)
 if ( NOT ${STRING_MATCH} EQUAL -1 )
+    message(STATUS "cpu backend enabled")
     target_link_libraries(${ProjectName} ${COMMON_LIB})
     target_compile_definitions(${ProjectName} PRIVATE -DAUTOMATA_ENGINE_CPU_BACKEND)
 endif()
 
 string(FIND ${ProjectBackend} "VK_BACKEND" STRING_MATCH)
 if ( NOT ${STRING_MATCH} EQUAL -1 )
+    message(STATUS "vk backend enabled")
     target_link_libraries(${ProjectName} ${COMMON_LIB})
     target_compile_definitions(${ProjectName} PRIVATE -DAUTOMATA_ENGINE_VK_BACKEND)
 endif()
