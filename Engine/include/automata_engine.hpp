@@ -89,6 +89,12 @@ Index of this file:
 // NOTE: glew must always be before gl.h
 #endif
 
+#if defined(AUTOMATA_ENGINE_DX12_BACKEND)
+#define NOMINMAX
+#include <D3d12.h>
+#include <dxgi1_6.h>
+#endif
+
 // NOTE: The printf and scanf family of functions are now defined inline.
 // therefore we link otherwise XAPOBase.lib has an unresolved external symbol.
 #pragma comment(lib, "legacy_stdio_definitions.lib")
@@ -237,6 +243,19 @@ namespace automata_engine {
 
     /// @brief Helper function to render a math::vec3_t to the ImGui window.
     void ImGuiRenderVec3(const char *vecName, math::vec3_t vec);
+
+#if defined(AUTOMATA_ENGINE_DX12_BACKEND)
+    namespace DX {
+
+    /**
+     * @param ppAdapter has AddRef called. Caller of this func must do
+     * ->Release() on adapter.
+     * @returns nullptr in ppAdapter on failure.
+     */
+    void findHardwareAdapter(IDXGIFactory2 *dxgiFactory,
+                             IDXGIAdapter1 **ppAdapter);
+    } // namespace DX
+#endif
 
 #if defined(AUTOMATA_ENGINE_GL_BACKEND)
     namespace GL {
