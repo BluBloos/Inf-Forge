@@ -1,6 +1,9 @@
 #include <automata_engine.hpp>
 
 #if defined(AUTOMATA_ENGINE_DX12_BACKEND)
+
+#include <D3DCompiler.h>
+
 namespace automata_engine {
 namespace DX {
 
@@ -87,6 +90,29 @@ void findHardwareAdapter(IDXGIFactory2 *dxgiFactory,
   }
 }
 
+
+HRESULT compileShader(
+    const wchar_t *filePathIn,
+    const char *entryPoint, const char *hlslVersion,
+    UINT compileFlags,
+    ID3DBlob **shaderOut
+) {
+    ID3DBlob *errs = nullptr;
+    HRESULT  hr;
+    (hr = D3DCompileFromFile(
+        filePathIn, nullptr, nullptr, entryPoint, hlslVersion, compileFlags, 0, shaderOut, &errs));
+    if (hr != S_OK && errs != nullptr) {
+        // check the error messages
+        void *bufPtr = errs->GetBufferPointer();
+        // size_t bufSize = errs->GetBufferSize();
+        // here we make the assumption that the message is null-terminated.
+        AELoggerError("shader compilation of entryPoint:\"%s\" on file:\"%s\" failed with err msg=\"%s\"", 
+            entryPoint, (char *)filePathIn, (char *)bufPtr);
+    }
+    return hr;
+}
+
+  
 #undef COM_RELEASE
 } // namespace DX
 }; // namespace automata_engine

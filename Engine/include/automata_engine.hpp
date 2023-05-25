@@ -254,6 +254,10 @@ namespace automata_engine {
      */
     void findHardwareAdapter(IDXGIFactory2 *dxgiFactory,
                              IDXGIAdapter1 **ppAdapter);
+
+    HRESULT compileShader(const wchar_t *filePathIn, const char *entryPoint,
+                          const char *hlslVersion, UINT compileFlags,
+                          ID3DBlob **shaderOut);
     } // namespace DX
 #endif
 
