@@ -144,7 +144,12 @@ if( NOT "${ProjectResourcesExtraPath}" STREQUAL "" )
         "${ProjectResourcesExtraPath}/*")
 endif()
 
-set( ProjectResourcesList ${ProjectResources} ${ProjectResourcesExtra} "${ENGINE_ROOT}/assets/engine.WAV" "${ENGINE_ROOT}/assets/logo.png" )
+#TODO: maybe there is a way that we can automate the finding of things in the assets folder.
+set( ProjectResourcesList ${ProjectResources} ${ProjectResourcesExtra}
+    "${ENGINE_ROOT}/assets/engine.WAV"
+    "${ENGINE_ROOT}/assets/logo.png"
+    "${ENGINE_ROOT}/assets/dxcompiler.dll"
+    "${ENGINE_ROOT}/assets/dxil.dll" )
 list( FILTER ProjectResourcesList EXCLUDE REGEX "\\.ini" )
 message(STATUS "found ProjectResourcesList=${ProjectResourcesList}")
 
