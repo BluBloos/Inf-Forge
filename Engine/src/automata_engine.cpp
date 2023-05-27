@@ -169,6 +169,7 @@ namespace automata_engine {
     void super::_close() {
         StretchyBufferFree(appTable_func);
         StretchyBufferFree(appTable_name);
+        ae::DX::_close();
     }
     void super::_init() {
         stbi_set_flip_vertically_on_load(true);
@@ -189,4 +190,4 @@ namespace automata_engine {
             return "UNKNOWN";
         }
     }
-    };  // namespace automata_engine
+};  // namespace automata_engine

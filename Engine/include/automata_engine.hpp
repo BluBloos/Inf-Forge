@@ -93,6 +93,7 @@ Index of this file:
 #define NOMINMAX
 #include <D3d12.h>
 #include <dxgi1_6.h>
+#include <dxcapi.h>
 #endif
 
 // NOTE: The printf and scanf family of functions are now defined inline.
@@ -247,17 +248,24 @@ namespace automata_engine {
 #if defined(AUTOMATA_ENGINE_DX12_BACKEND)
     namespace DX {
 
-    /**
-     * @param ppAdapter has AddRef called. Caller of this func must do
-     * ->Release() on adapter.
-     * @returns nullptr in ppAdapter on failure.
-     */
+    /// @brief finds the hardware adapter for use with creating the dx12 device.
+    ///
+    /// on failure, logs to console and returns nullptr in ppAdapter.
+    ///
+    /// @param ppAdapter has AddRef called. Caller of this func must do
+    ///        ->Release() on adapter.
+    ///
     void findHardwareAdapter(IDXGIFactory2 *dxgiFactory,
                              IDXGIAdapter1 **ppAdapter);
 
-    HRESULT compileShader(const wchar_t *filePathIn, const char *entryPoint,
-                          const char *hlslVersion, UINT compileFlags,
-                          ID3DBlob **shaderOut);
+    /// @brief compile an HLSL shader from file. automata engine bundles
+    /// dxcompiler.dll
+    ///        to compile shaders.
+    bool compileShader(const char *filePathIn, const WCHAR *entryPoint,
+                       const WCHAR *profile, IDxcBlob **blobOut);
+    /// @brief NOT to be called by user.
+    void _close();
+
     } // namespace DX
 #endif
 
