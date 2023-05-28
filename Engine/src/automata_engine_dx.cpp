@@ -206,6 +206,30 @@ bool compileShader(const char *filePathIn, const WCHAR *entryPoint,
   return false;
 }
 
+ID3D12Resource *AllocUploadBuffer(ID3D12Device *device, UINT64 size,
+                                  void **pData) {
+  ID3D12Resource *res = nullptr;
+  D3D12_HEAP_PROPERTIES hprop = {};
+  hprop.Type = D3D12_HEAP_TYPE_UPLOAD;
+  D3D12_RESOURCE_DESC resDesc = {};
+  resDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+  resDesc.Width = size;
+  resDesc.Height = 1;
+  resDesc.DepthOrArraySize = 1;
+  resDesc.MipLevels = 1;
+  resDesc.SampleDesc.Count = 1;
+  resDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+  (device->CreateCommittedResource(&hprop, D3D12_HEAP_FLAG_NONE, &resDesc,
+                                   D3D12_RESOURCE_STATE_GENERIC_READ,
+                                   nullptr, // optimized clear.
+                                   IID_PPV_ARGS(&res)));
+
+  D3D12_RANGE rr = {}; // empty range, will not be reading this resource.
+  if (res)
+    res->Map(0, &rr, pData);
+  return res;
+}
+
 #undef COM_RELEASE
 } // namespace DX
 }; // namespace automata_engine

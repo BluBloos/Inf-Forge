@@ -263,6 +263,14 @@ namespace automata_engine {
     ///        to compile shaders.
     bool compileShader(const char *filePathIn, const WCHAR *entryPoint,
                        const WCHAR *profile, IDxcBlob **blobOut);
+
+    /// @brief allocate a buffer for upload data to the GPU from the CPU.
+    /// this buffer will exist in system RAM and this be CPU visible.
+    /// the buffer will be automatically mapped after creation
+    /// the virtual addr is returned through pData.
+    ID3D12Resource *AllocUploadBuffer(ID3D12Device *device, UINT64 size,
+                                      void **pData);
+
     /// @brief NOT to be called by user.
     void _close();
 
