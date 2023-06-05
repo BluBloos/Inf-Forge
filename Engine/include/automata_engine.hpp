@@ -89,6 +89,13 @@ Index of this file:
 // NOTE: glew must always be before gl.h
 #endif
 
+#if defined(AUTOMATA_ENGINE_DX12_BACKEND)
+#define NOMINMAX
+#include <D3d12.h>
+#include <dxgi1_6.h>
+#include <dxcapi.h>
+#endif
+
 // NOTE: The printf and scanf family of functions are now defined inline.
 // therefore we link otherwise XAPOBase.lib has an unresolved external symbol.
 #pragma comment(lib, "legacy_stdio_definitions.lib")
@@ -181,7 +188,7 @@ namespace automata_engine {
     void Init(game_memory_t *gameMemory);
 
     /// @brief Called after Init and before the first Update call is made to any registered app.
-    /// The execution thread is not the main thread and therefore for eg. OpenGL calls CANNOT be made.
+    /// The execution thread is not the main thread and therefore for e.g. OpenGL calls CANNOT be made.
     /// This callback is useful for the game to do any general setup work that may take some time.
     /// It occurs during the engine intro sequence if any. Once complete, this function should set the
     /// gameMemory to initialized, after which the first call to some Update is permitted to occur.
@@ -237,6 +244,38 @@ namespace automata_engine {
 
     /// @brief Helper function to render a math::vec3_t to the ImGui window.
     void ImGuiRenderVec3(const char *vecName, math::vec3_t vec);
+
+#if defined(AUTOMATA_ENGINE_DX12_BACKEND)
+    namespace DX {
+
+    /// @brief finds the hardware adapter for use with creating the dx12 device.
+    ///
+    /// on failure, logs to console and returns nullptr in ppAdapter.
+    ///
+    /// @param ppAdapter has AddRef called. Caller of this func must do
+    ///        ->Release() on adapter.
+    ///
+    void findHardwareAdapter(IDXGIFactory2 *dxgiFactory,
+                             IDXGIAdapter1 **ppAdapter);
+
+    /// @brief compile an HLSL shader from file. automata engine bundles
+    /// dxcompiler.dll
+    ///        to compile shaders.
+    bool compileShader(const char *filePathIn, const WCHAR *entryPoint,
+                       const WCHAR *profile, IDxcBlob **blobOut);
+
+    /// @brief allocate a buffer for upload data to the GPU from the CPU.
+    /// this buffer will exist in system RAM and this be CPU visible.
+    /// the buffer will be automatically mapped after creation
+    /// the virtual addr is returned through pData.
+    ID3D12Resource *AllocUploadBuffer(ID3D12Device *device, UINT64 size,
+                                      void **pData);
+
+    /// @brief NOT to be called by user.
+    void _close();
+
+    } // namespace DX
+#endif
 
 #if defined(AUTOMATA_ENGINE_GL_BACKEND)
     namespace GL {

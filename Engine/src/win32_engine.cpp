@@ -1507,7 +1507,7 @@ int CALLBACK WinMain(HINSTANCE instance,
             static constexpr float engineIntroDuration = 4.f;
 
             // is engine intro over?
-            float introElapsed;
+            float introElapsed = 0.f;
             if (!bEngineIntroOver) {
                 if (engineIntroDuration < (introElapsed=Win32GetSecondsElapsed(IntroCounter, Win32GetWallClock(), g_PerfCountFrequency64))) {
                     bEngineIntroOver = true;
