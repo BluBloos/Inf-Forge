@@ -274,6 +274,43 @@ namespace automata_engine {
             const VkDebugUtilsMessengerCallbackDataEXT                                               *pCallbackData,
             void                                                                                     *pUserData);
 
+
+      /// @brief create a buffer in a dumb way. i.e. allocate a single block of memory as large as the
+      ///        buffer and this memory will be solely used for the buffer.
+      size_t createBufferDumb(
+                              VkDevice device, size_t size, uint32_t heapIdx,
+                              VkBufferUsageFlags usage, VkBuffer *bufferOut, VkDeviceMemory *memOut );
+
+      /// @brief same as createBufferDumb with the added utility of automatically mapping the buffer
+      ///        so that the CPU can immediately throw the data in there.
+      size_t createUploadBufferDumb(
+                              VkDevice device, size_t size, uint32_t heapIdx,
+                              VkBufferUsageFlags usage, VkBuffer *bufferOut, VkDeviceMemory *memOut,
+                              void **pData);
+
+      /// @brief get the virtual address of the buffer. this is not the same as VkDeviceMemory.
+      /// that is just an opapque handle to the memory.
+      VkDeviceAddress getBufferVirtAddr(VkDevice device, VkBuffer buffer);
+
+      /// @brief flush and unmap the upload VkBuffer that is already mapped from [0, size] and whose
+      /// backing memory is mappedThing.
+      void flushAndUnmapUploadBuffer(
+                                     VkDevice device,
+                                     size_t size,
+                                     VkDeviceMemory mappedThing
+                                     );
+      
+      /// @brief create a 2D image in a dumb way. many setting are default. this allocates a single block
+      /// of memory as large as the image, which be used solely for it.
+      size_t createImage2D_dumb(VkDevice device,
+                                uint32_t width,
+                                uint32_t height,
+                                uint32_t heapIdx,
+                                VkFormat format,
+                                VkImageUsageFlags usage,
+                                VkImage *imageOut,
+                                VkDeviceMemory *memOut);
+      
         VkShaderModule loadShaderModule(
             VkDevice vkDevice, const char *filePathIn, const WCHAR *entryPoint, const WCHAR *profile);
     }  // namespace VK

@@ -103,6 +103,133 @@ namespace automata_engine {
             return VK_FALSE;
         }
 
+        size_t createBufferDumb(VkDevice device,
+            size_t                       size,
+            uint32_t                     heapIdx,
+            VkBufferUsageFlags           usage,
+            VkBuffer                    *bufferOut,
+            VkDeviceMemory              *memOut)
+        {
+            VkBufferCreateInfo bufCI = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
+            bufCI.size               = size;
+            bufCI.usage              = usage;
+
+            vkCreateBuffer(device, &bufCI, nullptr, bufferOut);
+
+            VkMemoryRequirements bufferReq;
+            (vkGetBufferMemoryRequirements(device, *bufferOut, &bufferReq));
+
+            VkMemoryAllocateFlagsInfo flagsInfo = {VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO};
+
+            VkMemoryAllocateInfo allocInfo = {VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};
+            allocInfo.allocationSize       = ae::math::align_up(bufferReq.size, bufferReq.alignment);  //TODO.
+            allocInfo.memoryTypeIndex      = heapIdx;
+
+            // NOTE: what is the point of this API ??
+            //
+            // well, this is the only way to get the GPU virtual address of a buffer.
+            //
+            // otherwise, when we map to some vkdevicememory, we don't actually know about any GPU virt
+            // addresses. we only know about this opaque handle to the device mem. and through API calls
+            // we can point to offsets within that.
+            //
+            if (usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) {
+                allocInfo.pNext = &flagsInfo;
+                flagsInfo.flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT;
+            }
+
+            size_t out = allocInfo.allocationSize;
+
+            vkAllocateMemory(device, &allocInfo, nullptr, memOut);
+
+            VK_CHECK(vkBindBufferMemory(device,
+                *bufferOut,
+                *memOut,
+                0));  // so this offset is how we can do placed resources effectively - we can bind to an offset in the memory.
+
+            return out;
+        }
+
+        size_t createImage2D_dumb(VkDevice device,
+            uint32_t                       width,
+            uint32_t                       height,
+            uint32_t                       heapIdx,
+            VkFormat                       format,
+            VkImageUsageFlags              usage,
+            VkImage                       *imageOut,
+            VkDeviceMemory                *memOut)
+        {
+            VkImageCreateInfo ci = {VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
+            ci.imageType         = VK_IMAGE_TYPE_2D;
+            ci.format            = format;
+            ci.extent            = {width, height, 1};
+            ci.mipLevels         = 1;
+            ci.arrayLayers       = 1;
+            ci.samples           = VK_SAMPLE_COUNT_1_BIT;
+            ci.usage             = usage;
+            ci.initialLayout     = VK_IMAGE_LAYOUT_UNDEFINED;
+
+            VK_CHECK(vkCreateImage(device, &ci, nullptr, imageOut));
+            VkMemoryRequirements imageReq;
+            (vkGetImageMemoryRequirements(device, *imageOut, &imageReq));
+
+            VkMemoryAllocateInfo allocInfo = {VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};
+            allocInfo.allocationSize       = ae::math::align_up(imageReq.size, imageReq.alignment);  //TODO.
+            allocInfo.memoryTypeIndex      = heapIdx;
+
+            size_t res = allocInfo.allocationSize;
+
+            // bind this to some memory.
+            vkAllocateMemory(device, &allocInfo, nullptr, memOut);
+
+            VK_CHECK(vkBindImageMemory(device,
+                *imageOut,
+                *memOut,
+                0));  // so this offset is how we can do placed resources effectively ...
+
+            return res;
+        }
+
+        size_t createUploadBufferDumb(VkDevice device,
+            size_t                             size,
+            uint32_t                           heapIdx,
+            VkBufferUsageFlags                 usage,
+            VkBuffer                          *bufferOut,
+            VkDeviceMemory                    *memOut,
+            void                             **pData)
+        {
+            auto res = createBufferDumb(device, size, heapIdx, usage, bufferOut, memOut);
+
+            // do the map.
+            auto   thingToMap = *memOut;
+            size_t mapOffset  = 0;
+            size_t mapSize    = size;
+            size_t flags      = 0;
+            VK_CHECK(vkMapMemory(device, thingToMap, mapOffset, mapSize, flags, pData));
+
+            return res;
+        }
+
+        VkDeviceAddress getBufferVirtAddr(VkDevice device, VkBuffer buffer)
+        {
+            VkBufferDeviceAddressInfo info = {VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO};
+            info.buffer                    = buffer;
+            return vkGetBufferDeviceAddress(device, &info);
+        }
+
+        void flushAndUnmapUploadBuffer(VkDevice device, size_t size, VkDeviceMemory mappedThing)
+        {
+            VkMappedMemoryRange range = {VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE};
+            range.memory              = mappedThing;
+            range.offset              = 0;
+            range.size                = size;
+            // flush the write caches so that GPU can see the data.
+            VK_CHECK(vkFlushMappedMemoryRanges(device, 1, &range));
+
+            // unmap the buffer.
+            vkUnmapMemory(device, mappedThing);
+        }
+
     }  // namespace VK
 };     // namespace automata_engine
 

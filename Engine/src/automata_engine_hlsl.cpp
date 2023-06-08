@@ -53,12 +53,24 @@ namespace automata_engine {
                 return false;
             }
 
-            std::vector<LPCWSTR> args;
+            std::vector<LPCWSTR>   args;
+            std::vector<DxcDefine> defs;  // = {{L"VULKAN", L"1"}};
+
             if (emitSpirv) {
                 args.push_back(L"-spirv");
                 args.push_back(L"-T");
                 args.push_back(profile);
-                args.push_back(L"-fspv-extension=SPV_KHR_ray_query");  //TODO: this is temporary.
+
+                args.push_back(L"-E");
+                args.push_back(entryPoint);
+
+                // TODO: maybe have the user request if they want raytracing or not.
+                args.push_back(L"-fspv-target-env=vulkan1.2");
+                args.push_back(L"-fspv-extension=SPV_KHR_ray_tracing");
+                args.push_back(L"-fspv-extension=SPV_KHR_ray_query");  // TODO: not sure why this is needed?
+
+                // TODO: technically, spirv is not a VK specific thing??
+                defs.push_back({L"VULKAN", L"1"});
             }
 
             auto createInst = (DxcCreateInstanceProc)::GetProcAddress(s_dxcModule, "DxcCreateInstance");
@@ -93,9 +105,9 @@ namespace automata_engine {
                     profile,
                     args.data(),
                     (UINT32)args.size(),
-                    nullptr,  // defines
-                    0,        // define count
-                    nullptr,  // optional interface to handle #include.
+                    defs.data(),  // defines
+                    defs.size(),  // define count
+                    nullptr,      // optional interface to handle #include.
                     &pOpRes,
                     &debugBlobName,  // suggested file name for debug blob.
                     &pPDB);
