@@ -10,6 +10,7 @@ set(ProjectBackend "CPU_BACKEND" CACHE STRING "a space separated string list of 
 set(ProjectRoot "${CMAKE_CURRENT_SOURCE_DIR}" CACHE STRING "set to where the folder src/ and res/ can be found")
 set(ProjectDisableLogging OFF CACHE BOOL "if true, disables logging")
 set(ProjectDisableImGui OFF CACHE BOOL "if true, disables imgui")
+set(ProjectDisableEngineIntro OFF CACHE BOOL "if true, disable engine intro")
 
 # TODO: What if we want to make a multiple gfx-API application?
 
@@ -49,6 +50,11 @@ if (NOT ${ProjectDisableImGui})
             "${ENGINE_EXTERNAL}/imgui-1.87/backends/imgui_impl_opengl3.cpp"
             ${IMGUI_SOURCES})
     endif()
+endif()
+
+# TODO: hook the definition of this to actually do something.
+if (${ProjectDisableEngineIntro})
+    target_compile_definitions(${ProjectName} PUBLIC -DAUTOMATA_ENGINE_DISABLE_ENGINE_INTRO)
 endif()
 
 set(SOURCES ${PROJ_SOURCES} ${ENGINE_SOURCES} ${IMGUI_SOURCES})
@@ -119,8 +125,16 @@ endif()
 string(FIND ${ProjectBackend} "VK_BACKEND" STRING_MATCH)
 if ( NOT ${STRING_MATCH} EQUAL -1 )
     message(STATUS "vk backend enabled")
-    target_link_libraries(${ProjectName} ${COMMON_LIB})
-    target_compile_definitions(${ProjectName} PRIVATE -DAUTOMATA_ENGINE_VK_BACKEND)
+
+    find_package( Vulkan 1.2 )
+    if ( NOT Vulkan_FOUND )
+        message( FATAL_ERROR "VK backend request made but unable to find Vulkan SDK on this machine." )
+    endif()
+
+    target_include_directories(${ProjectName} PRIVATE ${Vulkan_INCLUDE_DIRS} )
+    target_link_libraries( ${ProjectName} ${COMMON_LIB} )
+    target_compile_definitions(${ProjectName} PRIVATE -DAUTOMATA_ENGINE_VK_BACKEND )
+
 endif()
 
 if ( "${ProjectExplicitResOutputDir}" STREQUAL "" )

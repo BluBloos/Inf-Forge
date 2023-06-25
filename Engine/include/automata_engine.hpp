@@ -93,8 +93,25 @@ Index of this file:
 #define NOMINMAX
 #include <D3d12.h>
 #include <dxgi1_6.h>
-#include <dxcapi.h>
 #endif
+
+#if defined(AUTOMATA_ENGINE_VK_BACKEND)
+
+// TODO: we cannot define WIN32 here, automata_engine.hpp is meant to be platform agnostic.
+#define VK_USE_PLATFORM_WIN32_KHR
+#define NOMINMAX
+
+#define VK_NO_PROTOTYPES
+#include <vulkan/vulkan.h>
+
+// TODO: for now, this is the way. but in the future it would be nice to roll our own dynamic loading.
+#include <Volk/volk.h>
+
+#endif // AUTOMATA_ENGINE_VK_BACKEND
+
+
+// NOTE: for HLSL compilation.
+#include <dxcapi.h>
 
 // NOTE: The printf and scanf family of functions are now defined inline.
 // therefore we link otherwise XAPOBase.lib has an unresolved external symbol.
@@ -245,6 +262,60 @@ namespace automata_engine {
     /// @brief Helper function to render a math::vec3_t to the ImGui window.
     void ImGuiRenderVec3(const char *vecName, math::vec3_t vec);
 
+#if defined(AUTOMATA_ENGINE_VK_BACKEND)
+    namespace VK {
+
+        /// @brief convert the vk result to string. very simple cool stuff. very wow.
+        const char *VkResultToString(VkResult result);
+
+        /// @brief this is for use as a callback that an engine client can "just use".
+        VKAPI_ATTR VkBool32 VKAPI_CALL ValidationDebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+            VkDebugUtilsMessageTypeFlagsEXT                                                           messageType,
+            const VkDebugUtilsMessengerCallbackDataEXT                                               *pCallbackData,
+            void                                                                                     *pUserData);
+
+
+      /// @brief create a buffer in a dumb way. i.e. allocate a single block of memory as large as the
+      ///        buffer and this memory will be solely used for the buffer.
+      size_t createBufferDumb(
+                              VkDevice device, size_t size, uint32_t heapIdx,
+                              VkBufferUsageFlags usage, VkBuffer *bufferOut, VkDeviceMemory *memOut );
+
+      /// @brief same as createBufferDumb with the added utility of automatically mapping the buffer
+      ///        so that the CPU can immediately throw the data in there.
+      size_t createUploadBufferDumb(
+                              VkDevice device, size_t size, uint32_t heapIdx,
+                              VkBufferUsageFlags usage, VkBuffer *bufferOut, VkDeviceMemory *memOut,
+                              void **pData);
+
+      /// @brief get the virtual address of the buffer. this is not the same as VkDeviceMemory.
+      /// that is just an opapque handle to the memory.
+      VkDeviceAddress getBufferVirtAddr(VkDevice device, VkBuffer buffer);
+
+      /// @brief flush and unmap the upload VkBuffer that is already mapped from [0, size] and whose
+      /// backing memory is mappedThing.
+      void flushAndUnmapUploadBuffer(
+                                     VkDevice device,
+                                     size_t size,
+                                     VkDeviceMemory mappedThing
+                                     );
+      
+      /// @brief create a 2D image in a dumb way. many setting are default. this allocates a single block
+      /// of memory as large as the image, which be used solely for it.
+      size_t createImage2D_dumb(VkDevice device,
+                                uint32_t width,
+                                uint32_t height,
+                                uint32_t heapIdx,
+                                VkFormat format,
+                                VkImageUsageFlags usage,
+                                VkImage *imageOut,
+                                VkDeviceMemory *memOut);
+      
+        VkShaderModule loadShaderModule(
+            VkDevice vkDevice, const char *filePathIn, const WCHAR *entryPoint, const WCHAR *profile);
+    }  // namespace VK
+#endif
+
 #if defined(AUTOMATA_ENGINE_DX12_BACKEND)
     namespace DX {
 
@@ -258,12 +329,6 @@ namespace automata_engine {
     void findHardwareAdapter(IDXGIFactory2 *dxgiFactory,
                              IDXGIAdapter1 **ppAdapter);
 
-    /// @brief compile an HLSL shader from file. automata engine bundles
-    /// dxcompiler.dll
-    ///        to compile shaders.
-    bool compileShader(const char *filePathIn, const WCHAR *entryPoint,
-                       const WCHAR *profile, IDxcBlob **blobOut);
-
     /// @brief allocate a buffer for upload data to the GPU from the CPU.
     /// this buffer will exist in system RAM and this be CPU visible.
     /// the buffer will be automatically mapped after creation
@@ -271,11 +336,26 @@ namespace automata_engine {
     ID3D12Resource *AllocUploadBuffer(ID3D12Device *device, UINT64 size,
                                       void **pData);
 
-    /// @brief NOT to be called by user.
-    void _close();
-
     } // namespace DX
 #endif
+
+    namespace HLSL {
+
+    // TODO: the below prob will not work in isolation (say if we did not define to use
+    // any of the graphics API backends) as there is WCHAR.
+
+    /// @brief compile an HLSL shader from file. automata engine bundles
+    /// dxcompiler.dll
+    ///        to compile shaders.
+    bool compileBlobFromFile(const char *filePathIn,
+        const WCHAR                     *entryPoint,
+        const WCHAR                     *profile,
+        IDxcBlob                       **blobOut,
+        bool                             emitSpirv = false);
+
+    /// @brief NOT to be called by user.
+    void _close();
+    }  // namespace HLSL
 
 #if defined(AUTOMATA_ENGINE_GL_BACKEND)
     namespace GL {
