@@ -61,7 +61,10 @@ set(SOURCES ${PROJ_SOURCES} ${ENGINE_SOURCES} ${IMGUI_SOURCES})
 
 # Add EXEs
 add_executable(${ProjectName} WIN32 ${SOURCES})
-add_executable(AutomataTests ${ENGINE_SOURCES} "${ENGINE_ROOT}/tests/test_main.cpp")
+
+if (NOT TARGET AutomataTests)
+    add_executable(AutomataTests ${ENGINE_SOURCES} "${ENGINE_ROOT}/tests/test_main.cpp")
+endif()
 
 set_property(TARGET ${ProjectName} PROPERTY VS_DPI_AWARE "PerMonitor")
 
@@ -176,7 +179,10 @@ if ( WIN32 )
     )
 endif()
 
-add_subdirectory(external/freetype-2.12.1)
+if (NOT TARGET freetype)
+    add_subdirectory(external/freetype-2.12.1)
+endif()
+
 target_link_libraries(${ProjectName} freetype)
 
 target_compile_definitions(${ProjectName}
