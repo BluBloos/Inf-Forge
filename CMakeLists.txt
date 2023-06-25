@@ -33,7 +33,8 @@ if (NOT ${ProjectExplicitSources})
         "${ProjectRoot}/src/*.cpp")
 endif()
 file(GLOB_RECURSE ENGINE_SOURCES
-    "${ENGINE_ROOT}/src/*.cpp")
+    "${ENGINE_ROOT}/src/*.cpp"
+    "${ENGINE_ROOT}/src/*.manifest")
     
 # george w3as here
 
@@ -57,7 +58,7 @@ set(SOURCES ${PROJ_SOURCES} ${ENGINE_SOURCES} ${IMGUI_SOURCES})
 add_executable(${ProjectName} WIN32 ${SOURCES})
 add_executable(AutomataTests ${ENGINE_SOURCES} "${ENGINE_ROOT}/tests/test_main.cpp")
 
-set_property(TARGET ${ProjectName} PROPERTY VS_DPI_AWARE "PerMonitor")
+#set_property(TARGET ${ProjectName} PROPERTY VS_DPI_AWARE "PerMonitor")
 
 source_group(TREE "${ENGINE_ROOT}/src/" PREFIX "engine/" FILES ${ENGINE_SOURCES})
 source_group(TREE "${ProjectRoot}/src/" PREFIX "app/" FILES ${PROJ_SOURCES})
