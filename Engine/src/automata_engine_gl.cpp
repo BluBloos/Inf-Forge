@@ -53,6 +53,55 @@ namespace automata_engine {
             }
             return id;
         }
+        // TODO: there is quite a bit of copy-pasta between this and the normal
+        // createShader. we should prob clean that up! failure mode for this
+        // function is -1
+        GLuint createComputeShader(const char *filePath) {
+            uint32_t program;
+            // Step 1: Setup our vertex and fragment GLSL shaders!
+            loaded_file_t f1 =
+                automata_engine::platform::readEntireFile(filePath);
+            GL_CALL(program = glCreateProgram());
+            uint32_t cs = compileShader(GL_COMPUTE_SHADER, (char *)f1.contents);
+            auto findAndlogError = [=]() {
+              GLsizei length;
+              GLint logLength;
+              glGetProgramiv(program, GL_INFO_LOG_LENGTH, &logLength);
+              const char *logMsg = new char[logLength + 1];
+              defer(delete[] logMsg);
+              static_assert(sizeof(GLchar) == sizeof(char), "odd platform");
+              glGetProgramInfoLog(program, logLength, &length,
+                                  (GLchar *)logMsg);
+              AELoggerError("Program link or validation failure:\n%s", logMsg);
+            };
+            if ((int)cs == -1) {
+                goto createComputeShader_Fail;
+            }
+            glAttachShader(program, cs);
+            glLinkProgram(program);
+            GLint result;
+            glGetProgramiv(program, GL_LINK_STATUS, &result);
+            if (result == GL_FALSE) {
+                findAndlogError();
+                goto createComputeShader_Fail;
+            }
+            glValidateProgram(program);
+            glGetProgramiv(program, GL_LINK_STATUS, &result);
+            if (result == GL_FALSE) {
+                findAndlogError();
+                goto createComputeShader_Fail;
+            }
+            goto createComputeShader_end;
+        createComputeShader_Fail:
+            glDeleteProgram(program);
+            return -1;
+        createComputeShader_end:
+            // Cleanup
+            glDeleteShader(cs);
+            automata_engine::platform::freeLoadedFile(f1);
+            return program;
+        }
+
         // failure mode for this function is -1
         GLuint createShader(const char *vertFilePath, const char *fragFilePath,
             const char *geoFilePath
