@@ -3,57 +3,57 @@
 
 # Automata-Engine
 
-Build system for generic GUI applications.
+Framework for maybe writing games. Maybe also useful for writing general GUI applications.
 
 ## Supported Platforms
 
-The only supported target platform currently is Windows.
+Windows.
 
 ## How to use this project
 
-### Requirements
+The project is setup for building via CMake.
 
-- Python + requests lib.
-- CMake.
+### Building the examples
 
-Rather unfortunately (I'm hoping to change this in the future!), you must install Python. The engine has been tested
-with Python v3.10.5. Python is a dependency as some of the source tree is remotely sourced from my public gists on
-Github.
-
-The engine has been tested to work with CMake generators for Visual Studio 2019 and 2022.
+Simply use the CMake project located under the examples\ directory. This is a project with a single target per example.
 
 ### Game Setup
 
-Currently, the game is a service to the engine. It must define callbacks for the engine to call. The engine and game
-are statically linked together into a single target executable.
+This framework is architected where the game is a service to the engine. The game must define callbacks for the engine
+to call. The engine and game are statically linked together into a single target executable.
 
-The game project itself is expected to be a CMake project. The engine will be added as a subdirectory in the game
-project's CMakeLists.txt. Like so,
+The engine will be added as a subdirectory in the game project's CMakeLists.txt. This will define a target, but will never call `project`.
 
 ```CMake
 add_subdirectory(Automata-Engine)
 ```
 
 Here is **how the engine expects the directory structure to be formatted:**
-```
+
+```text
 <GameFolder>
   src\
   include\
   res\
 ```
 
-When building a project, the engine will recursively copy the `res\` folder into the directory where the target .exe
-resides. Source files are recursively searched for within `src\`. And the include path will have `include\` added to it.
+The include folder is not required, but if present is added to the include path for the build.
 
-Some of these folder settings are defaults and can be overridden by CMake variables. For eg. ProjectResourcesExtraPath
-can be set to copy not only from `res\`, but from some additional folder too.
+When building a project, the engine will recursively copy the items in `res\` folder into another `res\` folder within
+the directory where the target .exe resides. The directory structure of the output `res\` folder is flattened - any
+subfolders within the original `res\` folder are no longer present in the final one.
 
-### Selecting a backend
+Source files are recursively searched for within `src\` and added as sources for the target.
 
-Currently, Automata-Engine only supports OpenGL/CPU and for the forseeable future will only support a single backend at
-runtime. To select a backend, you must define a CMake variable `ProjectBackend` to be one of the following:
+Some of these folder settings are defaults and can be overridden by CMake variables. For e.g., ProjectResourcesExtraPath
+can be set as an additional folder used in the search for asset files.
 
-```
+### Selecting backend(s)
+
+To select the backends to use, you must define a CMake variable `ProjectBackend`. It should be a space delimited string of
+the following options:
+
+```text
 "GL_BACKEND" | "DX12_BACKEND" | "CPU_BACKEND" | "VK_BACKEND"
 ```
 
@@ -66,6 +66,7 @@ In the `CPU_BACKEND`, the contract between engine and app is that app must popul
 For `GL_BACKEND`, the engine will init window + OpenGL context. The engine manages when presentation happens, and when the application is called to update logic + make draw calls. The application calls `automata_engine::setUpdateModel()` to specify with detail how this works. Currently, `AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC` is the only supported update model.
 
 Here's how that works:
+
 ```C++
 // AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC:
 while (_globalRunning) {
@@ -76,3 +77,9 @@ while (_globalRunning) {
   SwapBuffers();
 }
 ```
+
+### DX12 / VULKAN
+
+these backends are experimental at the moment. to be honest, this entire framework is experimental :)
+
+i.e., these do not have the same behavior as the gl_backend, where presentation is automatically managed by the engine.
