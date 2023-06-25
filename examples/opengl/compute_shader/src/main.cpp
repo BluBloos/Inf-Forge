@@ -12,15 +12,16 @@ typedef struct game_state {
   GLuint computeShader;
   GLuint outputImage;
   GLenum outputFormat;
-      GLuint outputImageFramebuffer;
+  GLuint outputImageFramebuffer;
 } game_state_t;
 
-game_state_t *getGameState(ae::game_memory_t* gameMemory)
-{
-    return (game_state_t*)gameMemory->data;
+game_state_t *getGameState(ae::game_memory_t *gameMemory) {
+  return (game_state_t *)gameMemory->data;
 }
 
-void ae::HandleWindowResize(game_memory_t *gameMemory, int newWidth, int newHeight) {}
+void ae::HandleWindowResize(game_memory_t *gameMemory, int newWidth,
+                            int newHeight) {}
+
 void ae::PreInit(game_memory_t *gameMemory) {
   ae::defaultWinProfile = AUTOMATA_ENGINE_WINPROFILE_NORESIZE;
   ae::defaultWindowName = APP_NAME;
@@ -34,8 +35,7 @@ void ae::Init(game_memory_t *gameMemory) {
 
   auto winInfo = ae::platform::getWindowInfo();
 
-  glViewport(
-    0, 0, winInfo.width, winInfo.height);
+  glViewport(0, 0, winInfo.width, winInfo.height);
 
   game_state_t *gameState = getGameState(gameMemory);
 
@@ -44,13 +44,15 @@ void ae::Init(game_memory_t *gameMemory) {
     ae::setFatalExit();
     return;
   }
+
   glUseProgram(gameState->computeShader);
 
   // make the UAV texture.
   glGenTextures(1, &gameState->outputImage);
   glBindTexture(GL_TEXTURE_2D, gameState->outputImage);
   gameState->outputFormat = GL_RGBA32F;
-  glTexStorage2D(GL_TEXTURE_2D, 1, gameState->outputFormat, winInfo.width, winInfo.height);
+  glTexStorage2D(GL_TEXTURE_2D, 1, gameState->outputFormat, winInfo.width,
+                 winInfo.height);
 
   // wrap UAV in framebuffer object.
   {
@@ -76,23 +78,20 @@ void ae::Init(game_memory_t *gameMemory) {
   ae::platform::setVsync(true);
 }
 
-void ae::InitAsync(game_memory_t *gameMemory) { gameMemory->setInitialized(true); }
+void ae::InitAsync(game_memory_t *gameMemory) {
+  gameMemory->setInitialized(true);
+}
 
-// TODO: would be nice if it wasn't a requirement to do this thing. and instead we could
-// just be like, "we aren't using sound stuff."
+// TODO: would be nice if it wasn't a requirement to do this thing. and instead
+// we could just be like, "we aren't using sound stuff."
 void ae::OnVoiceBufferEnd(game_memory_t *gameMemory, intptr_t voiceHandle) {}
-void ae::OnVoiceBufferProcess(game_memory_t *gameMemory,
-    intptr_t                                 voiceHandle,
-    float                                   *dst,
-    float                                   *src,
-    uint32_t                                 samplesToWrite,
-    int                                      channels,
-    int                                      bytesPerSample)
-{}
+void ae::OnVoiceBufferProcess(game_memory_t *gameMemory, intptr_t voiceHandle,
+                              float *dst, float *src, uint32_t samplesToWrite,
+                              int channels, int bytesPerSample) {}
 
 void GameUpdateAndRender(ae::game_memory_t *gameMemory) {
   game_state_t *gameState = getGameState(gameMemory);
- 
+
   glClearColor(1.0f, 1.0f, 0.1f, 1.0f);
   glClear(GL_COLOR_BUFFER_BIT);
 
@@ -134,7 +133,7 @@ void GameUpdateAndRender(ae::game_memory_t *gameMemory) {
 
     // set draw dest.
     glBindFramebuffer(GL_READ_FRAMEBUFFER, gameState->outputImageFramebuffer);
-    glReadBuffer(GL_COLOR_ATTACHMENT0);    
+    glReadBuffer(GL_COLOR_ATTACHMENT0);
 
     // Copy the texture to the back buffer
     glBlitFramebuffer(0, 0, winInfo.width, winInfo.height, 0, 0, winInfo.width,
