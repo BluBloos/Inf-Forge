@@ -162,8 +162,10 @@ if ( WIN32 )
     )
 endif()
 
-add_subdirectory(external/freetype-2.12.1)
-target_link_libraries(${ProjectName} freetype)
+if (NOT ProjectDisableImGui)
+    add_subdirectory(external/freetype-2.12.1)
+    target_link_libraries(${ProjectName} freetype)
+endif()
 
 target_compile_definitions(${ProjectName}
     PUBLIC IMGUI_USER_CONFIG="automata_engine_imgui_config.h")

@@ -169,7 +169,10 @@ namespace automata_engine {
     void super::_close() {
         StretchyBufferFree(appTable_func);
         StretchyBufferFree(appTable_name);
+        // NOTE: pretty sure we made this change when doing the VK stuff.
+#if defined(AUTOMATA_ENGINE_DX12_BACKEND)
         ae::DX::_close();
+        #endif
     }
     void super::_init() {
         stbi_set_flip_vertically_on_load(true);
