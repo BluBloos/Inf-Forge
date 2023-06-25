@@ -93,6 +93,10 @@ Index of this file:
 #define NOMINMAX
 #include <D3d12.h>
 #include <dxgi1_6.h>
+
+// NOTE: for HLSL compilation.
+#include <dxcapi.h>
+
 #endif
 
 #if defined(AUTOMATA_ENGINE_VK_BACKEND)
@@ -107,11 +111,13 @@ Index of this file:
 // TODO: for now, this is the way. but in the future it would be nice to roll our own dynamic loading.
 #include <Volk/volk.h>
 
+// NOTE: for HLSL compilation.
+#include <dxcapi.h>
+
 #endif // AUTOMATA_ENGINE_VK_BACKEND
 
 
-// NOTE: for HLSL compilation.
-#include <dxcapi.h>
+
 
 // NOTE: The printf and scanf family of functions are now defined inline.
 // therefore we link otherwise XAPOBase.lib has an unresolved external symbol.
@@ -339,6 +345,10 @@ namespace automata_engine {
     } // namespace DX
 #endif
 
+    // TODO: maybe we actually care about HLSL if we aren't doing dx12/vk?
+    // but for now we get build errors, so deferring this work until a later time.
+#if defined(AUTOMATA_ENGINE_DX12_BACKEND) || defined(AUTOMATA_ENGINE_VK_BACKEND)
+
     namespace HLSL {
 
     // TODO: the below prob will not work in isolation (say if we did not define to use
@@ -356,6 +366,8 @@ namespace automata_engine {
     /// @brief NOT to be called by user.
     void _close();
     }  // namespace HLSL
+
+#endif
 
 #if defined(AUTOMATA_ENGINE_GL_BACKEND)
     namespace GL {
