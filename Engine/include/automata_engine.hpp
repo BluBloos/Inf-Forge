@@ -393,6 +393,9 @@ namespace automata_engine {
         /// @brief Load, compile, and upload to GPU a GLSL shader program from disk.
         GLuint createShader(const char *vertFilePath, const char *fragFilePath, const char *geoFilePath = "\0");
 
+        /// @brief Load, compile, and upload to GPU a GLSL compute shader program from disk.
+        GLuint createComputeShader(const char *filePath);
+
         // TODO(Noah): There's got to be a nice and clean way to get rid of the duplication
         // here with the header of the wrapper.
         /// @brief Load and upload to GPU a texture from disk. This function supports the same file formats as stbi_load.
