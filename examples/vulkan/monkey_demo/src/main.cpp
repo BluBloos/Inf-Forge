@@ -1,7 +1,5 @@
 #include <automata_engine.hpp>
 
-namespace ae = automata_engine;
-
 typedef uint32_t u32;
 
 void GameUpdateAndRender(ae::game_memory_t *gameMemory);
@@ -34,6 +32,9 @@ typedef struct game_state {
     VkPipeline            gameShader;
 
     VkRenderPass vkRenderPass;  // TODO: dyn rendering prefer.
+
+    // NOTE: 10 is certainly larger than swapchain count.
+    VkFramebuffer vkFramebufferCache[10] = {};
 
     VkImage        checkerTexture;
     VkDeviceMemory checkerTextureBacking;
@@ -86,6 +87,8 @@ void ae::Init(game_memory_t *gameMemory)
 {
     auto          winInfo = ae::platform::getWindowInfo();
     game_state_t *gd      = getGameState(gameMemory);
+
+    *gd = {}; // zero it out.
 
     ae::VK::doDefaultInit(
         &gd->vkInstance, &gd->vkGpu, &gd->vkDevice, &gd->gfxQueueIndex, &gd->vkQueue, &gd->vkDebugCallback);
@@ -141,7 +144,6 @@ void ae::Init(game_memory_t *gameMemory)
 
         ae::VK_CHECK(vkCreatePipelineLayout(gd->vkDevice, &layout_info, nullptr, &gd->pipelineLayout));
 
-        // TODO: temp create render pass.
         // init the render pass
         {
             VkAttachmentDescription attachment = {0};
@@ -153,7 +155,6 @@ void ae::Init(game_memory_t *gameMemory)
             attachment.finalLayout             = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
             VkAttachmentReference color_ref = {0,  // ref attachment 0
-
                 VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
 
             VkSubpassDescription subpass = {0};
@@ -420,6 +421,23 @@ void ae::OnVoiceBufferProcess(game_memory_t *gameMemory,
     int                                      bytesPerSample)
 {}
 
+VkFramebuffer MaybeMakeFramebuffer(game_state_t *gd, VkImageView view, u32 width, u32 height, uint32_t idx)
+{
+    assert(idx < _countof(gd->vkFramebufferCache));
+    if (!gd->vkFramebufferCache[idx]) {
+        VkFramebufferCreateInfo ci = {};
+        ci.sType                   = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+        ci.renderPass              = gd->vkRenderPass;
+        ci.attachmentCount         = 1;
+        ci.pAttachments            = &view;
+        ci.width                   = width;
+        ci.height                  = height;
+        ci.layers                  = 1;
+        vkCreateFramebuffer(gd->vkDevice, &ci, nullptr, &gd->vkFramebufferCache[idx]);
+    }
+    return gd->vkFramebufferCache[idx];
+}
+
 void GameUpdateAndRender(ae::game_memory_t *gameMemory)
 {
     auto             winInfo   = ae::platform::getWindowInfo();
@@ -469,7 +487,13 @@ void GameUpdateAndRender(ae::game_memory_t *gameMemory)
 
         VkImageView backbufferView;
         VkImage     backbuffer;
-        ae::VK::getCurrentBackbuffer(&backbuffer, &backbufferView);
+        uint32_t    backbufferIdx = ae::VK::getCurrentBackbuffer(&backbuffer, &backbufferView);
+
+        // NOTE: since the window cannot be resized, the swapchain will never be resized.
+        // for this reason, it is safe to rely that VkImageView is the same view across the entire
+        // app lifetime.
+        VkFramebuffer framebuffer =
+            MaybeMakeFramebuffer(gd, backbufferView, winInfo.width, winInfo.height, backbufferIdx);
 
         // NOTE: the barriers are special casing the fact that we have the atomic update model.
         // so, we don't need to sync against any work before.
@@ -489,9 +513,6 @@ void GameUpdateAndRender(ae::game_memory_t *gameMemory)
             &barrierInfo);
 
         {
-            // TODO: could it be that dynamic rendering is just broken ??
-            // i'd hate for that to be the case.
-
             VkRect2D renderArea = {VkOffset2D{0, 0}, VkExtent2D{winInfo.width, winInfo.height}};
 
             VkClearValue clearValue;
@@ -500,49 +521,15 @@ void GameUpdateAndRender(ae::game_memory_t *gameMemory)
             clearValue.color.float32[2] = 0.f;
             clearValue.color.float32[3] = 1.f;
 
-            /*// bind RT.
-            VkRenderingAttachmentInfo ba  = {};
-            ba.sType                      = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-            ba.imageLayout                = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-            ba.imageView                  = backbufferView;
-            ba.loadOp                     = VK_ATTACHMENT_LOAD_OP_CLEAR;
-            ba.storeOp                    = VK_ATTACHMENT_STORE_OP_STORE;
-            ba.clearValue = clearValue;
-
-            VkRenderingInfo renderingInfo      = {};
-            renderingInfo.sType                = VK_STRUCTURE_TYPE_RENDERING_INFO;
-            renderingInfo.renderArea           = renderArea;
-            renderingInfo.colorAttachmentCount = 1;
-            renderingInfo.pColorAttachments    = &ba;
-            renderingInfo.layerCount           = 1;
-
-            vkCmdBeginRendering(cmd, &renderingInfo);
-            defer(vkCmdEndRendering(cmd)));
-            */
-            // Render to this framebuffer.
-            VkFramebuffer           framebuffer;
-            VkFramebufferCreateInfo ci = {};
-            ci.sType                   = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-            ci.renderPass              = gd->vkRenderPass;
-            ci.attachmentCount         = 1;
-            ci.pAttachments            = &backbufferView;
-            ci.width                   = winInfo.width;
-            ci.height                  = winInfo.height;
-            ci.layers                  = 1;
-            vkCreateFramebuffer(gd->vkDevice,
-                &ci,
-                nullptr,
-                &framebuffer);  // TODO: could easily bundle this with getcurrbackbuffer call.
-
             // Begin the render pass.
-            VkRenderPassBeginInfo rp_begin{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
+            VkRenderPassBeginInfo rp_begin = {};
+            rp_begin.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
             rp_begin.renderPass  = gd->vkRenderPass;
             rp_begin.framebuffer = framebuffer;
-            rp_begin.renderArea  = renderArea;  //.extent.width  = g_vkSwapchainParams.width;
-            //                rp_begin.renderArea.extent.height = g_vkSwapchainParams.height;
-            rp_begin.clearValueCount = 1;
-            rp_begin.pClearValues    = &clearValue;
-            // We will add draw commands in the same command buffer.
+            rp_begin.renderArea            = renderArea;
+            rp_begin.clearValueCount       = 1;
+            rp_begin.pClearValues          = &clearValue;
+            
             vkCmdBeginRenderPass(cmd, &rp_begin, VK_SUBPASS_CONTENTS_INLINE);
             defer(vkCmdEndRenderPass(cmd));
 
@@ -559,18 +546,10 @@ void GameUpdateAndRender(ae::game_memory_t *gameMemory)
                 &verticesOffsetInBuffer);
 
             VkDeviceSize indicesOffsetInBuffer = 0;
-            //vkCmdBindIndexBuffer(cmd, gd->suzanneIbo, indicesOffsetInBuffer, VK_INDEX_TYPE_UINT32);
+            vkCmdBindIndexBuffer(cmd, gd->suzanneIbo, indicesOffsetInBuffer, VK_INDEX_TYPE_UINT32);
 
             vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, gd->gameShader);
 
-            // do the push constants for matrix.
-            /*        // set pos of monke
-        ae::GL::setUniformMat4f(
-            gd->gameShader, "umodel", ae::math::buildMat4fFromTransform(gd->suzanneTransform));
-        // set camera transforms
-        ae::GL::setUniformMat4f(gd->gameShader, "uproj", buildProjMat(gd->cam));
-        ae::GL::setUniformMat4f(gd->gameShader, "uview", buildViewMat(gd->cam));
-        */
             struct {
                 ae::math::mat4_t model;
                 ae::math::mat4_t projView;
@@ -579,8 +558,7 @@ void GameUpdateAndRender(ae::game_memory_t *gameMemory)
 
             //vkCmdPushConstants(cmd, gd->pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pushData), &pushData);
 
-            //vkCmdDrawIndexed(cmd, gd->suzanneVertCount * 3, 1, 0, 0, 0);
-            vkCmdDraw(cmd, gd->suzanneVertCount, 1, 0, 0);
+            vkCmdDrawIndexed(cmd, gd->suzanneVertCount * 3, 1, 0, 0, 0);
 
         }  // end render pass.
 

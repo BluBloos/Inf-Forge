@@ -195,10 +195,12 @@ VkImageView   *g_vkSwapchainImageViews = nullptr;  // stretchy buffer
 VkFence        g_vkPresentFence        = VK_NULL_HANDLE;
 uint32_t       g_vkCurrentImageIndex   = 0;
 
-void ae::VK::getCurrentBackbuffer(VkImage *image, VkImageView *view)
+uint32_t ae::VK::getCurrentBackbuffer(VkImage *image, VkImageView *view)
 {
     *image = g_vkSwapchainImages[g_vkCurrentImageIndex];
     *view  = g_vkSwapchainImageViews[g_vkCurrentImageIndex];
+
+    return g_vkCurrentImageIndex;
 }
 
 VkFence *ae::VK::getFrameEndFence()

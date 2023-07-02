@@ -284,7 +284,8 @@ namespace automata_engine {
     namespace VK {
 
         /// @brief get the current swapchain image for this frame.
-        void getCurrentBackbuffer(VkImage *image, VkImageView *view);
+        /// @returns the index of the backbuffer as found in the swapchain.
+        uint32_t getCurrentBackbuffer(VkImage *image, VkImageView *view);
 
         /// TODO: once we add support for more advanced update models, I think this will need
         /// to be called per frame to get the specific fence for that frame.
