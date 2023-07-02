@@ -196,22 +196,22 @@ namespace automata_engine {
             scaleAndFlip.matv[2][2] = -2.0f / (cam.farPlane - cam.nearPlane);
             return scaleAndFlip * transToCenter;
         }
-        // TODO(Noah): Review why this works ...
+        // TODO(Noah): Review in more detail how the projection matrix is mapping these radial lines in
+        // world space to axis aligned lines in NDC space.
         mat4_t buildProjMat(camera_t cam) {
+            // NOTE: we are using a simplified matrix form where the center of the screen is located
+            // at the center of the image plane of the frustrum. this makes things symmetric and the
+            // math easier.
             float n = cam.nearPlane;
             float f = cam.farPlane;
             float aspectRatio = (float)cam.height / (float)cam.width;
-            float r = tanf(cam.fov * DEGREES_TO_RADIANS / 2.0f) * n;
-            float l = -r;
+            float r = tanf(cam.fov * DEGREES_TO_RADIANS / 2.0f) * n; // TODO: I saw in the realtime rendering book that this took a different form.
             float t = r * aspectRatio;
-            float b = -t;
-            // Matrix in reference to: http://www.songho.ca/opengl/gl_projectionmatrix.html
-            // Modified to be column-order.
             ae::math::mat4_t result = {
-                2 * n / (r - l),  0,                0,                   0,
-                0,                2 * n / (t -b),   0,                   0,
-                (r + l) / (r -l), (t + b) / (t -b), -(f + n) / (f -n),  -1,
-                0,                0,                -2 * f * n / (f -n), 0
+                n / r,            0,                0,                   0, // col 1
+                0,                n / t,            0,                   0, // col 2
+                0,                0,                -(f + n) / (f -n),  -1, // col 3
+                0,                0,                -2 * f * n / (f -n), 0  // col 4 
             };
             return result;
         }

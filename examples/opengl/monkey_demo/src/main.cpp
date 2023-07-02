@@ -147,23 +147,31 @@ void GameUpdateAndRender(ae::game_memory_t *gameMemory) {
   glDrawElements(GL_TRIANGLES, gameState->suzanneIbo.count, GL_UNSIGNED_INT, NULL);
 
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
-    ImGui::Begin("MonkeyDemo");
+  ImGui::Begin("MonkeyDemo");
 
-    ImGui::Text("tris / faces: %d", gameState->suzanneIbo.count / 3);
-    ImGui::Text("verts: %f", StretchyBufferCount(gameState->suzanne.vertexData) / 8.f);
+  ImGui::Text(
+      "---CONTROLS---\n"
+      "WASD to move\n"
+      "Left click hold to rotate camera.\n"
+      "ESC to exit first person cam.\n"
+      "SPACE to fly up\n"
+      "SHIFT to fly down\n\n");
 
-    ImGui::Text("");
+  ImGui::Text("tris / faces: %d", gameState->suzanneIbo.count / 3);
+  ImGui::Text("verts: %f", StretchyBufferCount(gameState->suzanne.vertexData) / 8.f);
 
-    ae::ImGuiRenderMat4("camProjMat", buildProjMat(gameState->cam));
-    ae::ImGuiRenderMat4("camViewMat", buildViewMat(gameState->cam));
-    ae::ImGuiRenderMat4((char *)(std::string(gameState->suzanne.modelName) + "Mat").c_str(), 
+  ImGui::Text("");
+
+  ae::ImGuiRenderMat4("camProjMat", buildProjMat(gameState->cam));
+  ae::ImGuiRenderMat4("camViewMat", buildViewMat(gameState->cam));
+  ae::ImGuiRenderMat4((char *)(std::string(gameState->suzanne.modelName) + "Mat").c_str(),
       ae::math::buildMat4fFromTransform(gameState->suzanneTransform));
-    ae::ImGuiRenderVec3("camPos", gameState->cam.trans.pos);
-    ae::ImGuiRenderVec3((char *)(std::string(gameState->suzanne.modelName) + "Pos").c_str(),
-      gameState->suzanneTransform.pos);
-    ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 
-      1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
-    ImGui::End();
+  ae::ImGuiRenderVec3("camPos", gameState->cam.trans.pos);
+  ae::ImGuiRenderVec3(
+      (char *)(std::string(gameState->suzanne.modelName) + "Pos").c_str(), gameState->suzanneTransform.pos);
+  ImGui::Text(
+      "Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+  ImGui::End();
 #endif
 }
 
