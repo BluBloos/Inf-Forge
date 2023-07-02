@@ -41,7 +41,7 @@ typedef struct game_state {
 
     VkSampler sampler;
 
-    uint32_t              suzanneVertCount;
+    uint32_t              suzanneIndexCount;
     ae::math::transform_t suzanneTransform;
     VkBuffer              suzanneIbo;
     VkDeviceMemory        suzanneIboBacking;
@@ -317,7 +317,7 @@ void ae::Init(game_memory_t *gameMemory)
 
         size_t resSize = StretchyBufferCount(gd->suzanne.vertexData) * sizeof(float);
 
-        gd->suzanneVertCount = resSize / sizeof(Vertex);
+        gd->suzanneIndexCount = StretchyBufferCount(gd->suzanne.indexData);
 
         writeUploadBuffer(1,
             resSize,
@@ -556,9 +556,9 @@ void GameUpdateAndRender(ae::game_memory_t *gameMemory)
             } pushData = {ae::math::buildMat4fFromTransform(gd->suzanneTransform),
                 buildProjMatForVk(gd->cam) * buildViewMat(gd->cam)};
 
-            //vkCmdPushConstants(cmd, gd->pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pushData), &pushData);
+            vkCmdPushConstants(cmd, gd->pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pushData), &pushData);
 
-            vkCmdDrawIndexed(cmd, gd->suzanneVertCount * 3, 1, 0, 0, 0);
+            vkCmdDrawIndexed(cmd, gd->suzanneIndexCount, 1, 0, 0, 0);
 
         }  // end render pass.
 
