@@ -213,8 +213,8 @@ namespace automata_engine {
             ae::math::mat4_t result = {
                 n / r,            0,                0,                   0, // col 1
                 0,                n / t,            0,                   0, // col 2
-                0,                0,                (!forDxVk) ? -(f + n) / (f -n)   : -f/(f-n),  -1, // col 3
-                0,                0,                (!forDxVk) ? -2 * f * n / (f -n) : n*f/(f-n),  0  // col 4 
+                0,                0,                (!forDxVk) ? -(f + n) / (f -n)   : -f/(f-n),   -1, // col 3
+                0,                0,                (!forDxVk) ? -2 * f * n / (f -n) : -n*f/(f-n),  0  // col 4 
             };
             return result;
         }
