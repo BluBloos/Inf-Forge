@@ -176,6 +176,275 @@ static bool isImGuiInitialized = false;
 #include "imgui_impl_win32.h" // includes Windows.h for us
 #endif
 
+static HINSTANCE g_hInstance = NULL;
+
+#if defined(AUTOMATA_ENGINE_VK_BACKEND)
+
+// NOTE: currently there are some hard limitations on this system but that is OK.
+// all work/presentation must go through a single queue/device pair.
+// if the app wants to use more queues and devices, it needs to synchronize on its
+// end.
+VkQueue          g_vkQueue  = VK_NULL_HANDLE;
+VkPhysicalDevice g_vkGpu    = VK_NULL_HANDLE;
+VkDevice         g_vkDevice = VK_NULL_HANDLE;
+
+VkSwapchainKHR g_vkSwapchain           = VK_NULL_HANDLE;
+VkSurfaceKHR   g_vkSurface             = VK_NULL_HANDLE;
+VkImage       *g_vkSwapchainImages     = nullptr;  // stretchy buffer
+VkImageView   *g_vkSwapchainImageViews = nullptr;  // stretchy buffer
+VkFence        g_vkPresentFence        = VK_NULL_HANDLE;
+uint32_t       g_vkCurrentImageIndex   = 0;
+
+void ae::VK::getCurrentBackbuffer(VkImage *image, VkImageView *view)
+{
+    *image = g_vkSwapchainImages[g_vkCurrentImageIndex];
+    *view  = g_vkSwapchainImageViews[g_vkCurrentImageIndex];
+}
+
+VkFence *ae::VK::getFrameEndFence()
+{
+    return &g_vkPresentFence;
+}
+
+static void vk_WaitForAndResetFence(VkDevice device, VkFence *pFence, uint64_t waitTime = 1000 * 1000 * 1000)
+{
+    VkResult result = (vkWaitForFences(device,
+        1,
+        pFence,
+        // wait until all the fences are signaled. this blocks the CPU thread.
+        VK_TRUE,
+        waitTime));
+    // TODO: there was an interesting bug where if I went 1ms on the timeout, things were failing,
+    // where the fence was reset too soon. figure out what what going on in that case.
+
+    if (result == VK_SUCCESS) {
+        // reset fences back to unsignaled so that can use em' again;
+        vkResetFences(device, 1, pFence);
+    } else {
+        AELoggerError("some error occurred during the fence wait thing., %s", ae::VK::VkResultToString(result));
+    }
+}
+
+// TODO: I'm noticing that there are some functions that are pure (don't touch globals), and other
+// functions do touch globals. so, how can we make it clear which are which? is it a naming convention?
+static void vk_getNextBackbuffer()
+{
+#if _DEBUG
+    if (!(g_vkDevice && g_vkSwapchain && g_vkPresentFence)) {
+        AELoggerError("vk_getNextBackbuffer called with invalid state.");
+    }
+#endif
+
+    // Retrieve the index of the next available presentable image
+    ae::VK_CHECK(vkAcquireNextImageKHR(g_vkDevice,
+        g_vkSwapchain,
+        UINT64_MAX /* UINT64_MAX,timeout */,
+        nullptr,
+        g_vkPresentFence
+        /* fence to signal */,
+        &g_vkCurrentImageIndex));
+
+    if (ae::platform::GLOBAL_UPDATE_MODEL == ae::AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC) {
+        vk_WaitForAndResetFence(g_vkDevice, &g_vkPresentFence);
+    }
+}
+
+// TODO: this function is meant to be reentrant, so that we may recreate the swapchain when
+// we want to render to a different image size. however, we do all this work that seems like
+// we could just cache it.
+static bool vk_initSwapchain(uint32_t desiredWidth, uint32_t desiredHeight)
+{
+    VkSurfaceCapabilitiesKHR surface_properties;
+    ae::VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(g_vkGpu, g_vkSurface, &surface_properties));
+
+    uint32_t            format_count;
+    VkSurfaceFormatKHR *formats = nullptr;
+    defer(StretchyBufferFree(formats));
+    vkGetPhysicalDeviceSurfaceFormatsKHR(g_vkGpu, g_vkSurface, &format_count, nullptr);
+    StretchyBufferInitWithCount(formats, format_count);
+    vkGetPhysicalDeviceSurfaceFormatsKHR(g_vkGpu, g_vkSurface, &format_count, formats);
+
+    VkSurfaceFormatKHR format;
+    // we prefer sRGB for display
+    // sRGB is a color space.
+    // and there is also the idea of the nonlinear gamma transform of the colors
+    // from this linear space before it hits the monitor.
+    // so we need to apply the inverse transform before that on our end,
+    // putting our colors into a nonlinear space.
+    if (format_count == 0) {
+        AELoggerError("Surface has no formats.");
+        return false;
+    }
+    if ((format_count == 1) && (formats[0].format == VK_FORMAT_UNDEFINED)) {
+        format        = formats[0];
+        format.format = VK_FORMAT_B8G8R8A8_SRGB;
+    } else {
+        format.format = VK_FORMAT_UNDEFINED;
+        for (uint32_t i = 0; i < StretchyBufferCount(formats); i++) {
+            auto candidate = formats[i];
+            switch (candidate.format) {
+                case VK_FORMAT_R8G8B8A8_SRGB:
+                case VK_FORMAT_B8G8R8A8_SRGB:
+                case VK_FORMAT_A8B8G8R8_SRGB_PACK32:
+                                        format = candidate;
+                                        break;
+                default:
+                                        break;
+            }
+            if (format.format != VK_FORMAT_UNDEFINED) { break; }
+        }
+        if (format.format == VK_FORMAT_UNDEFINED) { format = formats[0]; }
+    }
+
+    VkExtent2D swapchain_size = surface_properties.currentExtent;
+    if (surface_properties.currentExtent.width == 0xFFFFFFFF) {
+        swapchain_size.width  = desiredWidth;
+        swapchain_size.height = desiredHeight;
+    } else if ((swapchain_size.width != desiredWidth) || (swapchain_size.height != desiredHeight)) {
+        AELoggerError("swapchain extent different from window client area");
+    }
+
+    // We desire at the minimum double buffering.
+    uint32_t desired_swapchain_images = surface_properties.minImageCount + 1;
+    if ((surface_properties.maxImageCount > 0) && (desired_swapchain_images > surface_properties.maxImageCount)) {
+        desired_swapchain_images = surface_properties.maxImageCount;
+    }
+
+    // Find a supported composite type.
+    VkCompositeAlphaFlagBitsKHR composite = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+    if (surface_properties.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR) {
+        composite = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+    } else if (surface_properties.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR) {
+        composite = VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR;
+    } else if (surface_properties.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR) {
+        composite = VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR;
+    } else if (surface_properties.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR) {
+        composite = VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR;
+    }
+
+    VkSwapchainKHR oldSwapchain = g_vkSwapchain;
+
+    VkSwapchainCreateInfoKHR info = {};
+    info.sType                    = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+    info.surface                  = g_vkSurface;
+    info.minImageCount            = desired_swapchain_images;
+    info.imageFormat              = format.format;
+    info.imageColorSpace          = format.colorSpace;
+    info.imageExtent.width        = swapchain_size.width;
+    info.imageExtent.height       = swapchain_size.height;
+    info.imageArrayLayers         = 1;  // not a multi-view/stereo surface
+    info.imageUsage               = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    info.imageSharingMode         = VK_SHARING_MODE_EXCLUSIVE;
+
+    // this is a transform that is applied before presentation.
+    info.preTransform   = (surface_properties.supportedTransforms & VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR)
+                              ? VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR
+                              : surface_properties.currentTransform;
+    info.compositeAlpha = composite;
+
+    // TODO: the present mode is based on vsync setting. if vsync is adjusted, need to recreate the
+    // swapchain. we also generally need to hook the setting here.
+    info.presentMode = VK_PRESENT_MODE_FIFO_KHR;  // FIFO is supported by all implementations.
+    if (true) {
+        // try to find best present mode for no-vsync.
+
+        uint32_t presentModeCount;
+        ae::VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(g_vkGpu, g_vkSurface, &presentModeCount, NULL));
+        VkPresentModeKHR *presentModes = nullptr;
+        defer(StretchyBufferFree(presentModes));
+        StretchyBufferInitWithCount(presentModes, presentModeCount);
+        ae::VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(g_vkGpu, g_vkSurface, &presentModeCount, presentModes));
+
+        bool bHasMailbox = false;
+        for (size_t i = 0; i < presentModeCount; i++) {
+            if ((presentModes[i] == VK_PRESENT_MODE_IMMEDIATE_KHR)) {
+                info.presentMode = VK_PRESENT_MODE_IMMEDIATE_KHR;
+            }
+            if (presentModes[i] == VK_PRESENT_MODE_MAILBOX_KHR) { bHasMailbox = true; }
+        }
+
+        if ((info.presentMode == VK_PRESENT_MODE_FIFO_KHR) && (bHasMailbox)) {
+            info.presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
+        }
+    }
+
+    // (clipped = true) is allow for more efficient presentation methods. It is
+    // a don't care on our part for what pixels vals are stored in surface, for example,
+    // on regions where another window is overlapping our window.
+    info.clipped      = true;
+    info.oldSwapchain = oldSwapchain;
+
+    ae::VK_CHECK(vkCreateSwapchainKHR(g_vkDevice, &info, nullptr, &g_vkSwapchain));
+
+    // need to remove the prior swapchain after now creating a new one
+    if (oldSwapchain != VK_NULL_HANDLE) {
+        uint32_t image_count = StretchyBufferCount(g_vkSwapchainImageViews);
+        for (uint32_t i = 0; i < image_count; i++) {
+            auto view = g_vkSwapchainImageViews[i];
+            vkDestroyImageView(g_vkDevice, view, nullptr);
+        }
+        StretchyBufferFree(g_vkSwapchainImageViews);
+        g_vkSwapchainImageViews = nullptr;
+        StretchyBufferFree(g_vkSwapchainImages);
+        g_vkSwapchainImages = nullptr;
+        vkDestroySwapchainKHR(g_vkDevice, oldSwapchain, nullptr);
+    }
+
+    uint32_t image_count;
+    ae::VK_CHECK(vkGetSwapchainImagesKHR(g_vkDevice, g_vkSwapchain, &image_count, nullptr));
+    StretchyBufferInitWithCount(g_vkSwapchainImages, image_count);
+    ae::VK_CHECK(vkGetSwapchainImagesKHR(g_vkDevice, g_vkSwapchain, &image_count, g_vkSwapchainImages));
+
+    // Create all VkImageView so that we can render into.
+    for (size_t i = 0; i < image_count; i++) {
+        VkImageViewCreateInfo view_info       = {};
+        view_info.sType                       = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        view_info.viewType                    = VK_IMAGE_VIEW_TYPE_2D;
+        view_info.format                      = format.format;
+        view_info.image                       = g_vkSwapchainImages[i];
+        view_info.subresourceRange.levelCount = 1;
+        view_info.subresourceRange.layerCount = 1;
+        view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+
+        VkImageView image_view;
+        ae::VK_CHECK(vkCreateImageView(g_vkDevice, &view_info, nullptr, &image_view));
+        StretchyBufferPush(g_vkSwapchainImageViews, image_view);
+    }
+
+    return true;
+}
+
+void ae::platform::VK::init(VkInstance instance, VkPhysicalDevice gpu, VkDevice device, VkQueue queue)
+{
+    g_vkQueue  = queue;
+    g_vkDevice = device;
+    g_vkGpu    = gpu;
+
+    // create the window surface
+    if (instance != VK_NULL_HANDLE) {
+        VkWin32SurfaceCreateInfoKHR surfaceCreateInfo = {};
+
+        surfaceCreateInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
+        surfaceCreateInfo.pNext = nullptr;
+        surfaceCreateInfo.flags = 0;
+
+        // NOTE: this function should always be called by the user post window init.
+        // and therefore we can expect that hwnd/hinstance are valid.
+        surfaceCreateInfo.hinstance = g_hInstance;
+        surfaceCreateInfo.hwnd      = g_hwnd;
+
+        if (g_hInstance == NULL) AELoggerError("ae::platform::VK::init called at an unexpected time");
+
+        ae::VK_CHECK(vkCreateWin32SurfaceKHR(instance, &surfaceCreateInfo, nullptr, &g_vkSurface));
+    }
+
+    // create the swapchain.
+    auto winInfo = ae::platform::getWindowInfo();
+    vk_initSwapchain(winInfo.width, winInfo.height);
+}
+
+#endif  // AUTOMATA_ENGINE_VK_BACKEND
+
 #if defined(AUTOMATA_ENGINE_GL_BACKEND)
 
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
@@ -978,7 +1247,6 @@ bool ae::platform::voiceSubmitBuffer(intptr_t voiceHandle, loaded_wav_t wavFile)
         wavFile.sampleCount * wavFile.channels * sizeof(short));
 }
 
-static HINSTANCE g_hInstance = NULL;
 
 #include <thread>
 
@@ -1452,6 +1720,29 @@ int CALLBACK WinMain(HINSTANCE instance,
             AELoggerLog("WARN: GameInit == nullptr");
         }
 
+#if defined(AUTOMATA_ENGINE_VK_BACKEND)
+
+        // create the present fence.
+        VkFenceCreateInfo ci = {};
+        ci.sType             = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        ae::VK_CHECK(vkCreateFence(g_vkDevice, &ci, nullptr, &g_vkPresentFence));
+
+        // TODO:
+        /*
+        there is this idea where I have a ton of globals in the backend here.
+        I do this to make it easy for me to write functions where the game can query
+        something from the engine side.
+
+        however, we could do something different.
+        we could make an "engine private" region of the gameMemory structure, and throw all
+        the engine into there.
+
+        then we can remove all the globals!!
+         */
+
+        vk_getNextBackbuffer();
+#endif
+
         // kick-off async init.
         std::thread([&]{ ae::InitAsync(&g_gameMemory);}).detach();
 
@@ -1595,6 +1886,11 @@ int CALLBACK WinMain(HINSTANCE instance,
 #if defined(AUTOMATA_ENGINE_GL_BACKEND)
                 ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 #endif
+#if defined(AUTOMATA_ENGINE_VK_BACKEND)
+                // TODO.
+                //if (ae::platform::GLOBAL_UPDATE_MODEL == ae::AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC)
+                //ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), frameVkCommandBuffer, VkPipeline pipeline = VK_NULL_HANDLE);
+#endif
             }
 
 #endif
@@ -1612,6 +1908,25 @@ int CALLBACK WinMain(HINSTANCE instance,
                     glFinish();  // block until GPU is complete
                 }
                 SwapBuffers(gHdc);
+            }
+#endif
+
+#if defined(AUTOMATA_ENGINE_VK_BACKEND)
+            if (!bRenderFallback) {
+                if (ae::platform::GLOBAL_UPDATE_MODEL == ae::AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC) {
+                    vk_WaitForAndResetFence(g_vkDevice, &g_vkPresentFence);
+                }
+
+                {
+                    VkPresentInfoKHR present = {};
+                    present.sType            = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+                    present.swapchainCount   = 1;
+                    present.pSwapchains      = &g_vkSwapchain;
+                    present.pImageIndices    = &g_vkCurrentImageIndex;
+                    vkQueuePresentKHR(g_vkQueue, &present);
+                }
+
+                vk_getNextBackbuffer();
             }
 #endif
 
@@ -1679,6 +1994,10 @@ int CALLBACK WinMain(HINSTANCE instance,
         if (isImGuiInitialized) {
 #if defined(AUTOMATA_ENGINE_GL_BACKEND)
             ImGui_ImplOpenGL3_Shutdown();
+#endif
+#if defined(AUTOMATA_ENGINE_VK_BACKEND)
+            // TODO: need headers.
+//            ImGui_ImplVulkan_Shutdown();
 #endif
             ImGui_ImplWin32_Shutdown();
             ImGui::DestroyContext();

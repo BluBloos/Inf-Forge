@@ -5,3 +5,4 @@ project("AutomataEngine_examples"
     LANGUAGES CXX)
 
 add_subdirectory(opengl)
+add_subdirectory(vulkan)

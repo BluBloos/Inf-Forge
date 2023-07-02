@@ -196,9 +196,11 @@ namespace automata_engine {
             scaleAndFlip.matv[2][2] = -2.0f / (cam.farPlane - cam.nearPlane);
             return scaleAndFlip * transToCenter;
         }
+
         // TODO(Noah): Review in more detail how the projection matrix is mapping these radial lines in
         // world space to axis aligned lines in NDC space.
-        mat4_t buildProjMat(camera_t cam) {
+        template <bool forDxVk>
+        mat4_t buildProjMatImpl(camera_t cam) {
             // NOTE: we are using a simplified matrix form where the center of the screen is located
             // at the center of the image plane of the frustrum. this makes things symmetric and the
             // math easier.
@@ -207,14 +209,28 @@ namespace automata_engine {
             float aspectRatio = (float)cam.height / (float)cam.width;
             float r = tanf(cam.fov * DEGREES_TO_RADIANS / 2.0f) * n; // TODO: I saw in the realtime rendering book that this took a different form.
             float t = r * aspectRatio;
+            // NOTE: when forDxVk is true, we map the near plane to NDC_z=0 instead of -1 (for GL).
             ae::math::mat4_t result = {
                 n / r,            0,                0,                   0, // col 1
                 0,                n / t,            0,                   0, // col 2
-                0,                0,                -(f + n) / (f -n),  -1, // col 3
-                0,                0,                -2 * f * n / (f -n), 0  // col 4 
+                0,                0,                (!forDxVk) ? -(f + n) / (f -n)   : -f/(f-n),  -1, // col 3
+                0,                0,                (!forDxVk) ? -2 * f * n / (f -n) : n*f/(f-n),  0  // col 4 
             };
             return result;
         }
+
+        mat4_t buildProjMat(camera_t cam)
+        {
+            constexpr bool forDxVk = false;
+            return buildProjMatImpl<forDxVk>(cam);
+        }
+
+        mat4_t buildProjMatForVk(camera_t cam)
+        {
+            constexpr bool forDxVk = true;
+            return buildProjMatImpl<forDxVk>(cam);
+        }
+
         mat4_t transposeMat4(mat4_t  mat) {
             // the rows of the incoming matrix become the columns of the outgoing matrix.
             return {
@@ -256,7 +272,7 @@ namespace automata_engine {
         }
         int sign(int x) {
             // NOTE: this is branchless. that makes it fast because branch prediction is expensive to fail.
-            // TODO: how does branch prediction work?
+            // it is expensive to fail due to the opportunity cost of the preemptive execution.
             return (x > 0) - (x < 0);
         }
         float round(float a) {

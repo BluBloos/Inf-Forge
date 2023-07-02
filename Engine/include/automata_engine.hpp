@@ -170,6 +170,16 @@ namespace automata_engine {
         struct vertex_attrib_desc_t;
     }
 #endif
+
+#if defined(AUTOMATA_ENGINE_VK_BACKEND)
+    namespace VK {
+        struct Sampler;
+        struct CommandPool;
+        struct CommandBuffer;
+        struct ImageMemoryBarrier;
+    }
+#endif
+    
 // ----------- [END SECTION] Forward declarations and basic types -----------
 
 
@@ -269,54 +279,113 @@ namespace automata_engine {
     void ImGuiRenderVec3(const char *vecName, math::vec3_t vec);
 
 #if defined(AUTOMATA_ENGINE_VK_BACKEND)
+    void VK_CHECK(VkResult result);
+
     namespace VK {
 
-        /// @brief convert the vk result to string. very simple cool stuff. very wow.
+        /// @brief get the current swapchain image for this frame.
+        void getCurrentBackbuffer(VkImage *image, VkImageView *view);
+
+        /// TODO: once we add support for more advanced update models, I think this will need
+        /// to be called per frame to get the specific fence for that frame.
+        /// in the atomic_update, only one fence is required.
+        ///
+        /// @brief the engine expects that the client architect their frame such that all work
+        /// for the frame is known to be complete one they signal this fence.
+        VkFence *getFrameEndFence();
+
+        /// @brief call vkCmdPipelineBarrier but submit only VkImageMemoryBarrier.
+        void cmdImageMemoryBarrier(VkCommandBuffer cmd,
+            VkPipelineStageFlags                   before,
+            VkPipelineStageFlags                   after,
+            uint32_t                               count,
+            VkImageMemoryBarrier                  *pBarriers);
+
+        /// @brief call vkBeginCommandBuffer with default parameters.
+        VkResult beginCommandBuffer(VkCommandBuffer cmd);
+
+        /// @brief return a wrapper class for a VkImageMemoryBarrier structure. this
+        /// has sane default parameters which can be overriden by member calls.
+        ImageMemoryBarrier imageMemoryBarrier(
+            VkAccessFlags src, VkAccessFlags dst, VkImageLayout srcLayout, VkImageLayout dstLayout, VkImage img);
+
+        /// @brief create a structure suitable for creation of a VkCommandPool. this structure
+        /// has sane default parameters which can be overriden by member calls.
+        CommandPool commandPoolCreateInfo(uint32_t queueIndex);
+
+        /// @brief create a structure suitable for allocation of VkCommandBuffers. this structure
+        /// has sane default parameters which can be overriden by member calls.
+        CommandBuffer commandBufferAllocateInfo(uint32_t count, VkCommandPool pool);
+
+        /// @brief create a structure suitable for creation of a VkSampler. this structure
+        /// has sane default parameters which can be overriden by member calls.
+        Sampler samplerCreateInfo();
+
+        /// @brief get the memory index for the allocable memory kind that has all of the
+        /// positive properties and none of the negative properties.
+        uint32_t getDesiredMemoryTypeIndex(
+            VkPhysicalDevice gpu, VkMemoryPropertyFlags positiveProp, VkMemoryPropertyFlags negativeProp);
+
+        /// @brief performs a barebones initialization of vulkan.
+        /// - sets us up with the first gpu found.
+        /// - creates a single queue for that supports graphics and compute.
+        /// - sets up the validation layers.
+        /// - sets up a debug callback for validation layer errors.
+        void doDefaultInit(VkInstance *pInstance,
+            VkPhysicalDevice          *pGpu,
+            VkDevice                  *pDevice,
+            uint32_t                  *pQueueIndex,
+            VkQueue                   *pQueue,
+            VkDebugUtilsMessengerEXT  *pDebugCallback);
+
+        /// @brief convert the vk result to string.
         const char *VkResultToString(VkResult result);
 
         /// @brief this is for use as a callback that an engine client can "just use".
+        /// doDefaultInit will use this as the debug callback for validation layer error messages.
         VKAPI_ATTR VkBool32 VKAPI_CALL ValidationDebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
             VkDebugUtilsMessageTypeFlagsEXT                                                           messageType,
             const VkDebugUtilsMessengerCallbackDataEXT                                               *pCallbackData,
             void                                                                                     *pUserData);
 
+        /// @brief create a buffer in a dumb way. i.e. allocate a single block of memory as large as the
+        ///        buffer and this memory will be solely used for the buffer.
+        size_t createBufferDumb(VkDevice device,
+            size_t                       size,
+            uint32_t                     heapIdx,
+            VkBufferUsageFlags           usage,
+            VkBuffer                    *bufferOut,
+            VkDeviceMemory              *memOut);
 
-      /// @brief create a buffer in a dumb way. i.e. allocate a single block of memory as large as the
-      ///        buffer and this memory will be solely used for the buffer.
-      size_t createBufferDumb(
-                              VkDevice device, size_t size, uint32_t heapIdx,
-                              VkBufferUsageFlags usage, VkBuffer *bufferOut, VkDeviceMemory *memOut );
+        /// @brief same as createBufferDumb with the added utility of automatically mapping the buffer
+        ///        so that the CPU can immediately throw the data in there.
+        size_t createUploadBufferDumb(VkDevice device,
+            size_t                             size,
+            uint32_t                           heapIdx,
+            VkBufferUsageFlags                 usage,
+            VkBuffer                          *bufferOut,
+            VkDeviceMemory                    *memOut,
+            void                             **pData);
 
-      /// @brief same as createBufferDumb with the added utility of automatically mapping the buffer
-      ///        so that the CPU can immediately throw the data in there.
-      size_t createUploadBufferDumb(
-                              VkDevice device, size_t size, uint32_t heapIdx,
-                              VkBufferUsageFlags usage, VkBuffer *bufferOut, VkDeviceMemory *memOut,
-                              void **pData);
+        /// @brief get the virtual address of the buffer. this is not the same as VkDeviceMemory.
+        /// that is just an opapque handle to the memory.
+        VkDeviceAddress getBufferVirtAddr(VkDevice device, VkBuffer buffer);
 
-      /// @brief get the virtual address of the buffer. this is not the same as VkDeviceMemory.
-      /// that is just an opapque handle to the memory.
-      VkDeviceAddress getBufferVirtAddr(VkDevice device, VkBuffer buffer);
+        /// @brief flush and unmap the upload VkBuffer that is already mapped from [0, size] and whose
+        /// backing memory is mappedThing.
+        void flushAndUnmapUploadBuffer(VkDevice device, size_t size, VkDeviceMemory mappedThing);
 
-      /// @brief flush and unmap the upload VkBuffer that is already mapped from [0, size] and whose
-      /// backing memory is mappedThing.
-      void flushAndUnmapUploadBuffer(
-                                     VkDevice device,
-                                     size_t size,
-                                     VkDeviceMemory mappedThing
-                                     );
-      
-      /// @brief create a 2D image in a dumb way. many setting are default. this allocates a single block
-      /// of memory as large as the image, which be used solely for it.
-      size_t createImage2D_dumb(VkDevice device,
-                                uint32_t width,
-                                uint32_t height,
-                                uint32_t heapIdx,
-                                VkFormat format,
-                                VkImageUsageFlags usage,
-                                VkImage *imageOut,
-                                VkDeviceMemory *memOut);
-      
+        /// @brief create a 2D image in a dumb way. many setting are default. this allocates a single block
+        /// of memory as large as the image, which be used solely for it.
+        size_t createImage2D_dumb(VkDevice device,
+            uint32_t                       width,
+            uint32_t                       height,
+            uint32_t                       heapIdx,
+            VkFormat                       format,
+            VkImageUsageFlags              usage,
+            VkImage                       *imageOut,
+            VkDeviceMemory                *memOut);
+
         VkShaderModule loadShaderModule(
             VkDevice vkDevice, const char *filePathIn, const WCHAR *entryPoint, const WCHAR *profile);
     }  // namespace VK
@@ -536,6 +605,11 @@ namespace automata_engine {
         /// @brief build a 4x4 projection matrix from a camera_t struct.
         mat4_t buildProjMat(camera_t cam);
 
+        /// @brief build a 4x4 projection matrix from a camera_t struct for use within Vulkan apps.
+        /// this version maps the near plane to NDC_z=0.
+        /// this matrix will also work for DX.
+        mat4_t buildProjMatForVk(camera_t cam);
+
         /// @brief build a 4x4 view matrix from a camera_t struct.
         mat4_t buildViewMat(camera_t cam);
 
@@ -615,6 +689,7 @@ namespace automata_engine {
         float cos(float a);
     }
 
+    // this namespace is for the engine service to the engine itself.
     namespace super {
         void _init();  // NOT to be called by the user.
         void _close(); // NOT to be called by the user.
@@ -791,6 +866,20 @@ namespace automata_engine {
         /// @brief  get if the platform window is focused.
         bool isWindowFocused();
 
+// --------- [SECTION] PLATFORM VK ----------------
+//
+#if defined(AUTOMATA_ENGINE_VK_BACKEND)
+        namespace VK {
+            /// @brief the client is to call this function to let the engine know what queue that the
+            /// engine is to present the swapchain to. the engine also requires knowledge of the
+            /// instance,device,and physical device. those parameters are cached for later use.
+            /// the engine also initializes the swapchain for the first time through this call.
+            void init(VkInstance instance, VkPhysicalDevice gpu, VkDevice device, VkQueue queue);
+        };  // namespace VK
+#endif
+//
+// --------- [END SECTION] PLATFORM VK ------------
+        
 
 // --------- [SECTION] PLATFORM AUDIO ----------------
 //
@@ -1160,7 +1249,26 @@ namespace automata_engine {
             static aabb_t fromCube(vec3_t bottomLeft, float width);
             static aabb_t fromLine(vec3_t p0, vec3_t p1);
         };
-    }
+    }  // namespace math
+
+#if defined(AUTOMATA_ENGINE_VK_BACKEND)
+    namespace VK {
+        struct Sampler : public VkSamplerCreateInfo {
+            Sampler &magFilter(VkFilter filter)
+            {
+                VkSamplerCreateInfo &ci = *this;
+                ci.magFilter            = filter;
+                return *this;
+            }
+        };
+        struct CommandBuffer : public VkCommandBufferAllocateInfo {};
+        struct CommandPool : public VkCommandPoolCreateInfo {};
+        struct ImageMemoryBarrier : public VkImageMemoryBarrier {};
+
+    }  // namespace VK
+
+#endif
+
 #if defined(AUTOMATA_ENGINE_GL_BACKEND)
     namespace GL {
 
@@ -1205,7 +1313,7 @@ namespace automata_engine {
                 vbo_t vbo,
                 bool iterInstance);
         };
-    }
+    }  // namespace GL
 #endif
 };
 // ---------- [END SECTION] Type Definitions ------------
