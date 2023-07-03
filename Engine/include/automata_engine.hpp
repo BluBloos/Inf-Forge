@@ -336,7 +336,7 @@ namespace automata_engine {
         /// in the atomic_update, only one fence is required.
         ///
         /// @brief the engine expects that the client architect their frame such that all work
-        /// for the frame is known to be complete one they signal this fence.
+        /// for the frame is known to be complete once they signal this fence.
         VkFence *getFrameEndFence();
 
         /// @brief call vkCmdPipelineBarrier but submit only VkImageMemoryBarrier.

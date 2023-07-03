@@ -12,7 +12,8 @@ set(ProjectDisableLogging OFF CACHE BOOL "if true, disables logging")
 set(ProjectDisableImGui OFF CACHE BOOL "if true, disables imgui")
 set(ProjectDisableEngineIntro OFF CACHE BOOL "if true, disable engine intro")
 
-# TODO: What if we want to make a multiple gfx-API application?
+# TODO: What if we want to make a multiple gfx-API application (at runtime)?
+# is there a point to that ever? I would think not ...
 
 if ( "${ProjectRoot}" STREQUAL "" )
     message(FATAL_ERROR "Must supply ProjectRoot var")
@@ -24,7 +25,6 @@ else()
     message(STATUS "Project backend set to ${ProjectBackend}")
 endif()
 
-set(ENV{CMAKE_GENERATOR} "Visual Studio 17 2022")
 set(ENGINE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/Engine")
 set(ENGINE_EXTERNAL "${CMAKE_CURRENT_SOURCE_DIR}/external")
 
@@ -39,21 +39,31 @@ file(GLOB_RECURSE ENGINE_SOURCES
     
 # george w3as here
 
+string(FIND ${ProjectBackend} "GL_BACKEND"   GL_STRING_MATCH)
+string(FIND ${ProjectBackend} "DX12_BACKEND" DX12_STRING_MATCH)
+string(FIND ${ProjectBackend} "VK_BACKEND"   VK_STRING_MATCH)
+string(FIND ${ProjectBackend} "CPU_BACKEND"  CPU_STRING_MATCH)
+
 if (NOT ${ProjectDisableImGui})
+    # TODO: don't always use win32 imgui backend. use only if building on win32.
     file(GLOB IMGUI_SOURCES
         "${ENGINE_EXTERNAL}/imgui-1.87/imgui*.cpp"
         "${ENGINE_EXTERNAL}/imgui-1.87/backends/imgui_impl_win32.cpp"
         "${ENGINE_EXTERNAL}/imgui-1.87/misc/freetype/imgui_freetype.cpp")
-    # TODO: We're kind of assuming Win32 all over the place right now.
-    string(FIND ${ProjectBackend} "GL_BACKEND" STRING_MATCH)
-    if ( NOT ${STRING_MATCH} EQUAL -1 )
+    if ( NOT ${GL_STRING_MATCH} EQUAL -1 )
         set(IMGUI_SOURCES
             "${ENGINE_EXTERNAL}/imgui-1.87/backends/imgui_impl_opengl3.cpp"
+            ${IMGUI_SOURCES})
+    endif()
+    if ( NOT ${VK_STRING_MATCH} EQUAL -1 )
+        set(IMGUI_SOURCES
+            "${ENGINE_EXTERNAL}/imgui-1.87/backends/imgui_impl_vulkan.cpp"
             ${IMGUI_SOURCES})
     endif()
 endif()
 
 # TODO: hook the definition of this to actually do something.
+# we already have a commit somewhere that does this. just need to cherry-pick that.
 if (${ProjectDisableEngineIntro})
     target_compile_definitions(${ProjectName} PUBLIC -DAUTOMATA_ENGINE_DISABLE_ENGINE_INTRO)
 endif()
@@ -97,8 +107,7 @@ if (${ProjectDisableImGui})
     target_compile_definitions(${ProjectName} PUBLIC -DAUTOMATA_ENGINE_DISABLE_IMGUI)
 endif()
 
-string(FIND ${ProjectBackend} "GL_BACKEND" STRING_MATCH)
-if ( NOT ${STRING_MATCH} EQUAL -1 )
+if ( NOT ${GL_STRING_MATCH} EQUAL -1 )
     message(STATUS "gl backend enabled")
     target_link_libraries(${ProjectName}
         ${COMMON_LIB}
@@ -106,13 +115,11 @@ if ( NOT ${STRING_MATCH} EQUAL -1 )
         "${ENGINE_EXTERNAL}/glew-2.2.0/lib/Release/x64/glew32s.lib")
     target_compile_definitions(${ProjectName}
         PRIVATE -DAUTOMATA_ENGINE_GL_BACKEND -DGLEW_STATIC)
-    # TODO(Noah): We can probably get rid of glm here.
     target_include_directories(${ProjectName}
-        PRIVATE "${ENGINE_EXTERNAL}/glm-0.9.9.8" "${ENGINE_EXTERNAL}/glew-2.2.0/include/GL")
+        PRIVATE "${ENGINE_EXTERNAL}/glew-2.2.0/include/GL")
 endif()
 
-string(FIND ${ProjectBackend} "DX12_BACKEND" STRING_MATCH)
-if ( NOT ${STRING_MATCH} EQUAL -1 )
+if ( NOT ${DX12_STRING_MATCH} EQUAL -1 )
     message(STATUS "dx12 backend enabled")
     target_link_libraries(${ProjectName}
         ${COMMON_LIB} D3D12 DXGI D3DCompiler)
@@ -120,14 +127,14 @@ if ( NOT ${STRING_MATCH} EQUAL -1 )
 endif()
 
 string(FIND ${ProjectBackend} "CPU_BACKEND" STRING_MATCH)
-if ( NOT ${STRING_MATCH} EQUAL -1 )
+if ( NOT ${CPU_STRING_MATCH} EQUAL -1 )
     message(STATUS "cpu backend enabled")
     target_link_libraries(${ProjectName} ${COMMON_LIB})
     target_compile_definitions(${ProjectName} PRIVATE -DAUTOMATA_ENGINE_CPU_BACKEND)
 endif()
 
 string(FIND ${ProjectBackend} "VK_BACKEND" STRING_MATCH)
-if ( NOT ${STRING_MATCH} EQUAL -1 )
+if ( NOT ${VK_STRING_MATCH} EQUAL -1 )
     message(STATUS "vk backend enabled")
 
     find_package( Vulkan 1.2 )
@@ -138,7 +145,6 @@ if ( NOT ${STRING_MATCH} EQUAL -1 )
     target_include_directories(${ProjectName} PRIVATE ${Vulkan_INCLUDE_DIRS} )
     target_link_libraries( ${ProjectName} ${COMMON_LIB} )
     target_compile_definitions(${ProjectName} PRIVATE -DAUTOMATA_ENGINE_VK_BACKEND )
-
 endif()
 
 if ( "${ProjectExplicitResOutputDir}" STREQUAL "" )
