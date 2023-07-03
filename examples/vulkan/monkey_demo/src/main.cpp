@@ -149,7 +149,7 @@ void ae::Init(game_memory_t *gameMemory)
         vkCreateImageView(gd->vkDevice, &viewInfo, nullptr, &gd->depthBufferView);
     }
 
-    // create THE command buffer.
+    // create THE command buffer (plus imgui command buffer).
     // NOTE: since this app is using the atomic update model, only one frame will ever be in flight at once.
     // so, we can literally get away with using just a single command buffer.
     {
@@ -157,6 +157,11 @@ void ae::Init(game_memory_t *gameMemory)
         ae::VK_CHECK(vkCreateCommandPool(gd->vkDevice, &poolInfo, nullptr, &gd->commandPool));
         auto cmdInfo = ae::VK::commandBufferAllocateInfo(1, gd->commandPool);
         ae::VK_CHECK(vkAllocateCommandBuffers(gd->vkDevice, &cmdInfo, &gd->commandBuffer));
+
+        auto im_poolInfo = ae::VK::commandPoolCreateInfo(gd->gfxQueueIndex);
+        ae::VK_CHECK(vkCreateCommandPool(gd->vkDevice, &im_poolInfo, nullptr, &gd->commandPool));
+        auto im_cmdInfo = ae::VK::commandBufferAllocateInfo(1, gd->commandPool);
+        ae::VK_CHECK(vkAllocateCommandBuffers(gd->vkDevice, &im_cmdInfo, &gd->imgui_commandBuffer));
     }
 
     VkCommandBuffer cmd = gd->commandBuffer;
@@ -632,7 +637,8 @@ void GameUpdateAndRender(ae::game_memory_t *gameMemory)
     si.sType              = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     si.commandBufferCount = 1;
     si.pCommandBuffers    = &cmd;
-    (vkQueueSubmit(gd->vkQueue, 1, &si, *pFence));
+
+    ae::super::updateAndRender(gameMemory);
 
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
     ImGui::Begin("MonkeyDemo");
@@ -658,7 +664,19 @@ void GameUpdateAndRender(ae::game_memory_t *gameMemory)
     ImGui::Text(
         "Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
     ImGui::End();
+
+    VkCommandBuffer ImguiCmd = gd->imgui_commandBuffer;
+    ae::VK_CHECK(vkResetCommandBuffer(ImguiCmd, 0));
+
+    ae::VK::renderAndRecordImGui(ImguiCmd);
+
+    VkCommandBuffer cmds[] = {cmd, ImguiCmd};
+    si.commandBufferCount  = 2;
+    si.pCommandBuffers     = cmds;
+
 #endif
+
+    (vkQueueSubmit(gd->vkQueue, 1, &si, *pFence));
 }
 
 void WaitForAndResetFence(VkDevice device, VkFence *pFence, uint64_t waitTime)

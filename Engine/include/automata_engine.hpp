@@ -289,6 +289,13 @@ namespace automata_engine {
 
     namespace VK {
 
+#if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
+        /// @brief record the imgui draw data into the command buffer. this records a render pass with the current backbuffer as
+        /// a color attachment.
+        /// @param cmd the command buffer to record into. must be in the initial state.
+        void renderAndRecordImGui(VkCommandBuffer cmd);
+#endif
+
         /// @brief create a structure suitable for creation of a VkRenderPass. this structure
         /// has sane default parameters which can be overriden by member calls.
         RenderPass createRenderPass(uint32_t attachmentCount,

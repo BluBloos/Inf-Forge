@@ -233,6 +233,40 @@ static VkRenderPass vk_MaybeCreateImguiRenderPass()
         return g_vkImguiRenderPass;
 }
 
+// TODO: impl other models. here would need an array for frame data!
+void ae::VK::renderAndRecordImGui(VkCommandBuffer cmd)
+{
+    if (ae::platform::GLOBAL_UPDATE_MODEL == ae::AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC) {
+
+        ImGui::Render();
+
+        VkCommandBufferBeginInfo info = {};
+        info.sType                    = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+        ae::VK_CHECK(vkBeginCommandBuffer(cmd, &info));
+
+        ae::game_window_info_t winInfo = automata_engine::platform::getWindowInfo();
+
+        VkRenderPassBeginInfo rpInfo    = {};
+        rpInfo.sType                    = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+        rpInfo.renderPass               = vk_MaybeCreateImguiRenderPass();
+        rpInfo.framebuffer              = g_vkImguiFramebuffers[g_vkCurrentImageIndex];
+        rpInfo.renderArea.extent.width  = winInfo.width;
+        rpInfo.renderArea.extent.height = winInfo.height;
+        vkCmdBeginRenderPass(cmd, &rpInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+        // Record dear imgui primitives into command buffer
+        ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
+
+        vkCmdEndRenderPass(cmd);
+
+        ae::VK_CHECK(vkEndCommandBuffer(cmd));
+    } else {
+        // TODO:
+        assert(false);
+    }
+}
+
 #endif
 
 VkFormat ae::VK::getSwapchainFormat() { return g_vkSwapchainFormat; }
@@ -1881,14 +1915,6 @@ int CALLBACK WinMain(HINSTANCE instance,
         ImGui_ImplVulkan_LoadFunctions(
             [](const char *function_name, void *) { return vkGetInstanceProcAddr(g_vkInstance, function_name); });
 
-        // create the imgui command buffer stuff.
-        VkFence vkImguiFence = VK_NULL_HANDLE;
-        {
-            VkFenceCreateInfo ci = {};
-            ci.sType             = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-            ae::VK_CHECK(vkCreateFence(g_vkDevice, &ci, nullptr, &vkImguiFence));
-        }
-
         VkCommandPool   vkImguiCommandPool   = VK_NULL_HANDLE;
         VkCommandBuffer vkImguiCommandBuffer = VK_NULL_HANDLE;
 
@@ -2070,51 +2096,12 @@ int CALLBACK WinMain(HINSTANCE instance,
 
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
             if (isImGuiInitialized && bAppOkNow) {
-                ImGui::Render();
 #if defined(AUTOMATA_ENGINE_GL_BACKEND)
+                ImGui::Render();
                 ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 #endif
 #if defined(AUTOMATA_ENGINE_VK_BACKEND)
-
-                // TODO: impl other models. here would need an array for frame data!
-                if (ae::platform::GLOBAL_UPDATE_MODEL == ae::AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC) {
-                    auto cmd = vkImguiCommandBuffer;
-
-                    // NOTE: again, we know that since atomic update model that this command buffer cannot be in flight
-                    // at this point in the code.
-                    ae::VK_CHECK(vkResetCommandBuffer(cmd, 0));
-                    ae::VK_CHECK(vkResetCommandPool(g_vkDevice, vkImguiCommandPool, 0));
-
-                    VkCommandBufferBeginInfo info = {};
-                    info.sType                    = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-                    info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-                    ae::VK_CHECK(vkBeginCommandBuffer(cmd, &info));
-
-                    ae::game_window_info_t winInfo = automata_engine::platform::getWindowInfo();
-
-                    VkRenderPassBeginInfo rpInfo    = {};
-                    rpInfo.sType                    = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-                    rpInfo.renderPass               = vk_MaybeCreateImguiRenderPass();
-                    rpInfo.framebuffer              = g_vkImguiFramebuffers[g_vkCurrentImageIndex];
-                    rpInfo.renderArea.extent.width  = winInfo.width;
-                    rpInfo.renderArea.extent.height = winInfo.height;
-                    vkCmdBeginRenderPass(cmd, &rpInfo, VK_SUBPASS_CONTENTS_INLINE);
-
-                    // Record dear imgui primitives into command buffer
-                    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
-
-                    vkCmdEndRenderPass(cmd);
-
-                    ae::VK_CHECK(vkEndCommandBuffer(cmd));
-
-                    // submit the cmd buffer to queue.
-                    VkSubmitInfo sinfo       = {};
-                    sinfo.sType              = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-                    sinfo.commandBufferCount = 1;
-                    sinfo.pCommandBuffers    = &cmd;
-
-                    ae::VK_CHECK(vkQueueSubmit(g_vkQueue, 1, &sinfo, vkImguiFence));
-                }
+                // NOTE: app responsible to record imgui into its own command buffers.
 #endif
             }
 
@@ -2140,9 +2127,6 @@ int CALLBACK WinMain(HINSTANCE instance,
             if (!bRenderFallback) {
                 if (ae::platform::GLOBAL_UPDATE_MODEL == ae::AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC) {
                     vk_WaitForAndResetFence(g_vkDevice, &g_vkPresentFence);
-#if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
-                    vk_WaitForAndResetFence(g_vkDevice, &vkImguiFence);
-#endif
                 }
 
                 {

@@ -18,6 +18,9 @@ typedef struct game_state {
     VkCommandBuffer commandBuffer;
     VkCommandPool   commandPool;
 
+    VkCommandBuffer imgui_commandBuffer;
+    //VkCommandPool   imgui_commandPool;
+
     VkFence vkInitFence;
 
     VkDescriptorSetLayout setLayout;
