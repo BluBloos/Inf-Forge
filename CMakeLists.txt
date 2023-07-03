@@ -79,8 +79,8 @@ set(ENGINE_INCLUDES "${ENGINE_ROOT}/src" "${ENGINE_ROOT}/include"  "${ENGINE_ROO
 target_include_directories( ${ProjectName} PUBLIC ${ENGINE_INCLUDES} "${ProjectRoot}/include" "${ProjectRoot}" "${ProjectRoot}/src")
 target_include_directories( AutomataTests PUBLIC ${ENGINE_INCLUDES} )
 
-target_compile_features(${ProjectName} PRIVATE cxx_std_17)
-target_compile_features(AutomataTests PRIVATE cxx_std_17)
+target_compile_features(${ProjectName} PRIVATE cxx_std_20)
+target_compile_features(AutomataTests PRIVATE cxx_std_20)
 
 set_target_properties(${ProjectName}
     PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY $<TARGET_FILE_DIR:${ProjectName}>)

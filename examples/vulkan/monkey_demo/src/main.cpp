@@ -1,73 +1,10 @@
 #include <automata_engine.hpp>
 
-typedef uint32_t u32;
-
-void GameUpdateAndRender(ae::game_memory_t *gameMemory);
-void CreateGraphicsPipeline(VkDevice vkDevice,
-    VkShaderModule                   vertShader,
-    VkShaderModule                   fragShader,
-    VkPipelineLayout                 pipelineLayout,
-    VkRenderPass                     renderPass,  //TODO,
-    VkPipeline                      *pPipeline);
-void WaitForAndResetFence(VkDevice device, VkFence *pFence, uint64_t waitTime = 1000 * 1000 * 1000);
-
-typedef struct game_state {
-    ae::raw_model_t suzanne;
-
-    VkPhysicalDevice vkGpu;
-    VkDevice         vkDevice;
-    VkInstance       vkInstance;
-
-    VkDebugUtilsMessengerEXT vkDebugCallback;
-
-    uint32_t        gfxQueueIndex;  // TODO: maybe don't care about this?
-    VkQueue         vkQueue;
-    VkCommandBuffer commandBuffer;
-    VkCommandPool   commandPool;
-
-    VkFence vkInitFence;
-
-    VkDescriptorSetLayout setLayout;
-    VkPipelineLayout      pipelineLayout;
-    VkPipeline            gameShader;
-
-    VkDescriptorPool descPool;
-    VkDescriptorSet  theDescSet;
-
-    VkRenderPass vkRenderPass;  // TODO: dyn rendering prefer.
-
-    // NOTE: 10 is certainly larger than swapchain count.
-    VkFramebuffer vkFramebufferCache[10] = {};
-
-    VkImageView    depthBufferView;
-    VkImage        depthBuffer;
-    VkDeviceMemory depthBufferBacking;
-
-    VkImageView    checkerTextureView;
-    VkImage        checkerTexture;
-    VkDeviceMemory checkerTextureBacking;
-
-    VkSampler sampler;
-
-    uint32_t              suzanneIndexCount;
-    ae::math::transform_t suzanneTransform;
-    VkBuffer              suzanneIbo;
-    VkDeviceMemory        suzanneIboBacking;
-    VkBuffer              suzanneVbo;
-    VkDeviceMemory        suzanneVboBacking;
-
-    ae::math::camera_t cam;
-} game_state_t;
-
-struct Vertex {
-    float x, y, z;
-    float u, v;
-    float nx, ny, nz;
-};
+#include <main.hpp>
 
 game_state_t *getGameState(ae::game_memory_t *gameMemory) { return (game_state_t *)gameMemory->data; }
 
-void ae::HandleWindowResize(game_memory_t *gameMemory, int newWidth, int newHeight) {}
+
 void ae::PreInit(game_memory_t *gameMemory)
 {
     ae::defaultWinProfile = AUTOMATA_ENGINE_WINPROFILE_NORESIZE;
@@ -79,7 +16,6 @@ static struct {
     VkDeviceMemory uploadBufferBacking;
     VkBuffer       buffer = VK_NULL_HANDLE;
     VkImage        image  = VK_NULL_HANDLE;
-    VkImageLayout  dstLayout;
     VkDeviceMemory backing;
 
     union {
@@ -105,14 +41,15 @@ void ae::Init(game_memory_t *gameMemory)
     // and to present on. at this time, the engine also initializes the swapchain for the first time.
     ae::platform::VK::init(gd->vkInstance, gd->vkGpu, gd->vkDevice, gd->vkQueue);
 
-    auto device = gd->vkDevice;
-
-    VkFormat depthFormat = VK_FORMAT_D32_SFLOAT;
+    const VkFormat depthFormat = VK_FORMAT_D32_SFLOAT;
 
     // create the pipeline.
     {
-        auto vertModule = ae::VK::loadShaderModule(device, "res\\vert.hlsl", L"main", L"vs_6_0");
-        auto fragModule = ae::VK::loadShaderModule(device, "res\\frag.hlsl", L"main", L"ps_6_0");
+        auto vertModule = ae::VK::loadShaderModule(gd->vkDevice, "res\\vert.hlsl", L"main", L"vs_6_0");
+        auto fragModule = ae::VK::loadShaderModule(gd->vkDevice, "res\\frag.hlsl", L"main", L"ps_6_0");
+        // NOTE: pipline is self-contained after create.
+        defer(vkDestroyShaderModule(gd->vkDevice, vertModule, nullptr));
+        defer(vkDestroyShaderModule(gd->vkDevice, fragModule, nullptr));
 
         // TODO: review in detail https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#textures. how is the image precisely sampled?
         //
@@ -120,6 +57,7 @@ void ae::Init(game_memory_t *gameMemory)
         ae::VK_CHECK(vkCreateSampler(gd->vkDevice, &samplerInfo, nullptr, &gd->sampler));
 
         // TODO: is it possible to clean up the below?
+        // answer: yes.
 
         VkDescriptorSetLayoutBinding bindings[2] = {};
         bindings[0].binding                      = 0;
@@ -144,6 +82,9 @@ void ae::Init(game_memory_t *gameMemory)
         pushRange.offset              = 0;  // TODO.
         pushRange.size                = sizeof(ae::math::mat4_t) * 2;
 
+        // TODO:
+        // auto pipelineLayoutInfo = ae::VK::createPipelineLayout(1, &gd->setLayout).pushConstantRanges(1, &pushRange);
+
         VkPipelineLayoutCreateInfo layout_info = {};
         layout_info.sType                      = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
         layout_info.setLayoutCount             = 1;
@@ -153,7 +94,7 @@ void ae::Init(game_memory_t *gameMemory)
 
         ae::VK_CHECK(vkCreatePipelineLayout(gd->vkDevice, &layout_info, nullptr, &gd->pipelineLayout));
 
-        // init the render pass
+        // create the render pass
         {
             VkAttachmentDescription attachments[2] = {0};
             attachments[0].format                  = VK_FORMAT_B8G8R8A8_SRGB;  // TODO.
@@ -195,8 +136,10 @@ void ae::Init(game_memory_t *gameMemory)
             VK_CHECK(vkCreateRenderPass(gd->vkDevice, &rp_info, nullptr, &gd->vkRenderPass));
         }
 
-        CreateGraphicsPipeline(
-            gd->vkDevice, vertModule, fragModule, gd->pipelineLayout, gd->vkRenderPass, &gd->gameShader);
+        auto pipelineInfo = ae::VK::createGraphicsPipeline(
+            vertModule, fragModule, "main", "main", gd->pipelineLayout, gd->vkRenderPass);
+        ae::VK_CHECK(
+            vkCreateGraphicsPipelines(gd->vkDevice, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &gd->gameShader));
     }
 
     gd->cam.trans.scale              = ae::math::vec3_t(1.0f, 1.0f, 1.0f);
@@ -504,10 +447,6 @@ void ae::Init(game_memory_t *gameMemory)
     si.pCommandBuffers    = &cmd;
     (vkQueueSubmit(gd->vkQueue, 1, &si, fence));
 
-    // TODO: for now we are waiting for this just because the async init stuff
-    // could get messy.
-    WaitForAndResetFence(gd->vkDevice, &fence);
-
     ae::bifrost::registerApp("spinning_monkey", GameUpdateAndRender);
     ae::setUpdateModel(AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC);
     ae::platform::setVsync(true);
@@ -518,28 +457,17 @@ void ae::InitAsync(game_memory_t *gameMemory)
     game_state_t *gd = getGameState(gameMemory);
 
     // wait for the init command list.
+    auto &fence = gd->vkInitFence;
+    WaitForAndResetFence(gd->vkDevice, &fence);
 
     ae::VK_CHECK(vkResetCommandBuffer(gd->commandBuffer, 0));
     ae::VK_CHECK(vkResetCommandPool(gd->vkDevice, gd->commandPool, 0));
 
-    // now we can destroy the upload resources. TODO.
-    // TODO: can we get rid of the globals? why do people say that globals are bad tho?
+    // TODO: destroy the upload resources.
 
-    // and only after then mark the game ready to go.
+    // game is ready to go now.
     gameMemory->setInitialized(true);
 }
-
-// TODO: would be nice if it wasn't a requirement to do this thing. and instead we could
-// just be like, "we aren't using sound stuff."
-void ae::OnVoiceBufferEnd(game_memory_t *gameMemory, intptr_t voiceHandle) {}
-void ae::OnVoiceBufferProcess(game_memory_t *gameMemory,
-    intptr_t                                 voiceHandle,
-    float                                   *dst,
-    float                                   *src,
-    uint32_t                                 samplesToWrite,
-    int                                      channels,
-    int                                      bytesPerSample)
-{}
 
 VkFramebuffer MaybeMakeFramebuffer(game_state_t *gd, VkImageView backbuffer, u32 width, u32 height, uint32_t idx)
 {
@@ -745,136 +673,6 @@ void GameUpdateAndRender(ae::game_memory_t *gameMemory)
 #endif
 }
 
-void ae::Close(game_memory_t *gameMemory) { game_state_t *gd = getGameState(gameMemory); }
-
-// TODO: see if we can get this into the "engine". the idea is that we can see the need to expose
-// for stuff like set depth. set blend. the vertex input. many of these params should be exposed.
-//
-// it looks like we might be able to use the default struct idea.
-//
-// init the pipeline
-void CreateGraphicsPipeline(VkDevice vkDevice,
-    VkShaderModule                   vertShader,
-    VkShaderModule                   fragShader,
-    VkPipelineLayout                 pipelineLayout,
-    VkRenderPass                     renderPass,
-    VkPipeline                      *pPipeline)
-{
-    VkVertexInputAttributeDescription vertex_input_attr_desc[3];
-    vertex_input_attr_desc[0].location = 0;
-    vertex_input_attr_desc[0].binding  = 0;  // slot 0.
-    vertex_input_attr_desc[0].format   = VK_FORMAT_R32G32B32_SFLOAT;
-    vertex_input_attr_desc[0].offset   = 0;  // offset in vertex buf with which to look for elems.
-
-    vertex_input_attr_desc[1].location = 1;  // in shader.
-    vertex_input_attr_desc[1].binding  = 0;
-    vertex_input_attr_desc[1].format   = VK_FORMAT_R32G32_SFLOAT;
-    vertex_input_attr_desc[1].offset   = sizeof(float) * 3;
-
-    vertex_input_attr_desc[2].location = 2;  // in shader.
-    vertex_input_attr_desc[2].binding  = 0;
-    vertex_input_attr_desc[2].format   = VK_FORMAT_R32G32B32_SFLOAT;
-    vertex_input_attr_desc[2].offset   = sizeof(float) * 5;
-
-    VkPipelineVertexInputStateCreateInfo vertex_input = {};
-    vertex_input.sType                                = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-
-    VkVertexInputBindingDescription vertex_input_binding_desc[1];
-    vertex_input_binding_desc[0].binding   = 0;               // this structure describes slot 0.
-    vertex_input_binding_desc[0].stride    = sizeof(Vertex);  // to get to next vertex.
-    vertex_input_binding_desc[0].inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-
-    vertex_input.vertexBindingDescriptionCount   = 1;
-    vertex_input.pVertexBindingDescriptions      = vertex_input_binding_desc;
-    vertex_input.vertexAttributeDescriptionCount = _countof(vertex_input_attr_desc);
-    vertex_input.pVertexAttributeDescriptions    = vertex_input_attr_desc;
-
-    // Specify we will use triangle lists to draw geometry.
-    VkPipelineInputAssemblyStateCreateInfo input_assembly = {};
-    input_assembly.sType                                  = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-    input_assembly.topology                               = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-
-    // Specify rasterization state.
-    VkPipelineRasterizationStateCreateInfo raster = {};
-    raster.sType                                  = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-    raster.cullMode                               = VK_CULL_MODE_NONE;  // TODO: temp.
-    raster.frontFace               = VK_FRONT_FACE_COUNTER_CLOCKWISE;   // NOTE: how our .OBJ is. also default in GL.
-    raster.lineWidth               = 1.0f;
-    raster.rasterizerDiscardEnable = VK_FALSE;
-
-    // Our attachment will write to all color channels, but no blending is enabled.
-    VkPipelineColorBlendAttachmentState blend_attachment = {};
-    blend_attachment.colorWriteMask =
-        VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-
-    // blend infos.
-    VkPipelineColorBlendStateCreateInfo blend = {};
-    blend.sType                               = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-    blend.attachmentCount                     = 1;
-    blend.pAttachments                        = &blend_attachment;
-
-    // We will have one viewport and scissor box.
-    VkPipelineViewportStateCreateInfo viewport = {};
-    viewport.sType                             = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-    viewport.viewportCount                     = 1;
-    viewport.scissorCount                      = 1;
-
-    // set depth testing params.
-    VkPipelineDepthStencilStateCreateInfo depth_stencil = {};
-    depth_stencil.sType                                 = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-    depth_stencil.depthTestEnable                       = VK_TRUE;
-    depth_stencil.stencilTestEnable                     = VK_FALSE;
-    depth_stencil.depthBoundsTestEnable                 = VK_FALSE;
-    depth_stencil.depthCompareOp                        = VK_COMPARE_OP_LESS;
-    depth_stencil.depthWriteEnable                      = VK_TRUE;
-
-    // No multisampling.
-    VkPipelineMultisampleStateCreateInfo multisample = {};
-    multisample.sType                                = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-    multisample.rasterizationSamples                 = VK_SAMPLE_COUNT_1_BIT;
-
-    // Specify that these states will be dynamic, i.e. not part of pipeline state object.
-    VkDynamicState                   dynamics[2] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
-    VkPipelineDynamicStateCreateInfo dynamic     = {};
-    dynamic.sType                                = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-    dynamic.pDynamicStates                       = dynamics;
-    dynamic.dynamicStateCount                    = _countof(dynamics);
-
-    VkPipelineShaderStageCreateInfo shader_stages[2] = {};
-    // Vertex stage of the pipeline
-    shader_stages[0].sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    shader_stages[0].stage  = VK_SHADER_STAGE_VERTEX_BIT;
-    shader_stages[0].module = vertShader;
-    shader_stages[0].pName  = "main";  // TODO.
-    // Fragment stage of the pipeline
-    shader_stages[1].sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    shader_stages[1].stage  = VK_SHADER_STAGE_FRAGMENT_BIT;
-    shader_stages[1].module = fragShader;
-    shader_stages[1].pName  = "main";  // TODO.
-
-    VkGraphicsPipelineCreateInfo pipe = {};
-    pipe.sType                        = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-    pipe.stageCount                   = _countof(shader_stages);
-    pipe.pStages                      = shader_stages;
-    pipe.pVertexInputState            = &vertex_input;
-    pipe.pInputAssemblyState          = &input_assembly;
-    pipe.pRasterizationState          = &raster;
-    pipe.pColorBlendState             = &blend;
-    pipe.pMultisampleState            = &multisample;
-    pipe.pViewportState               = &viewport;
-    pipe.pDepthStencilState           = &depth_stencil;
-    pipe.pDynamicState                = &dynamic;
-    // NOTE: no need since dynamic rendering.
-    pipe.renderPass = renderPass;
-    pipe.layout     = pipelineLayout;
-
-    ae::VK_CHECK(vkCreateGraphicsPipelines(vkDevice, VK_NULL_HANDLE, 1, &pipe, nullptr, pPipeline));
-
-    // no longer needed since PSO is self-contained.
-    vkDestroyShaderModule(vkDevice, shader_stages[0].module, nullptr);
-    vkDestroyShaderModule(vkDevice, shader_stages[1].module, nullptr);
-};
-
 void WaitForAndResetFence(VkDevice device, VkFence *pFence, uint64_t waitTime)
 {
     VkResult result = (vkWaitForFences(device,
@@ -893,3 +691,21 @@ void WaitForAndResetFence(VkDevice device, VkFence *pFence, uint64_t waitTime)
         AELoggerError("some error occurred during the fence wait thing., %s", ae::VK::VkResultToString(result));
     }
 }
+
+void ae::Close(game_memory_t *gameMemory)
+{
+    // TODO: destroy Vulkan resources.
+}
+
+// TODO: for any AE callbacks that the game doesn't care to define, don't make it a requirement
+// to still have the function.
+void ae::OnVoiceBufferEnd(game_memory_t *gameMemory, intptr_t voiceHandle) {}
+void ae::OnVoiceBufferProcess(game_memory_t *gameMemory,
+    intptr_t                                 voiceHandle,
+    float                                   *dst,
+    float                                   *src,
+    uint32_t                                 samplesToWrite,
+    int                                      channels,
+    int                                      bytesPerSample)
+{}
+void ae::HandleWindowResize(game_memory_t *gameMemory, int newWidth, int newHeight) {}

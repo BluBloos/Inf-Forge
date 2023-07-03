@@ -614,6 +614,127 @@ namespace automata_engine {
             vkCmdPipelineBarrier(cmd, before, after, 0, 0, nullptr, 0, nullptr, count, pBarriers);
         }
 
+        GraphicsPipeline createGraphicsPipeline(VkShaderModule vertShader,
+            VkShaderModule                                     fragShader,
+            const char                                        *vertEntryName,
+            const char                                        *fragEntryName,
+            VkPipelineLayout                                   pipelineLayout,
+            VkRenderPass                                       renderPass)
+        {
+            GraphicsPipeline gPipe = {};
+
+            // NOTE: the default setup for the vertex binding stuff here is based on a single
+            // bound vertex buffer where the vertex within is same as our .OBJ.
+            static constexpr VkVertexInputAttributeDescription vertex_input_attr_desc[3] = {
+                {
+                    .location = 0,
+                    .binding  = 0,  // slot 0.
+                    .format   = VK_FORMAT_R32G32B32_SFLOAT,
+                    .offset   = 0,  // offset in vertex buf with which to look for elems.
+                },
+                {.location   = 1,  // in shader.
+                    .binding = 0,
+                    .format  = VK_FORMAT_R32G32_SFLOAT,
+                    .offset  = sizeof(float) * 3},
+                {.location   = 2,  // in shader.
+                    .binding = 0,
+                    .format  = VK_FORMAT_R32G32B32_SFLOAT,
+                    .offset  = sizeof(float) * 5}};
+
+            static constexpr VkVertexInputBindingDescription vertex_input_binding_desc[1] = {
+                {.binding      = 0,                  // this structure describes slot 0.
+                    .stride    = sizeof(float) * 8,  // to get to next vertex.
+                    .inputRate = VK_VERTEX_INPUT_RATE_VERTEX}};
+
+            VkPipelineVertexInputStateCreateInfo &vertex_input = gPipe.m_vertexInputState;
+            vertex_input.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+
+            vertex_input.vertexBindingDescriptionCount   = _countof(vertex_input_binding_desc);
+            vertex_input.pVertexBindingDescriptions      = vertex_input_binding_desc;
+            vertex_input.vertexAttributeDescriptionCount = _countof(vertex_input_attr_desc);
+            vertex_input.pVertexAttributeDescriptions    = vertex_input_attr_desc;
+
+            // Specify we will use triangle lists to draw geometry.
+            VkPipelineInputAssemblyStateCreateInfo &input_assembly = gPipe.m_inputAssemblyState;
+            input_assembly.sType    = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+            input_assembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+
+            // Specify rasterization state.
+            VkPipelineRasterizationStateCreateInfo &raster = gPipe.m_rasterizationState;
+            raster.sType                                   = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+            raster.cullMode                                = VK_CULL_MODE_BACK_BIT;
+            raster.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;  // NOTE: how our .OBJ is. also default in GL.
+            raster.lineWidth = 1.0f;
+            raster.rasterizerDiscardEnable = VK_FALSE;
+
+            // blend infos.
+            static constexpr VkPipelineColorBlendAttachmentState blend_attachment = {
+                .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT |
+                                  VK_COLOR_COMPONENT_A_BIT};
+
+            VkPipelineColorBlendStateCreateInfo &blend = gPipe.m_colorBlendState;
+            blend.sType                                = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+            blend.attachmentCount                      = 1;
+            blend.pAttachments                         = &blend_attachment;
+
+            // We will have one viewport and scissor box.
+            VkPipelineViewportStateCreateInfo &viewport = gPipe.m_viewportState;
+            viewport.sType                              = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+            viewport.viewportCount                      = 1;
+            viewport.scissorCount                       = 1;
+
+            // set depth testing params.
+            VkPipelineDepthStencilStateCreateInfo &depth_stencil = gPipe.m_depthStencilState;
+            depth_stencil.sType                 = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+            depth_stencil.depthTestEnable       = VK_TRUE;
+            depth_stencil.stencilTestEnable     = VK_FALSE;
+            depth_stencil.depthBoundsTestEnable = VK_FALSE;
+            depth_stencil.depthCompareOp        = VK_COMPARE_OP_LESS;
+            depth_stencil.depthWriteEnable      = VK_TRUE;
+
+            // No multisampling.
+            VkPipelineMultisampleStateCreateInfo &multisample = gPipe.m_multisampleState;
+            multisample.sType                = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+            multisample.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+
+            // which states of the pipeline are dynamic?
+            static constexpr VkDynamicState   dynamics[2] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
+            VkPipelineDynamicStateCreateInfo &dynamic     = gPipe.m_dynamicState;
+            dynamic.sType                                 = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+            dynamic.pDynamicStates                        = dynamics;
+            // TODO: _countof is MSVC specific.
+            dynamic.dynamicStateCount = _countof(dynamics);
+
+            VkPipelineShaderStageCreateInfo (&shader_stages)[2] = gPipe.m_stages;
+            // Vertex stage of the pipeline
+            shader_stages[0].sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+            shader_stages[0].stage  = VK_SHADER_STAGE_VERTEX_BIT;
+            shader_stages[0].module = vertShader;
+            shader_stages[0].pName  = vertEntryName;
+            // Fragment stage of the pipeline
+            shader_stages[1].sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+            shader_stages[1].stage  = VK_SHADER_STAGE_FRAGMENT_BIT;
+            shader_stages[1].module = fragShader;
+            shader_stages[1].pName  = fragEntryName;
+
+            VkGraphicsPipelineCreateInfo &pipe  = gPipe;
+            pipe.sType                          = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+            pipe.stageCount                     = _countof(shader_stages);
+            pipe.pStages                        = shader_stages;
+            pipe.pVertexInputState              = &vertex_input;
+            pipe.pInputAssemblyState            = &input_assembly;
+            pipe.pRasterizationState            = &raster;
+            pipe.pColorBlendState               = &blend;
+            pipe.pMultisampleState              = &multisample;
+            pipe.pViewportState                 = &viewport;
+            pipe.pDepthStencilState             = &depth_stencil;
+            pipe.pDynamicState                  = &dynamic;
+            pipe.renderPass                     = renderPass;
+            pipe.layout                         = pipelineLayout;
+
+            return gPipe;
+        }
+
     }  // namespace VK
 };     // namespace automata_engine
 

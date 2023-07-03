@@ -179,6 +179,7 @@ namespace automata_engine {
         struct ImageMemoryBarrier;
         struct ImageView;
         struct Image;
+        struct GraphicsPipeline;
     }
 #endif
     
@@ -284,6 +285,18 @@ namespace automata_engine {
     void VK_CHECK(VkResult result);
 
     namespace VK {
+
+        /// @brief create a structure suitable for creation of a VkGraphicsPipeline. this structure
+        /// has sane default parameters which can be overriden by member calls.
+        ///
+        /// NOTE: this call is particularily data heavy. the GraphicsPipeline wrapper stores ALL data
+        /// required to create the pipeline. this includes many substructures.
+        GraphicsPipeline createGraphicsPipeline(VkShaderModule vertShader,
+            VkShaderModule                                     fragShader,
+            const char                                        *vertEntryName,
+            const char                                        *fragEntryName,
+            VkPipelineLayout                                   pipelineLayout,
+            VkRenderPass                                       renderPass);
 
         /// @brief create a structure suitable for creation of a VkImage. this structure
         /// has sane default parameters which can be overriden by member calls.
@@ -807,7 +820,7 @@ namespace automata_engine {
         /// @brief read an image from disk into memory using stb_image.
         ///
         /// Must be freed with freeLoadedImage. The pixel data will be in 0xABGR (32bpp) format.
-        loaded_image_t stbImageLoad(char *fileName);
+        loaded_image_t stbImageLoad(const char *fileName);
 
         /// @brief get the lastly polled user input.
         void getUserInput(user_input_t *userInput);
@@ -1305,6 +1318,18 @@ namespace automata_engine {
                 ci.flags              = flags;
                 return *this;
             }
+        };
+
+        struct GraphicsPipeline : public VkGraphicsPipelineCreateInfo {
+            VkPipelineShaderStageCreateInfo        m_stages[2]          = {};
+            VkPipelineDynamicStateCreateInfo       m_dynamicState       = {};
+            VkPipelineMultisampleStateCreateInfo   m_multisampleState   = {};
+            VkPipelineDepthStencilStateCreateInfo  m_depthStencilState  = {};
+            VkPipelineViewportStateCreateInfo      m_viewportState      = {};
+            VkPipelineColorBlendStateCreateInfo    m_colorBlendState    = {};
+            VkPipelineRasterizationStateCreateInfo m_rasterizationState = {};
+            VkPipelineInputAssemblyStateCreateInfo m_inputAssemblyState = {};
+            VkPipelineVertexInputStateCreateInfo   m_vertexInputState   = {};
         };
 
     }  // namespace VK
