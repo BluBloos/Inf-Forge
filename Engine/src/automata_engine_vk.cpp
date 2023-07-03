@@ -765,6 +765,21 @@ namespace automata_engine {
             return setLayout;
         }
 
+        RenderPass createRenderPass(uint32_t attachmentCount,
+            VkAttachmentDescription         *attachments,
+            uint32_t                         subpassCount,
+            VkSubpassDescription            *subpasses)
+        {
+            RenderPass              rp      = {};
+            VkRenderPassCreateInfo &rp_info = rp;
+            rp_info.sType                   = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+            rp_info.attachmentCount         = attachmentCount;
+            rp_info.pAttachments            = attachments;
+            rp_info.subpassCount            = 1;
+            rp_info.pSubpasses              = subpasses;
+            return rp;
+        }
+
     }  // namespace VK
 };     // namespace automata_engine
 

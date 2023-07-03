@@ -45,8 +45,8 @@ void ae::Init(game_memory_t *gameMemory)
 
     // create the pipeline.
     {
-        // TODO: review in detail https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#textures. how is the image precisely sampled?
-        //
+        // TODO: review in detail https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#textures.
+        // how is the image precisely sampled?
         auto samplerInfo = ae::VK::samplerCreateInfo();
         ae::VK_CHECK(vkCreateSampler(gd->vkDevice, &samplerInfo, nullptr, &gd->sampler));
 
@@ -71,44 +71,36 @@ void ae::Init(game_memory_t *gameMemory)
 
         // create the render pass
         {
-            VkAttachmentDescription attachments[2] = {0};
-            attachments[0].format                  = ae::VK::getSwapchainFormat();
-            attachments[0].samples                 = VK_SAMPLE_COUNT_1_BIT;
-            attachments[0].loadOp                  = VK_ATTACHMENT_LOAD_OP_CLEAR;
-            attachments[0].storeOp                 = VK_ATTACHMENT_STORE_OP_STORE;
-            attachments[0].initialLayout           = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-            attachments[0].finalLayout             = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            VkAttachmentDescription attachments[2] = {{
+                                                          .format        = ae::VK::getSwapchainFormat(),
+                                                          .samples       = VK_SAMPLE_COUNT_1_BIT,
+                                                          .loadOp        = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                                                          .storeOp       = VK_ATTACHMENT_STORE_OP_STORE,
+                                                          .initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                                                          .finalLayout   = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                                                      },
+                {
+                    .format  = depthFormat,
+                    .samples = VK_SAMPLE_COUNT_1_BIT,
+                    .loadOp  = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                    // NOTE: we don't actually care about what the depth buffer is after the pass.
+                    // we literally just want it to exist during the pass for the purpose of
+                    // depth test.
+                    .storeOp       = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+                    .initialLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+                    .finalLayout   = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+                }};
 
-            attachments[1].format                  = depthFormat;
-            attachments[1].samples                 = VK_SAMPLE_COUNT_1_BIT;
-            attachments[1].loadOp                  = VK_ATTACHMENT_LOAD_OP_CLEAR;
-            // NOTE: we don't actually care about what the depth buffer is after the pass.
-            // we literally just want it to exist during the pass for the purpose of
-            // depth test.
-            attachments[1].storeOp                 = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-            attachments[1].initialLayout           = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-            attachments[1].finalLayout             = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+            VkAttachmentReference color_ref = {.attachment = 0, .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
+            VkAttachmentReference depth_ref = {.attachment = 1, .layout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL};
 
-            VkAttachmentReference color_ref = {0,  // ref attachment 0
-                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
+            VkSubpassDescription subpass = {.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+                .colorAttachmentCount                          = 1,
+                .pColorAttachments                             = &color_ref,
+                .pDepthStencilAttachment                       = &depth_ref};
 
-            VkAttachmentReference depth_ref = {1, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL};
-
-            VkSubpassDescription subpass    = {0};
-            subpass.pipelineBindPoint       = VK_PIPELINE_BIND_POINT_GRAPHICS;
-            subpass.colorAttachmentCount    = 1;
-            subpass.pColorAttachments       = &color_ref;
-            subpass.pDepthStencilAttachment = &depth_ref;
-
-            // Finally, create the renderpass.
-            VkRenderPassCreateInfo rp_info = {};
-            rp_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-            rp_info.attachmentCount        = _countof(attachments);
-            rp_info.pAttachments           = attachments;
-            rp_info.subpassCount           = 1;
-            rp_info.pSubpasses             = &subpass;
-
-            VK_CHECK(vkCreateRenderPass(gd->vkDevice, &rp_info, nullptr, &gd->vkRenderPass));
+            auto rpInfo = ae::VK::createRenderPass(_countof(attachments), attachments, 1, &subpass);
+            VK_CHECK(vkCreateRenderPass(gd->vkDevice, &rpInfo, nullptr, &gd->vkRenderPass));
         }
 
         auto vertModule = ae::VK::loadShaderModule(gd->vkDevice, "res\\vert.hlsl", L"main", L"vs_6_0");

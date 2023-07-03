@@ -182,6 +182,7 @@ namespace automata_engine {
         struct GraphicsPipeline;
         struct PipelineLayout;
         struct DescriptorSetLayout;
+        struct RenderPass;
     }
 #endif
     
@@ -287,6 +288,13 @@ namespace automata_engine {
     void VK_CHECK(VkResult result);
 
     namespace VK {
+
+        /// @brief create a structure suitable for creation of a VkRenderPass. this structure
+        /// has sane default parameters which can be overriden by member calls.
+        RenderPass createRenderPass(uint32_t attachmentCount,
+            VkAttachmentDescription         *attachments,
+            uint32_t                         subpassCount,
+            VkSubpassDescription            *subpasses);
 
         /// @brief create a structure suitable for creation of a VkDescriptorSetLayout. this structure
         /// has sane default parameters which can be overriden by member calls.
@@ -1299,6 +1307,7 @@ namespace automata_engine {
 
 #if defined(AUTOMATA_ENGINE_VK_BACKEND)
     namespace VK {
+        struct RenderPass : public VkRenderPassCreateInfo {};
         struct DescriptorSetLayout : public VkDescriptorSetLayoutCreateInfo {};
 
         struct Sampler : public VkSamplerCreateInfo {
