@@ -36,6 +36,10 @@ typedef struct game_state {
     // NOTE: 10 is certainly larger than swapchain count.
     VkFramebuffer vkFramebufferCache[10] = {};
 
+    VkImageView    depthBufferView;
+    VkImage        depthBuffer;
+    VkDeviceMemory depthBufferBacking;
+
     VkImage        checkerTexture;
     VkDeviceMemory checkerTextureBacking;
 
@@ -99,6 +103,8 @@ void ae::Init(game_memory_t *gameMemory)
 
     auto device = gd->vkDevice;
 
+    VkFormat depthFormat = VK_FORMAT_D32_SFLOAT;
+
     // create the pipeline.
     {
         auto vertModule = ae::VK::loadShaderModule(device, "res\\vert.hlsl", L"main", L"vs_6_0");
@@ -146,26 +152,40 @@ void ae::Init(game_memory_t *gameMemory)
 
         // init the render pass
         {
-            VkAttachmentDescription attachment = {0};
-            attachment.format                  = VK_FORMAT_B8G8R8A8_SRGB;  // TODO.
-            attachment.samples                 = VK_SAMPLE_COUNT_1_BIT;
-            attachment.loadOp                  = VK_ATTACHMENT_LOAD_OP_CLEAR;
-            attachment.storeOp                 = VK_ATTACHMENT_STORE_OP_STORE;
-            attachment.initialLayout           = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-            attachment.finalLayout             = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            VkAttachmentDescription attachments[2] = {0};
+            attachments[0].format                  = VK_FORMAT_B8G8R8A8_SRGB;  // TODO.
+            attachments[0].samples                 = VK_SAMPLE_COUNT_1_BIT;
+            attachments[0].loadOp                  = VK_ATTACHMENT_LOAD_OP_CLEAR;
+            attachments[0].storeOp                 = VK_ATTACHMENT_STORE_OP_STORE;
+            attachments[0].initialLayout           = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            attachments[0].finalLayout             = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+            attachments[1].format                  = depthFormat;
+            attachments[1].samples                 = VK_SAMPLE_COUNT_1_BIT;
+            attachments[1].loadOp                  = VK_ATTACHMENT_LOAD_OP_CLEAR;
+            // NOTE: we don't actually care about what the depth buffer is after the pass.
+            // we literally just want it to exist during the pass for the purpose of
+            // depth test.
+            attachments[1].storeOp                 = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+            attachments[1].initialLayout           = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+            attachments[1].finalLayout             = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
 
             VkAttachmentReference color_ref = {0,  // ref attachment 0
                 VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
 
-            VkSubpassDescription subpass = {0};
-            subpass.pipelineBindPoint    = VK_PIPELINE_BIND_POINT_GRAPHICS;
-            subpass.colorAttachmentCount = 1;
-            subpass.pColorAttachments    = &color_ref;
+            VkAttachmentReference depth_ref = {1, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL};
+
+            VkSubpassDescription subpass    = {0};
+            subpass.pipelineBindPoint       = VK_PIPELINE_BIND_POINT_GRAPHICS;
+            subpass.colorAttachmentCount    = 1;
+            subpass.pColorAttachments       = &color_ref;
+            subpass.pDepthStencilAttachment = &depth_ref;
 
             // Finally, create the renderpass.
-            VkRenderPassCreateInfo rp_info = {VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO};
-            rp_info.attachmentCount        = 1;
-            rp_info.pAttachments           = &attachment;
+            VkRenderPassCreateInfo rp_info = {};
+            rp_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+            rp_info.attachmentCount        = _countof(attachments);
+            rp_info.pAttachments           = attachments;
             rp_info.subpassCount           = 1;
             rp_info.pSubpasses             = &subpass;
 
@@ -192,6 +212,23 @@ void ae::Init(game_memory_t *gameMemory)
 
     uint32_t vramHeapIdx = ae::VK::getDesiredMemoryTypeIndex(
         gd->vkGpu, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+
+    // create the depth buffer.
+    {
+        ae::VK::createImage2D_dumb(gd->vkDevice,
+            winInfo.width,
+            winInfo.height,
+            vramHeapIdx,
+            depthFormat,
+            VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+            &gd->depthBuffer,
+            &gd->depthBufferBacking);
+
+        // create image view.
+
+        auto viewInfo = ae::VK::createImageView(gd->depthBuffer, depthFormat).aspectMask(VK_IMAGE_ASPECT_DEPTH_BIT);
+        vkCreateImageView(gd->vkDevice, &viewInfo, nullptr, &gd->depthBufferView);
+    }
 
     // create THE command buffer.
     // NOTE: since this app is using the atomic update model, only one frame will ever be in flight at once.
@@ -368,6 +405,21 @@ void ae::Init(game_memory_t *gameMemory)
             vkCmdCopyBufferToImage(cmd, it.uploadBuffer, it.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
         }
     }
+
+    // issue the barrier to set the depth buffer to the initial layout.
+    auto barrierInfo = ae::VK::imageMemoryBarrier(VK_ACCESS_NONE,
+        VK_ACCESS_MEMORY_WRITE_BIT,
+        VK_IMAGE_LAYOUT_UNDEFINED,
+        VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+        gd->depthBuffer)
+                           .aspectMask(VK_IMAGE_ASPECT_DEPTH_BIT);
+
+    ae::VK::cmdImageMemoryBarrier(cmd,
+        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,     // no stage before.
+        VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,  // no stage after.
+        1,
+        &barrierInfo);
+
     vkEndCommandBuffer(cmd);
 
     // create the init fence.
@@ -421,19 +473,26 @@ void ae::OnVoiceBufferProcess(game_memory_t *gameMemory,
     int                                      bytesPerSample)
 {}
 
-VkFramebuffer MaybeMakeFramebuffer(game_state_t *gd, VkImageView view, u32 width, u32 height, uint32_t idx)
+VkFramebuffer MaybeMakeFramebuffer(game_state_t *gd, VkImageView backbuffer, u32 width, u32 height, uint32_t idx)
 {
     assert(idx < _countof(gd->vkFramebufferCache));
     if (!gd->vkFramebufferCache[idx]) {
+
+        // NOTE: since we use the atomic update model, we can get away with using just one
+        // depth buffer view for both framebuffer objects. these will never be in flight
+        // at the same time.
+        VkImageView views[2] = {backbuffer, gd->depthBufferView};
+
         VkFramebufferCreateInfo ci = {};
         ci.sType                   = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
         ci.renderPass              = gd->vkRenderPass;
-        ci.attachmentCount         = 1;
-        ci.pAttachments            = &view;
+        ci.attachmentCount         = _countof(views);
+        ci.pAttachments            = views;
         ci.width                   = width;
         ci.height                  = height;
         ci.layers                  = 1;
         vkCreateFramebuffer(gd->vkDevice, &ci, nullptr, &gd->vkFramebufferCache[idx]);
+        
     }
     return gd->vkFramebufferCache[idx];
 }
@@ -515,20 +574,21 @@ void GameUpdateAndRender(ae::game_memory_t *gameMemory)
         {
             VkRect2D renderArea = {VkOffset2D{0, 0}, VkExtent2D{winInfo.width, winInfo.height}};
 
-            VkClearValue clearValue;
-            clearValue.color.float32[0] = 1.f;
-            clearValue.color.float32[1] = 1.f;
-            clearValue.color.float32[2] = 0.f;
-            clearValue.color.float32[3] = 1.f;
+            VkClearValue clearValues[2]       = {};
+            clearValues[0].color.float32[0]   = 1.f;
+            clearValues[0].color.float32[1]   = 1.f;
+            clearValues[0].color.float32[2]   = 0.f;
+            clearValues[0].color.float32[3]   = 1.f;
+            clearValues[1].depthStencil.depth = 1.f;
 
             // Begin the render pass.
             VkRenderPassBeginInfo rp_begin = {};
-            rp_begin.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-            rp_begin.renderPass  = gd->vkRenderPass;
-            rp_begin.framebuffer = framebuffer;
+            rp_begin.sType                 = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+            rp_begin.renderPass            = gd->vkRenderPass;
+            rp_begin.framebuffer           = framebuffer;
             rp_begin.renderArea            = renderArea;
-            rp_begin.clearValueCount       = 1;
-            rp_begin.pClearValues          = &clearValue;
+            rp_begin.clearValueCount       = _countof(clearValues);
+            rp_begin.pClearValues          = clearValues;
             
             vkCmdBeginRenderPass(cmd, &rp_begin, VK_SUBPASS_CONTENTS_INLINE);
             defer(vkCmdEndRenderPass(cmd));
@@ -679,12 +739,14 @@ void CreateGraphicsPipeline(VkDevice vkDevice,
     viewport.viewportCount                     = 1;
     viewport.scissorCount                      = 1;
 
-    // Disable all depth testing.
+    // set depth testing params.
     VkPipelineDepthStencilStateCreateInfo depth_stencil = {};
     depth_stencil.sType                                 = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-    depth_stencil.depthTestEnable                       = VK_FALSE;
+    depth_stencil.depthTestEnable                       = VK_TRUE;
     depth_stencil.stencilTestEnable                     = VK_FALSE;
     depth_stencil.depthBoundsTestEnable                 = VK_FALSE;
+    depth_stencil.depthCompareOp                        = VK_COMPARE_OP_LESS;
+    depth_stencil.depthWriteEnable                      = VK_TRUE;
 
     // No multisampling.
     VkPipelineMultisampleStateCreateInfo multisample = {};

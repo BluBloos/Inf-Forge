@@ -577,6 +577,20 @@ namespace automata_engine {
             return imb;
         }
 
+        ImageView createImageView(VkImage image, VkFormat format)
+        {
+            ImageView              view           = {};
+            VkImageViewCreateInfo &view_info      = view;
+            view_info.sType                       = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+            view_info.viewType                    = VK_IMAGE_VIEW_TYPE_2D;
+            view_info.format                      = format;
+            view_info.image                       = image;
+            view_info.subresourceRange.levelCount = 1;
+            view_info.subresourceRange.layerCount = 1;
+            view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            return view;
+        }
+
         void cmdImageMemoryBarrier(VkCommandBuffer cmd,
             VkPipelineStageFlags                   before,
             VkPipelineStageFlags                   after,

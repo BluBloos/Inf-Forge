@@ -177,6 +177,7 @@ namespace automata_engine {
         struct CommandPool;
         struct CommandBuffer;
         struct ImageMemoryBarrier;
+        struct ImageView;
     }
 #endif
     
@@ -282,6 +283,10 @@ namespace automata_engine {
     void VK_CHECK(VkResult result);
 
     namespace VK {
+
+        /// @brief create a structure suitable for creation of a VkImageView. this structure
+        /// has sane default parameters which can be overriden by member calls.
+        ImageView createImageView(VkImage image, VkFormat format);
 
         /// @brief get the current swapchain image for this frame.
         /// @returns the index of the backbuffer as found in the swapchain.
@@ -1264,7 +1269,23 @@ namespace automata_engine {
         };
         struct CommandBuffer : public VkCommandBufferAllocateInfo {};
         struct CommandPool : public VkCommandPoolCreateInfo {};
-        struct ImageMemoryBarrier : public VkImageMemoryBarrier {};
+        struct ImageMemoryBarrier : public VkImageMemoryBarrier {
+            ImageMemoryBarrier &aspectMask(VkImageAspectFlags mask)
+            {
+                VkImageMemoryBarrier &ci       = *this;
+                ci.subresourceRange.aspectMask = mask;
+                return *this;
+            }
+        };
+
+        struct ImageView : public VkImageViewCreateInfo {
+            ImageView &aspectMask(VkImageAspectFlags mask)
+            {
+                VkImageViewCreateInfo &ci      = *this;
+                ci.subresourceRange.aspectMask = mask;
+                return *this;
+            }
+        };
 
     }  // namespace VK
 
