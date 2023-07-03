@@ -661,8 +661,6 @@ void GameUpdateAndRender(ae::game_memory_t *gameMemory)
         ae::math::buildMat4fFromTransform(gd->suzanneTransform));
     ae::ImGuiRenderVec3("camPos", gd->cam.trans.pos);
     ae::ImGuiRenderVec3((char *)(std::string(gd->suzanne.modelName) + "Pos").c_str(), gd->suzanneTransform.pos);
-    ImGui::Text(
-        "Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
     ImGui::End();
 
     VkCommandBuffer ImguiCmd = gd->imgui_commandBuffer;

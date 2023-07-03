@@ -890,10 +890,10 @@ static void Win32ResizeBackbuffer(win32_backbuffer_t *buffer, int newWidth, int 
     g_gameMemory.backbufferHeight = newHeight;
 }
 
-float Win32GetSecondsElapsed(
+static float Win32GetSecondsElapsed(
     LARGE_INTEGER Start, LARGE_INTEGER End, LONGLONG PerfCountFrequency64
 ) {
-	float Result = 1.0f * (End.QuadPart - Start.QuadPart) / PerfCountFrequency64;
+	float Result = float(End.QuadPart - Start.QuadPart) / float(PerfCountFrequency64);
 	return (Result);
 }
 
@@ -2150,13 +2150,11 @@ int CALLBACK WinMain(HINSTANCE instance,
 
             static constexpr float TargetSecondsElapsedPerFrame = 1 / 60.f;
             {
-                LARGE_INTEGER WorkCounter = Win32GetWallClock();
-                float WorkSecondsElapsed  = Win32GetSecondsElapsed(LastCounter, WorkCounter, g_PerfCountFrequency64);
-
-                float SecondsElapsedForFrame = WorkSecondsElapsed;
+                float SecondsElapsedForFrame = Win32GetSecondsElapsed(LastCounter, Win32GetWallClock(), g_PerfCountFrequency64);
                 if (SecondsElapsedForFrame < TargetSecondsElapsedPerFrame) {
                     if (SleepGranular && ae::platform::_globalVsync) {
-                        DWORD SleepMS = (DWORD)(1000.0f * (TargetSecondsElapsedPerFrame - WorkSecondsElapsed));
+                        DWORD SleepMS = (DWORD)ae::math::max(
+                            int32_t(0), int32_t(1000.0f * (TargetSecondsElapsedPerFrame - SecondsElapsedForFrame)) - 1);
                         if (SleepMS > 0) { Sleep(SleepMS); }
                     }
                     while ((SecondsElapsedForFrame < TargetSecondsElapsedPerFrame) && ae::platform::_globalVsync) {
