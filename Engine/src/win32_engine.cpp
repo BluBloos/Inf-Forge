@@ -192,8 +192,11 @@ VkSwapchainKHR g_vkSwapchain           = VK_NULL_HANDLE;
 VkSurfaceKHR   g_vkSurface             = VK_NULL_HANDLE;
 VkImage       *g_vkSwapchainImages     = nullptr;  // stretchy buffer
 VkImageView   *g_vkSwapchainImageViews = nullptr;  // stretchy buffer
+VkFormat       g_vkSwapchainFormat     = VK_FORMAT_UNDEFINED;
 VkFence        g_vkPresentFence        = VK_NULL_HANDLE;
 uint32_t       g_vkCurrentImageIndex   = 0;
+
+VkFormat ae::VK::getSwapchainFormat() { return g_vkSwapchainFormat; }
 
 uint32_t ae::VK::getCurrentBackbuffer(VkImage *image, VkImageView *view)
 {
@@ -297,6 +300,7 @@ static bool vk_initSwapchain(uint32_t desiredWidth, uint32_t desiredHeight)
         }
         if (format.format == VK_FORMAT_UNDEFINED) { format = formats[0]; }
     }
+    g_vkSwapchainFormat = format.format;
 
     VkExtent2D swapchain_size = surface_properties.currentExtent;
     if (surface_properties.currentExtent.width == 0xFFFFFFFF) {

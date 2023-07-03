@@ -97,7 +97,7 @@ void ae::Init(game_memory_t *gameMemory)
         // create the render pass
         {
             VkAttachmentDescription attachments[2] = {0};
-            attachments[0].format                  = VK_FORMAT_B8G8R8A8_SRGB;  // TODO.
+            attachments[0].format                  = ae::VK::getSwapchainFormat();
             attachments[0].samples                 = VK_SAMPLE_COUNT_1_BIT;
             attachments[0].loadOp                  = VK_ATTACHMENT_LOAD_OP_CLEAR;
             attachments[0].storeOp                 = VK_ATTACHMENT_STORE_OP_STORE;

@@ -306,6 +306,9 @@ namespace automata_engine {
         /// has sane default parameters which can be overriden by member calls.
         ImageView createImageView(VkImage image, VkFormat format);
 
+        /// @brief get the format that the swapchain image views have been created with.
+        VkFormat getSwapchainFormat();
+        
         /// @brief get the current swapchain image for this frame.
         /// @returns the index of the backbuffer as found in the swapchain.
         uint32_t getCurrentBackbuffer(VkImage *image, VkImageView *view);
