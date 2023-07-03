@@ -35,11 +35,11 @@ void ae::Init(game_memory_t *gameMemory)
     *gd = {}; // zero it out.
 
     ae::VK::doDefaultInit(
-        &gd->vkInstance, &gd->vkGpu, &gd->vkDevice, &gd->gfxQueueIndex, &gd->vkQueue, &gd->vkDebugCallback);
+        &gd->vkInstance, &gd->vkGpu, &gd->vkDevice, &gd->vkQueue, & gd->gfxQueueIndex, &gd->vkDebugCallback);
 
     // NOTE: init the VK resources on the engine side. this lets it know what queue to wait for work
     // and to present on. at this time, the engine also initializes the swapchain for the first time.
-    ae::platform::VK::init(gd->vkInstance, gd->vkGpu, gd->vkDevice, gd->vkQueue);
+    ae::platform::VK::init(gd->vkInstance, gd->vkGpu, gd->vkDevice, gd->vkQueue, gd->gfxQueueIndex);
 
     const VkFormat depthFormat = VK_FORMAT_D32_SFLOAT;
 
@@ -596,6 +596,20 @@ void GameUpdateAndRender(ae::game_memory_t *gameMemory)
 
         }  // end render pass.
 
+#if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
+        // sync the backbuffer against the imgui render pass.
+        auto barrierInfo2 = ae::VK::imageMemoryBarrier(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+            VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,  // load op.
+            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            backbuffer);
+
+        ae::VK::cmdImageMemoryBarrier(cmd,
+            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            1,
+            &barrierInfo2);
+#else
         // transit backbuffer from color attachment to present.
         auto barrierInfo2 = ae::VK::imageMemoryBarrier(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
             VK_ACCESS_MEMORY_READ_BIT,  // ensure cache flush.
@@ -605,6 +619,7 @@ void GameUpdateAndRender(ae::game_memory_t *gameMemory)
 
         ae::VK::cmdImageMemoryBarrier(
             cmd, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 1, &barrierInfo2);
+#endif
 
         vkEndCommandBuffer(cmd);
     }
@@ -622,12 +637,19 @@ void GameUpdateAndRender(ae::game_memory_t *gameMemory)
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
     ImGui::Begin("MonkeyDemo");
 
-    //  ImGui::Text("tris / faces: %d", gd->suzanneIbo.count / 3);
-    ImGui::Text("verts: %f", StretchyBufferCount(gd->suzanne.vertexData) / 8.f);
+    ImGui::Text(
+        "---CONTROLS---\n"
+        "WASD to move\n"
+        "Left click hold to rotate camera.\n"
+        "ESC to exit first person cam.\n"
+        "SPACE to fly up\n"
+        "SHIFT to fly down\n\n");
+
+    ImGui::Text("face count: %d", gd->suzanneIndexCount / 3);
 
     ImGui::Text("");
 
-    ae::ImGuiRenderMat4("camProjMat", buildProjMat(gd->cam));
+    ae::ImGuiRenderMat4("camProjMat", buildProjMatForVk(gd->cam));
     ae::ImGuiRenderMat4("camViewMat", buildViewMat(gd->cam));
     ae::ImGuiRenderMat4((char *)(std::string(gd->suzanne.modelName) + "Mat").c_str(),
         ae::math::buildMat4fFromTransform(gd->suzanneTransform));

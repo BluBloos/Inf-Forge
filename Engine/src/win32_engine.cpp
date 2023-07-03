@@ -184,9 +184,11 @@ static HINSTANCE g_hInstance = NULL;
 // all work/presentation must go through a single queue/device pair.
 // if the app wants to use more queues and devices, it needs to synchronize on its
 // end.
-VkQueue          g_vkQueue  = VK_NULL_HANDLE;
-VkPhysicalDevice g_vkGpu    = VK_NULL_HANDLE;
-VkDevice         g_vkDevice = VK_NULL_HANDLE;
+uint32_t         g_vkQueueIndex = 0;
+VkQueue          g_vkQueue      = VK_NULL_HANDLE;
+VkPhysicalDevice g_vkGpu        = VK_NULL_HANDLE;
+VkDevice         g_vkDevice     = VK_NULL_HANDLE;
+VkInstance       g_vkInstance   = VK_NULL_HANDLE;
 
 VkSwapchainKHR g_vkSwapchain           = VK_NULL_HANDLE;
 VkSurfaceKHR   g_vkSurface             = VK_NULL_HANDLE;
@@ -195,6 +197,43 @@ VkImageView   *g_vkSwapchainImageViews = nullptr;  // stretchy buffer
 VkFormat       g_vkSwapchainFormat     = VK_FORMAT_UNDEFINED;
 VkFence        g_vkPresentFence        = VK_NULL_HANDLE;
 uint32_t       g_vkCurrentImageIndex   = 0;
+
+#if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
+#include "imgui_impl_vulkan.h"
+VkFramebuffer *g_vkImguiFramebuffers = nullptr;
+VkRenderPass   g_vkImguiRenderPass   = VK_NULL_HANDLE;
+
+static VkRenderPass vk_MaybeCreateImguiRenderPass()
+{
+        if (g_vkImguiRenderPass == VK_NULL_HANDLE) {
+        VkAttachmentDescription attachment = {};
+        attachment.format                  = g_vkSwapchainFormat;
+        attachment.samples                 = VK_SAMPLE_COUNT_1_BIT;
+        attachment.loadOp        = VK_ATTACHMENT_LOAD_OP_LOAD;  // imgui should not clear contents that we already have.
+        attachment.storeOp       = VK_ATTACHMENT_STORE_OP_STORE;
+        attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        attachment.stencilStoreOp              = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        attachment.initialLayout               = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        attachment.finalLayout                 = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        VkAttachmentReference color_attachment = {};
+        color_attachment.attachment            = 0;
+        color_attachment.layout                = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        VkSubpassDescription subpass           = {};
+        subpass.pipelineBindPoint              = VK_PIPELINE_BIND_POINT_GRAPHICS;
+        subpass.colorAttachmentCount           = 1;
+        subpass.pColorAttachments              = &color_attachment;
+        VkRenderPassCreateInfo info            = {};
+        info.sType                             = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+        info.attachmentCount                   = 1;
+        info.pAttachments                      = &attachment;
+        info.subpassCount                      = 1;
+        info.pSubpasses                        = &subpass;
+        ae::VK_CHECK(vkCreateRenderPass(g_vkDevice, &info, nullptr, &g_vkImguiRenderPass));
+        }
+        return g_vkImguiRenderPass;
+}
+
+#endif
 
 VkFormat ae::VK::getSwapchainFormat() { return g_vkSwapchainFormat; }
 
@@ -382,13 +421,21 @@ static bool vk_initSwapchain(uint32_t desiredWidth, uint32_t desiredHeight)
 
     ae::VK_CHECK(vkCreateSwapchainKHR(g_vkDevice, &info, nullptr, &g_vkSwapchain));
 
-    // need to remove the prior swapchain after now creating a new one
+    // need to remove the prior swapchain + other objects after now creating a new one
     if (oldSwapchain != VK_NULL_HANDLE) {
         uint32_t image_count = StretchyBufferCount(g_vkSwapchainImageViews);
         for (uint32_t i = 0; i < image_count; i++) {
             auto view = g_vkSwapchainImageViews[i];
             vkDestroyImageView(g_vkDevice, view, nullptr);
         }
+#if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
+        for (uint32_t i = 0; i < image_count; i++) {
+            auto fb = g_vkImguiFramebuffers[i];
+            vkDestroyFramebuffer(g_vkDevice, fb, nullptr);
+        }
+        StretchyBufferFree(g_vkImguiFramebuffers);
+        g_vkImguiFramebuffers = nullptr;
+#endif
         StretchyBufferFree(g_vkSwapchainImageViews);
         g_vkSwapchainImageViews = nullptr;
         StretchyBufferFree(g_vkSwapchainImages);
@@ -401,7 +448,7 @@ static bool vk_initSwapchain(uint32_t desiredWidth, uint32_t desiredHeight)
     StretchyBufferInitWithCount(g_vkSwapchainImages, image_count);
     ae::VK_CHECK(vkGetSwapchainImagesKHR(g_vkDevice, g_vkSwapchain, &image_count, g_vkSwapchainImages));
 
-    // Create all VkImageView so that we can render into.
+    // Create all additional objects for associated with the swapchain.
     for (size_t i = 0; i < image_count; i++) {
         VkImageViewCreateInfo view_info       = {};
         view_info.sType                       = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -415,16 +462,33 @@ static bool vk_initSwapchain(uint32_t desiredWidth, uint32_t desiredHeight)
         VkImageView image_view;
         ae::VK_CHECK(vkCreateImageView(g_vkDevice, &view_info, nullptr, &image_view));
         StretchyBufferPush(g_vkSwapchainImageViews, image_view);
+
+#if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
+        VkFramebufferCreateInfo ci = {};
+        ci.sType                   = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+        ci.renderPass              = vk_MaybeCreateImguiRenderPass();
+        ci.attachmentCount         = 1;
+        ci.pAttachments            = &g_vkSwapchainImageViews[i];
+        ci.width                   = swapchain_size.width;
+        ci.height                  = swapchain_size.height;
+        ci.layers                  = 1;
+        VkFramebuffer framebuffer;
+        vkCreateFramebuffer(g_vkDevice, &ci, nullptr, &framebuffer);
+        StretchyBufferPush(g_vkImguiFramebuffers, framebuffer);
+#endif
     }
 
     return true;
 }
 
-void ae::platform::VK::init(VkInstance instance, VkPhysicalDevice gpu, VkDevice device, VkQueue queue)
+void ae::platform::VK::init(
+    VkInstance instance, VkPhysicalDevice gpu, VkDevice device, VkQueue queue, uint32_t queueIndex)
 {
-    g_vkQueue  = queue;
-    g_vkDevice = device;
-    g_vkGpu    = gpu;
+    g_vkQueueIndex = queueIndex;
+    g_vkQueue      = queue;
+    g_vkDevice     = device;
+    g_vkGpu        = gpu;
+    g_vkInstance   = instance;
 
     // create the window surface
     if (instance != VK_NULL_HANDLE) {
@@ -694,7 +758,7 @@ static ae::game_memory_t g_gameMemory = {};
 static win32_backbuffer_t globalBackBuffer = {};
 
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
-void ScaleImGui()
+void ScaleImGui_Impl()
 {
     if (isImGuiInitialized) {
         HMONITOR            hMonitor = MonitorFromWindow(g_hwnd, MONITOR_DEFAULTTONEAREST);
@@ -714,14 +778,51 @@ void ScaleImGui()
             }
             //#endif
             //ImGui::GetStyle().ScaleAllSizes(SCALE);
-
-#if defined(AUTOMATA_ENGINE_GL_BACKEND)
-            ImGui_ImplOpenGL3_DestroyFontsTexture();
-            ImGui_ImplOpenGL3_CreateFontsTexture();
-#endif
         }
     }
 }
+
+#if defined(AUTOMATA_ENGINE_GL_BACKEND)
+void ScaleImGuiForGL()
+{
+    ScaleImGui_Impl();
+
+    ImGui_ImplOpenGL3_DestroyFontsTexture();
+    ImGui_ImplOpenGL3_CreateFontsTexture();
+}
+#endif
+
+#if defined(AUTOMATA_ENGINE_VK_BACKEND)
+void ScaleImGuiForVK(VkCommandBuffer cmd, VkCommandPool cmdPool)
+{
+    ScaleImGui_Impl();
+
+    ImGui::GetIO().Fonts->Build();
+
+    ae::VK_CHECK(vkResetCommandBuffer(cmd, 0));
+    ae::VK_CHECK(vkResetCommandPool(g_vkDevice, cmdPool, 0));
+
+    VkCommandBufferBeginInfo begin_info = {};
+    begin_info.sType                    = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    begin_info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    ae::VK_CHECK(vkBeginCommandBuffer(cmd, &begin_info));
+
+    // TODO: each time we do this, it creates data that is not freed. fix that.
+    ImGui_ImplVulkan_CreateFontsTexture(cmd);
+
+    ae::VK_CHECK(vkEndCommandBuffer(cmd));
+
+    VkSubmitInfo end_info       = {};
+    end_info.sType              = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    end_info.commandBufferCount = 1;
+    end_info.pCommandBuffers    = &cmd;
+    ae::VK_CHECK(vkQueueSubmit(g_vkQueue, 1, &end_info, VK_NULL_HANDLE));
+
+    ae::VK_CHECK(vkDeviceWaitIdle(g_vkDevice));
+    ImGui_ImplVulkan_DestroyFontUploadObjects();
+}
+#endif
+
 #endif
 
 static void Win32ResizeBackbuffer(win32_backbuffer_t *buffer, int newWidth, int newHeight)
@@ -855,9 +956,14 @@ LRESULT CALLBACK Win32WindowProc(HWND window,
         } break;
         case WM_DPICHANGED: {
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
-            ScaleImGui();
+#if defined(AUTOMATA_ENGINE_GL_BACKEND)
+            ScaleImGuiForGL();
 #endif
-            RECT* const prcNewWindow = (RECT*)lParam;
+// TODO: for the VK case, this is kind of a concern.
+// when we look at updating the imgui font, it means that we need to stall the entire device.
+// but, couldn't we keep the current frame in flight any only stall the future frames?
+#endif
+            RECT *const prcNewWindow = (RECT *)lParam;
             SetWindowPos(window,
                 NULL,
                 prcNewWindow->left,
@@ -1754,24 +1860,97 @@ int CALLBACK WinMain(HINSTANCE instance,
 
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
         // ImGUI initialization code :)
-        {
-            // Setup Dear ImGui context
-            IMGUI_CHECKVERSION();
-            ImGui::CreateContext();
-            // ImGuiIO& io = ImGui::GetIO(); (void)io;
-            // Setup Dear ImGui style
-            ImGui::StyleColorsDark();
-            // Setup Platform/Renderer backends
-            ImGui_ImplWin32_Init(windowHandle);
+
+        // Setup Dear ImGui context
+        IMGUI_CHECKVERSION();
+        ImGui::CreateContext();
+        // ImGuiIO& io = ImGui::GetIO(); (void)io;
+        // Setup Dear ImGui style
+        ImGui::StyleColorsDark();
+        // Setup Platform/Renderer backends
+        ImGui_ImplWin32_Init(windowHandle);
 #if defined(AUTOMATA_ENGINE_GL_BACKEND)
-        const char* glsl_version = "#version 330";
+        {
+            const char *glsl_version = "#version 330";
             ImGui_ImplOpenGL3_Init(glsl_version);
+        }
 #endif
 
-            isImGuiInitialized = true;
+#if defined(AUTOMATA_ENGINE_VK_BACKEND)
 
-            ScaleImGui();
+        ImGui_ImplVulkan_LoadFunctions(
+            [](const char *function_name, void *) { return vkGetInstanceProcAddr(g_vkInstance, function_name); });
+
+        // create the imgui command buffer stuff.
+        VkFence vkImguiFence = VK_NULL_HANDLE;
+        {
+            VkFenceCreateInfo ci = {};
+            ci.sType             = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+            ae::VK_CHECK(vkCreateFence(g_vkDevice, &ci, nullptr, &vkImguiFence));
         }
+
+        VkCommandPool   vkImguiCommandPool   = VK_NULL_HANDLE;
+        VkCommandBuffer vkImguiCommandBuffer = VK_NULL_HANDLE;
+
+        auto poolInfo = ae::VK::commandPoolCreateInfo(g_vkQueueIndex);
+        ae::VK_CHECK(vkCreateCommandPool(g_vkDevice, &poolInfo, nullptr, &vkImguiCommandPool));
+        auto cmdInfo = ae::VK::commandBufferAllocateInfo(1, vkImguiCommandPool);
+        ae::VK_CHECK(vkAllocateCommandBuffers(g_vkDevice, &cmdInfo, &vkImguiCommandBuffer));
+
+        {
+            static VkDescriptorPool imguiDescPool = VK_NULL_HANDLE;
+
+            // Create Descriptor Pool for imgui.
+            {
+                VkDescriptorPoolSize pool_sizes[]    = {{.type = VK_DESCRIPTOR_TYPE_SAMPLER, .descriptorCount = 1000},
+                       {.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .descriptorCount = 1000},
+                       {.type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, .descriptorCount = 1000},
+                       {.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .descriptorCount = 1000},
+                       {.type = VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, .descriptorCount = 1000},
+                       {.type = VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, .descriptorCount = 1000},
+                       {.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, .descriptorCount = 1000},
+                       {.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .descriptorCount = 1000},
+                       {.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, .descriptorCount = 1000},
+                       {.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, .descriptorCount = 1000},
+                       {.type = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, .descriptorCount = 1000}};
+                VkDescriptorPoolCreateInfo pool_info = {};
+                pool_info.sType                      = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+                pool_info.flags                      = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+                pool_info.maxSets                    = 1000 * IM_ARRAYSIZE(pool_sizes);
+                pool_info.poolSizeCount              = (uint32_t)IM_ARRAYSIZE(pool_sizes);
+                pool_info.pPoolSizes                 = pool_sizes;
+                ae::VK_CHECK(vkCreateDescriptorPool(g_vkDevice, &pool_info, nullptr, &imguiDescPool));
+            }
+
+            ImGui_ImplVulkan_InitInfo init_info = {};
+            init_info.Instance                  = g_vkInstance;
+            init_info.PhysicalDevice            = g_vkGpu;
+            init_info.Device                    = g_vkDevice;
+            init_info.QueueFamily               = g_vkQueueIndex;
+            init_info.Queue                     = g_vkQueue;
+            init_info.PipelineCache             = VK_NULL_HANDLE;
+            init_info.DescriptorPool            = imguiDescPool;
+            init_info.Subpass                   = 0;  // TODO: why?
+            init_info.MinImageCount =
+                2;  // TODO: can we pull this value from somewhere? this is a common idea in this code.
+            // TODO: it is currently the case that the count of swapchain images is static.
+            // but, how can we have out program statically assert that?
+            uint32_t swapCount = StretchyBufferCount(g_vkSwapchainImages);
+            IM_ASSERT(swapCount >= 2);
+            init_info.ImageCount      = swapCount;
+            init_info.MSAASamples     = VK_SAMPLE_COUNT_1_BIT;
+            init_info.Allocator       = nullptr;
+            init_info.CheckVkResultFn = ae::VK_CHECK;
+            ImGui_ImplVulkan_Init(&init_info, vk_MaybeCreateImguiRenderPass());
+        }
+#endif
+        isImGuiInitialized = true;
+#if defined(AUTOMATA_ENGINE_GL_BACKEND)
+        ScaleImGuiForGL();
+#endif
+#if defined(AUTOMATA_ENGINE_VK_BACKEND)
+        ScaleImGuiForVK(vkImguiCommandBuffer, vkImguiCommandPool);
+#endif
 #endif
         // TODO(Noah): Look into what the imGUI functions are going to return on failure!
 
@@ -1813,15 +1992,18 @@ int CALLBACK WinMain(HINSTANCE instance,
 
             bool bAppOkNow = g_gameMemory.getInitialized() && bEngineIntroOver;
 
-    #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
+#if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
             if (isImGuiInitialized && bAppOkNow) {
-    #if defined(AUTOMATA_ENGINE_GL_BACKEND)
+#if defined(AUTOMATA_ENGINE_GL_BACKEND)
                 ImGui_ImplOpenGL3_NewFrame();
-    #endif
+#endif
+#if defined(AUTOMATA_ENGINE_VK_BACKEND)
+                ImGui_ImplVulkan_NewFrame();
+#endif
                 ImGui_ImplWin32_NewFrame();
                 ImGui::NewFrame();
             }
-    #endif
+#endif
 
             static bool bRenderFallbackFirstTime = true;
             bool        bRenderFallback          = false;
@@ -1893,9 +2075,46 @@ int CALLBACK WinMain(HINSTANCE instance,
                 ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 #endif
 #if defined(AUTOMATA_ENGINE_VK_BACKEND)
-                // TODO.
-                //if (ae::platform::GLOBAL_UPDATE_MODEL == ae::AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC)
-                //ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), frameVkCommandBuffer, VkPipeline pipeline = VK_NULL_HANDLE);
+
+                // TODO: impl other models. here would need an array for frame data!
+                if (ae::platform::GLOBAL_UPDATE_MODEL == ae::AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC) {
+                    auto cmd = vkImguiCommandBuffer;
+
+                    // NOTE: again, we know that since atomic update model that this command buffer cannot be in flight
+                    // at this point in the code.
+                    ae::VK_CHECK(vkResetCommandBuffer(cmd, 0));
+                    ae::VK_CHECK(vkResetCommandPool(g_vkDevice, vkImguiCommandPool, 0));
+
+                    VkCommandBufferBeginInfo info = {};
+                    info.sType                    = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+                    info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+                    ae::VK_CHECK(vkBeginCommandBuffer(cmd, &info));
+
+                    ae::game_window_info_t winInfo = automata_engine::platform::getWindowInfo();
+
+                    VkRenderPassBeginInfo rpInfo    = {};
+                    rpInfo.sType                    = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+                    rpInfo.renderPass               = vk_MaybeCreateImguiRenderPass();
+                    rpInfo.framebuffer              = g_vkImguiFramebuffers[g_vkCurrentImageIndex];
+                    rpInfo.renderArea.extent.width  = winInfo.width;
+                    rpInfo.renderArea.extent.height = winInfo.height;
+                    vkCmdBeginRenderPass(cmd, &rpInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+                    // Record dear imgui primitives into command buffer
+                    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
+
+                    vkCmdEndRenderPass(cmd);
+
+                    ae::VK_CHECK(vkEndCommandBuffer(cmd));
+
+                    // submit the cmd buffer to queue.
+                    VkSubmitInfo sinfo       = {};
+                    sinfo.sType              = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+                    sinfo.commandBufferCount = 1;
+                    sinfo.pCommandBuffers    = &cmd;
+
+                    ae::VK_CHECK(vkQueueSubmit(g_vkQueue, 1, &sinfo, vkImguiFence));
+                }
 #endif
             }
 
@@ -1921,6 +2140,9 @@ int CALLBACK WinMain(HINSTANCE instance,
             if (!bRenderFallback) {
                 if (ae::platform::GLOBAL_UPDATE_MODEL == ae::AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC) {
                     vk_WaitForAndResetFence(g_vkDevice, &g_vkPresentFence);
+#if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
+                    vk_WaitForAndResetFence(g_vkDevice, &vkImguiFence);
+#endif
                 }
 
                 {
@@ -2002,8 +2224,7 @@ int CALLBACK WinMain(HINSTANCE instance,
             ImGui_ImplOpenGL3_Shutdown();
 #endif
 #if defined(AUTOMATA_ENGINE_VK_BACKEND)
-            // TODO: need headers.
-//            ImGui_ImplVulkan_Shutdown();
+            ImGui_ImplVulkan_Shutdown();
 #endif
             ImGui_ImplWin32_Shutdown();
             ImGui::DestroyContext();

@@ -13,6 +13,7 @@ namespace automata_engine {
     {
         if (err) {
             AELoggerError("Detected Vulkan error: %s", ae::VK::VkResultToString(err));
+            // TODO: there is probably a much better way to handle this...
             abort();
         }
     }
@@ -248,8 +249,8 @@ namespace automata_engine {
         void doDefaultInit(VkInstance *pInstance,
             VkPhysicalDevice          *pGpu,
             VkDevice                  *pDevice,
-            uint32_t                  *pQueueIndex,
             VkQueue                   *pQueue,
+            uint32_t                  *pQueueIndex,
             VkDebugUtilsMessengerEXT  *pDebugCallback)
         {
             // TODO: remove need for volk.

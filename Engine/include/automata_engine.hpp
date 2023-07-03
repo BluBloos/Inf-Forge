@@ -382,8 +382,8 @@ namespace automata_engine {
         void doDefaultInit(VkInstance *pInstance,
             VkPhysicalDevice          *pGpu,
             VkDevice                  *pDevice,
-            uint32_t                  *pQueueIndex,
             VkQueue                   *pQueue,
+            uint32_t                  *pQueueIndex,
             VkDebugUtilsMessengerEXT  *pDebugCallback);
 
         /// @brief convert the vk result to string.
@@ -928,7 +928,7 @@ namespace automata_engine {
             /// engine is to present the swapchain to. the engine also requires knowledge of the
             /// instance,device,and physical device. those parameters are cached for later use.
             /// the engine also initializes the swapchain for the first time through this call.
-            void init(VkInstance instance, VkPhysicalDevice gpu, VkDevice device, VkQueue queue);
+            void init(VkInstance instance, VkPhysicalDevice gpu, VkDevice device, VkQueue queue, uint32_t queueIndex);
         };  // namespace VK
 #endif
 //
