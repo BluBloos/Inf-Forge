@@ -180,6 +180,8 @@ namespace automata_engine {
         struct ImageView;
         struct Image;
         struct GraphicsPipeline;
+        struct PipelineLayout;
+        struct DescriptorSetLayout;
     }
 #endif
     
@@ -286,6 +288,14 @@ namespace automata_engine {
 
     namespace VK {
 
+        /// @brief create a structure suitable for creation of a VkDescriptorSetLayout. this structure
+        /// has sane default parameters which can be overriden by member calls.
+        DescriptorSetLayout createDescriptorSetLayout(uint32_t bindCount, VkDescriptorSetLayoutBinding *bindings);
+
+        /// @brief create a structure suitable for creation of a VkPipelineLayout. this structure
+        /// has sane default parameters which can be overriden by member calls.
+        PipelineLayout createPipelineLayout(uint32_t setCount, VkDescriptorSetLayout *layouts);
+
         /// @brief create a structure suitable for creation of a VkGraphicsPipeline. this structure
         /// has sane default parameters which can be overriden by member calls.
         ///
@@ -330,6 +340,9 @@ namespace automata_engine {
 
         /// @brief call vkBeginCommandBuffer with default parameters.
         VkResult beginCommandBuffer(VkCommandBuffer cmd);
+
+        /// @brief call vkUpdateDescriptorSets but do no copies.
+        void updateDescriptorSets(VkDevice device, uint32_t count, VkWriteDescriptorSet *writes);
 
         /// @brief return a wrapper class for a VkImageMemoryBarrier structure. this
         /// has sane default parameters which can be overriden by member calls.
@@ -1286,6 +1299,8 @@ namespace automata_engine {
 
 #if defined(AUTOMATA_ENGINE_VK_BACKEND)
     namespace VK {
+        struct DescriptorSetLayout : public VkDescriptorSetLayoutCreateInfo {};
+
         struct Sampler : public VkSamplerCreateInfo {
             Sampler &magFilter(VkFilter filter)
             {
@@ -1319,6 +1334,16 @@ namespace automata_engine {
             {
                 VkImageCreateInfo &ci = *this;
                 ci.flags              = flags;
+                return *this;
+            }
+        };
+
+        struct PipelineLayout : public VkPipelineLayoutCreateInfo {
+            PipelineLayout &pushConstantRanges(uint32_t rangeCount, VkPushConstantRange *ranges)
+            {
+                VkPipelineLayoutCreateInfo &ci = *this;
+                ci.pushConstantRangeCount      = rangeCount;
+                ci.pPushConstantRanges         = ranges;
                 return *this;
             }
         };

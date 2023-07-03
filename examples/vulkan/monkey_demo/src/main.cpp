@@ -45,54 +45,29 @@ void ae::Init(game_memory_t *gameMemory)
 
     // create the pipeline.
     {
-        auto vertModule = ae::VK::loadShaderModule(gd->vkDevice, "res\\vert.hlsl", L"main", L"vs_6_0");
-        auto fragModule = ae::VK::loadShaderModule(gd->vkDevice, "res\\frag.hlsl", L"main", L"ps_6_0");
-        // NOTE: pipline is self-contained after create.
-        defer(vkDestroyShaderModule(gd->vkDevice, vertModule, nullptr));
-        defer(vkDestroyShaderModule(gd->vkDevice, fragModule, nullptr));
-
         // TODO: review in detail https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#textures. how is the image precisely sampled?
         //
-        auto samplerInfo = ae::VK::samplerCreateInfo().magFilter(VK_FILTER_LINEAR);
+        auto samplerInfo = ae::VK::samplerCreateInfo();
         ae::VK_CHECK(vkCreateSampler(gd->vkDevice, &samplerInfo, nullptr, &gd->sampler));
 
-        // TODO: is it possible to clean up the below?
-        // answer: yes.
+        VkDescriptorSetLayoutBinding bindings[2] = {{.binding            = 0,
+                                                        .descriptorType  = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                                                        .descriptorCount = 1,
+                                                        .stageFlags      = VK_SHADER_STAGE_FRAGMENT_BIT},
+            {.binding               = 1,
+                .descriptorType     = VK_DESCRIPTOR_TYPE_SAMPLER,
+                .descriptorCount    = 1,
+                .stageFlags         = VK_SHADER_STAGE_FRAGMENT_BIT,
+                .pImmutableSamplers = &gd->sampler}};
 
-        VkDescriptorSetLayoutBinding bindings[2] = {};
-        bindings[0].binding                      = 0;
-        bindings[0].descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-        bindings[0].descriptorCount              = 1;
-        bindings[0].stageFlags                   = VK_SHADER_STAGE_FRAGMENT_BIT;
-        bindings[1].binding                      = 1;
-        bindings[1].descriptorType               = VK_DESCRIPTOR_TYPE_SAMPLER;
-        bindings[1].descriptorCount              = 1;
-        bindings[1].stageFlags                   = VK_SHADER_STAGE_FRAGMENT_BIT;
-        bindings[1].pImmutableSamplers           = &gd->sampler;
 
-        VkDescriptorSetLayoutCreateInfo setInfo = {};
-        setInfo.sType                           = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        setInfo.bindingCount                    = _countof(bindings);
-        setInfo.pBindings                       = bindings;
+        auto setLayoutInfo = ae::VK::createDescriptorSetLayout(_countof(bindings), bindings);
+        ae::VK_CHECK(vkCreateDescriptorSetLayout(gd->vkDevice, &setLayoutInfo, nullptr, &gd->setLayout));
 
-        ae::VK_CHECK(vkCreateDescriptorSetLayout(gd->vkDevice, &setInfo, nullptr, &gd->setLayout));
-
-        VkPushConstantRange pushRange = {};
-        pushRange.stageFlags          = VK_SHADER_STAGE_VERTEX_BIT;
-        pushRange.offset              = 0;  // TODO.
-        pushRange.size                = sizeof(ae::math::mat4_t) * 2;
-
-        // TODO:
-        // auto pipelineLayoutInfo = ae::VK::createPipelineLayout(1, &gd->setLayout).pushConstantRanges(1, &pushRange);
-
-        VkPipelineLayoutCreateInfo layout_info = {};
-        layout_info.sType                      = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-        layout_info.setLayoutCount             = 1;
-        layout_info.pSetLayouts                = &gd->setLayout;
-        layout_info.pushConstantRangeCount     = 1;
-        layout_info.pPushConstantRanges        = &pushRange;
-
-        ae::VK_CHECK(vkCreatePipelineLayout(gd->vkDevice, &layout_info, nullptr, &gd->pipelineLayout));
+        VkPushConstantRange pushRange = {
+            .stageFlags = VK_SHADER_STAGE_VERTEX_BIT, .offset = 0, .size = sizeof(ae::math::mat4_t) * 2};
+        auto pipelineLayoutInfo = ae::VK::createPipelineLayout(1, &gd->setLayout).pushConstantRanges(1, &pushRange);
+        ae::VK_CHECK(vkCreatePipelineLayout(gd->vkDevice, &pipelineLayoutInfo, nullptr, &gd->pipelineLayout));
 
         // create the render pass
         {
@@ -135,6 +110,12 @@ void ae::Init(game_memory_t *gameMemory)
 
             VK_CHECK(vkCreateRenderPass(gd->vkDevice, &rp_info, nullptr, &gd->vkRenderPass));
         }
+
+        auto vertModule = ae::VK::loadShaderModule(gd->vkDevice, "res\\vert.hlsl", L"main", L"vs_6_0");
+        auto fragModule = ae::VK::loadShaderModule(gd->vkDevice, "res\\frag.hlsl", L"main", L"ps_6_0");
+        // NOTE: pipline is self-contained after create.
+        defer(vkDestroyShaderModule(gd->vkDevice, vertModule, nullptr));
+        defer(vkDestroyShaderModule(gd->vkDevice, fragModule, nullptr));
 
         auto pipelineInfo = ae::VK::createGraphicsPipeline(
             vertModule, fragModule, "main", "main", gd->pipelineLayout, gd->vkRenderPass);
@@ -214,7 +195,7 @@ void ae::Init(game_memory_t *gameMemory)
             memcpy(data, resData, resSize);
             ae::VK::flushAndUnmapUploadBuffer(gd->vkDevice, resSize, res.uploadBufferBacking);
         } else {
-            // TODO: log?
+            AELoggerError("unable to map upload buffer.");
             ae::setFatalExit();
             return;
         }
@@ -255,7 +236,7 @@ void ae::Init(game_memory_t *gameMemory)
             memcpy(data, resData, resSize);
             ae::VK::flushAndUnmapUploadBuffer(gd->vkDevice, resSize, res.uploadBufferBacking);
         } else {
-            // TODO: log?
+            AELoggerError("unable to map upload buffer.");
             ae::setFatalExit();
             return;
         }
@@ -290,8 +271,7 @@ void ae::Init(game_memory_t *gameMemory)
 
     // create the checker texture view.
     {
-        auto viewInfo = ae::VK::createImageView(gd->checkerTexture, VK_FORMAT_R8G8B8A8_UNORM  // TODO.
-        );
+        auto viewInfo = ae::VK::createImageView(gd->checkerTexture, VK_FORMAT_R8G8B8A8_UNORM);
         vkCreateImageView(gd->vkDevice, &viewInfo, nullptr, &gd->checkerTextureView);
     }
 
@@ -332,13 +312,7 @@ void ae::Init(game_memory_t *gameMemory)
         writes[0].descriptorType  = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
         writes[0].pImageInfo      = &imageInfo;
 
-        // TODO: we could create a wrapper here, since there are some unused params.
-        vkUpdateDescriptorSets(gd->vkDevice,
-            _countof(writes),  // write count.
-            writes,
-            0,       //copy count.
-            nullptr  // copies.
-        );
+        ae::VK::updateDescriptorSets(gd->vkDevice, _countof(writes), writes);
     }
 
     // load the vertex and index buffers to the GPU.

@@ -735,6 +735,36 @@ namespace automata_engine {
             return gPipe;
         }
 
+        void updateDescriptorSets(VkDevice device, uint32_t count, VkWriteDescriptorSet *writes)
+        {
+            vkUpdateDescriptorSets(device,
+                count,  // write count.
+                writes,
+                0,       //copy count.
+                nullptr  // copies.
+            );
+        }
+
+        PipelineLayout createPipelineLayout(uint32_t setCount, VkDescriptorSetLayout *layouts)
+        {
+            PipelineLayout layout = {};
+            VkPipelineLayoutCreateInfo &layout_info = layout;
+            layout_info.sType                      = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+            layout_info.setLayoutCount             = setCount;
+            layout_info.pSetLayouts                = layouts;
+            return layout;
+        }
+
+        DescriptorSetLayout createDescriptorSetLayout(uint32_t bindCount, VkDescriptorSetLayoutBinding *bindings)
+        {
+            DescriptorSetLayout              setLayout = {};
+            VkDescriptorSetLayoutCreateInfo &setInfo   = setLayout;
+            setInfo.sType                              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+            setInfo.bindingCount                       = bindCount;
+            setInfo.pBindings                          = bindings;
+            return setLayout;
+        }
+
     }  // namespace VK
 };     // namespace automata_engine
 
