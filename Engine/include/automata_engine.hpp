@@ -178,6 +178,7 @@ namespace automata_engine {
         struct CommandBuffer;
         struct ImageMemoryBarrier;
         struct ImageView;
+        struct Image;
     }
 #endif
     
@@ -284,6 +285,10 @@ namespace automata_engine {
 
     namespace VK {
 
+        /// @brief create a structure suitable for creation of a VkImage. this structure
+        /// has sane default parameters which can be overriden by member calls.
+        Image createImage(uint32_t width, uint32_t height, VkFormat format, VkImageUsageFlags usage);
+
         /// @brief create a structure suitable for creation of a VkImageView. this structure
         /// has sane default parameters which can be overriden by member calls.
         ImageView createImageView(VkImage image, VkFormat format);
@@ -374,12 +379,18 @@ namespace automata_engine {
             void                             **pData);
 
         /// @brief get the virtual address of the buffer. this is not the same as VkDeviceMemory.
-        /// that is just an opapque handle to the memory.
+        /// that is just an opaque handle to the memory.
         VkDeviceAddress getBufferVirtAddr(VkDevice device, VkBuffer buffer);
 
         /// @brief flush and unmap the upload VkBuffer that is already mapped from [0, size] and whose
         /// backing memory is mappedThing.
         void flushAndUnmapUploadBuffer(VkDevice device, size_t size, VkDeviceMemory mappedThing);
+
+        /// @brief create an image in a dumb way. this takes the wrapper struct Image which wraps the
+        /// VkImageCreateInfo. this allocates a single block of memory as large as the image, which is
+        /// then used solely for the image.
+        size_t createImage_dumb(
+            VkDevice device, uint32_t heapIdx, const Image &imageInfo, VkImage *imageOut, VkDeviceMemory *memOut);
 
         /// @brief create a 2D image in a dumb way. many setting are default. this allocates a single block
         /// of memory as large as the image, which be used solely for it.
@@ -1283,6 +1294,15 @@ namespace automata_engine {
             {
                 VkImageViewCreateInfo &ci      = *this;
                 ci.subresourceRange.aspectMask = mask;
+                return *this;
+            }
+        };
+
+        struct Image : public VkImageCreateInfo {
+            Image &flags(VkImageCreateFlags flags)
+            {
+                VkImageCreateInfo &ci = *this;
+                ci.flags              = flags;
                 return *this;
             }
         };

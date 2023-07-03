@@ -149,30 +149,31 @@ namespace automata_engine {
             return out;
         }
 
-        size_t createImage2D_dumb(VkDevice device,
-            uint32_t                       width,
-            uint32_t                       height,
-            uint32_t                       heapIdx,
-            VkFormat                       format,
-            VkImageUsageFlags              usage,
-            VkImage                       *imageOut,
-            VkDeviceMemory                *memOut)
+        Image createImage(uint32_t width, uint32_t height, VkFormat format, VkImageUsageFlags usage)
         {
-            VkImageCreateInfo ci = {VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
-            ci.imageType         = VK_IMAGE_TYPE_2D;
-            ci.format            = format;
-            ci.extent            = {width, height, 1};
-            ci.mipLevels         = 1;
-            ci.arrayLayers       = 1;
-            ci.samples           = VK_SAMPLE_COUNT_1_BIT;
-            ci.usage             = usage;
-            ci.initialLayout     = VK_IMAGE_LAYOUT_UNDEFINED;
+            Image              image = {};
+            VkImageCreateInfo &ci    = image;
+            ci.sType                 = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+            ci.imageType             = VK_IMAGE_TYPE_2D;
+            ci.format                = format;
+            ci.extent                = {width, height, 1};
+            ci.mipLevels             = 1;
+            ci.arrayLayers           = 1;
+            ci.samples               = VK_SAMPLE_COUNT_1_BIT;
+            ci.usage                 = usage;
+            ci.initialLayout         = VK_IMAGE_LAYOUT_UNDEFINED;
+            return image;
+        }
 
-            VK_CHECK(vkCreateImage(device, &ci, nullptr, imageOut));
+        size_t createImage_dumb(
+            VkDevice device, uint32_t heapIdx, const Image &imageInfo, VkImage *imageOut, VkDeviceMemory *memOut)
+        {
+            VK_CHECK(vkCreateImage(device, &imageInfo, nullptr, imageOut));
             VkMemoryRequirements imageReq;
             (vkGetImageMemoryRequirements(device, *imageOut, &imageReq));
 
-            VkMemoryAllocateInfo allocInfo = {VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};
+            VkMemoryAllocateInfo allocInfo = {};
+            allocInfo.sType                = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
             allocInfo.allocationSize       = ae::math::align_up(imageReq.size, imageReq.alignment);  //TODO.
             allocInfo.memoryTypeIndex      = heapIdx;
 
@@ -187,6 +188,19 @@ namespace automata_engine {
                 0));  // so this offset is how we can do placed resources effectively ...
 
             return res;
+        }
+
+        size_t createImage2D_dumb(VkDevice device,
+            uint32_t                       width,
+            uint32_t                       height,
+            uint32_t                       heapIdx,
+            VkFormat                       format,
+            VkImageUsageFlags              usage,
+            VkImage                       *imageOut,
+            VkDeviceMemory                *memOut)
+        {
+            auto imageInfo = createImage(width, height, format, usage);
+            return createImage_dumb(device, heapIdx, imageInfo, imageOut, memOut);
         }
 
         size_t createUploadBufferDumb(VkDevice device,

@@ -31,6 +31,9 @@ typedef struct game_state {
     VkPipelineLayout      pipelineLayout;
     VkPipeline            gameShader;
 
+    VkDescriptorPool descPool;
+    VkDescriptorSet  theDescSet;
+
     VkRenderPass vkRenderPass;  // TODO: dyn rendering prefer.
 
     // NOTE: 10 is certainly larger than swapchain count.
@@ -40,6 +43,7 @@ typedef struct game_state {
     VkImage        depthBuffer;
     VkDeviceMemory depthBufferBacking;
 
+    VkImageView    checkerTextureView;
     VkImage        checkerTexture;
     VkDeviceMemory checkerTextureBacking;
 
@@ -142,11 +146,10 @@ void ae::Init(game_memory_t *gameMemory)
 
         VkPipelineLayoutCreateInfo layout_info = {};
         layout_info.sType                      = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-        // TODO: for now we don't care about the descriptors.
-        //layout_info.setLayoutCount             = 1;
-        //layout_info.pSetLayouts                = &gd->setLayout;
-        layout_info.pushConstantRangeCount = 1;
-        layout_info.pPushConstantRanges    = &pushRange;
+        layout_info.setLayoutCount             = 1;
+        layout_info.pSetLayouts                = &gd->setLayout;
+        layout_info.pushConstantRangeCount     = 1;
+        layout_info.pPushConstantRanges        = &pushRange;
 
         ae::VK_CHECK(vkCreatePipelineLayout(gd->vkDevice, &layout_info, nullptr, &gd->pipelineLayout));
 
@@ -273,16 +276,13 @@ void ae::Init(game_memory_t *gameMemory)
             return;
         }
 
-        // NOTE: the *UNORM forms read as "unsigned normalized". so if it is a UNORM float format,
-        // then the format stores colors as 0.0 -> 1.0.
-        ae::VK::createImage2D_dumb(gd->vkDevice,
-            width,
-            height,
-            vramHeapIdx,
-            VK_FORMAT_R8G8B8A8_UINT,
-            usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-            image,
-            backing);
+        // NOTE: the *UNORM forms read as "unsigned normalized". this is a float format where the
+        // values go between 0.0 -> 1.0. SNORM is -1.0 -> 1.0.
+        auto imageInfo =
+            ae::VK::createImage(width, height, VK_FORMAT_R8G8B8A8_UINT, usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT)
+                .flags(VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT);
+
+        ae::VK::createImage_dumb(gd->vkDevice, vramHeapIdx, imageInfo, image, backing);
 
         res.image       = *image;
         res.backing     = *backing;
@@ -300,6 +300,7 @@ void ae::Init(game_memory_t *gameMemory)
         auto &res = g_uploadResources[whichRes];
 
         void *data;
+       
         ae::VK::createUploadBufferDumb(gd->vkDevice,
             resSize,
             uploadHeapIdx,
@@ -342,6 +343,59 @@ void ae::Init(game_memory_t *gameMemory)
             &gd->checkerTextureBacking);
 
         ae::io::freeLoadedImage(bitmap);
+    }
+
+    // create the checker texture view.
+    {
+        auto viewInfo = ae::VK::createImageView(gd->checkerTexture, VK_FORMAT_R8G8B8A8_UNORM  // TODO.
+        );
+        vkCreateImageView(gd->vkDevice, &viewInfo, nullptr, &gd->checkerTextureView);
+    }
+
+    // now that we have the checker image, we can create the descriptor for it.
+    {
+        // begin by create the pool.
+        VkDescriptorPoolSize pools[1] = {
+            {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 2},
+        };
+
+        VkDescriptorPoolCreateInfo ci = {};
+        ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        ci.maxSets                    = 1;
+        ci.poolSizeCount              = _countof(pools);
+        ci.pPoolSizes                 = pools;
+        VK_CHECK(vkCreateDescriptorPool(gd->vkDevice, &ci, nullptr, &gd->descPool));
+
+        VkDescriptorSetAllocateInfo allocInfo = {};
+        allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        allocInfo.descriptorPool              = gd->descPool; // to allocate from.
+        allocInfo.descriptorSetCount          = 1;
+        allocInfo.pSetLayouts                 = &gd->setLayout;
+
+        VK_CHECK(vkAllocateDescriptorSets(gd->vkDevice, &allocInfo, &gd->theDescSet));
+
+        VkDescriptorImageInfo imageInfo = {
+            VK_NULL_HANDLE,  // sampler.
+            gd->checkerTextureView,
+            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL  // layout at the time of access through this descriptor.
+        };
+
+        VkWriteDescriptorSet writes[1] = {};
+
+        writes[0].sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writes[0].dstSet          = gd->theDescSet;
+        writes[0].dstBinding      = 0;  // binding within set to write.
+        writes[0].descriptorCount = 1;
+        writes[0].descriptorType  = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+        writes[0].pImageInfo      = &imageInfo;
+
+        // TODO: we could create a wrapper here, since there are some unused params.
+        vkUpdateDescriptorSets(gd->vkDevice,
+            _countof(writes),  // write count.
+            writes,
+            0,       //copy count.
+            nullptr  // copies.
+        );
     }
 
     // load the vertex and index buffers to the GPU.
@@ -406,7 +460,8 @@ void ae::Init(game_memory_t *gameMemory)
         }
     }
 
-    // issue the barrier to set the depth buffer to the initial layout.
+    // issue the barriers to set some inital layouts.
+    {
     auto barrierInfo = ae::VK::imageMemoryBarrier(VK_ACCESS_NONE,
         VK_ACCESS_MEMORY_WRITE_BIT,
         VK_IMAGE_LAYOUT_UNDEFINED,
@@ -419,6 +474,19 @@ void ae::Init(game_memory_t *gameMemory)
         VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,  // no stage after.
         1,
         &barrierInfo);
+
+    auto barrierInfo2 = ae::VK::imageMemoryBarrier(VK_ACCESS_TRANSFER_WRITE_BIT,
+        VK_ACCESS_SHADER_READ_BIT,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        gd->checkerTexture);
+
+    ae::VK::cmdImageMemoryBarrier(cmd,
+        VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,  // no stage after.
+        1,
+        &barrierInfo2);
+    }
 
     vkEndCommandBuffer(cmd);
 
@@ -611,6 +679,16 @@ void GameUpdateAndRender(ae::game_memory_t *gameMemory)
             vkCmdBindIndexBuffer(cmd, gd->suzanneIbo, indicesOffsetInBuffer, VK_INDEX_TYPE_UINT32);
 
             vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, gd->gameShader);
+
+            vkCmdBindDescriptorSets(cmd,
+                VK_PIPELINE_BIND_POINT_GRAPHICS,
+                gd->pipelineLayout,
+                0,  // set number of first descriptor set to bind.
+                1,  // number of sets to bind.
+                &gd->theDescSet,
+                0,       // dynamic offsets
+                nullptr  // ^
+            );
 
             struct {
                 ae::math::mat4_t model;
