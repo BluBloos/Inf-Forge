@@ -593,7 +593,9 @@ void GameUpdateAndRender(ae::game_memory_t *gameMemory)
             vkCmdBeginRenderPass(cmd, &rp_begin, VK_SUBPASS_CONTENTS_INLINE);
             defer(vkCmdEndRenderPass(cmd));
 
-            VkViewport viewport = {0.0f, 0.0f, winInfo.width * 1.0f, winInfo.height * 1.0f, 0.0f, 1.0f};
+            // NOTE: need to flip Y like so for NDC space in VK.
+            VkViewport viewport = {0.0f, winInfo.height, winInfo.width * 1.0f, winInfo.height * -1.0f, 0.0f, 1.0f};
+
             VkRect2D   scissor  = renderArea;
             vkCmdSetViewport(cmd, 0, 1, &viewport);
             vkCmdSetScissor(cmd, 0, 1, &scissor);
