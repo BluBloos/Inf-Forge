@@ -30,7 +30,8 @@
 
 #define MAX_CONSOLE_LINES 500
 
-static HWND g_hwnd = NULL;
+static bool g_bEngineIntroOver = false;
+static HWND g_hwnd             = NULL;
 
 // TODO(Noah): Hot reloading 😎 baby!.
 
@@ -1063,14 +1064,20 @@ LRESULT CALLBACK Win32WindowProc(HWND window,
             }
             Win32ResizeBackbuffer(&globalBackBuffer, width,height);
         } break;
-        
+
         case WM_PAINT: {
-            HDC DeviceContext = BeginPaint(window, &ps);
-            // Do a render.
-            ae::game_window_info_t winInfo =
-                automata_engine::platform::getWindowInfo();
-			Win32DisplayBufferWindow(DeviceContext, winInfo);
-            EndPaint(window, &ps);
+#if defined(AUTOMATA_ENGINE_CPU_BACKEND)
+            bool bCpuBackend = true;
+#else
+            bool bCpuBackend = false;
+#endif
+            bool bDuringInit = !(g_gameMemory.getInitialized() && g_bEngineIntroOver);
+            if (bDuringInit || bCpuBackend) {
+                HDC DeviceContext = BeginPaint(window, &ps);
+                ae::game_window_info_t winInfo = automata_engine::platform::getWindowInfo();
+                Win32DisplayBufferWindow(DeviceContext, winInfo);
+                EndPaint(window, &ps);
+            }
         } break;
         case WM_DESTROY: {
             // TODO(Noah): Handle as error
@@ -2005,18 +2012,17 @@ int CALLBACK WinMain(HINSTANCE instance,
                 }
             }
 
-            static bool            bEngineIntroOver    = false;
             static constexpr float engineIntroDuration = 4.f;
 
             // is engine intro over?
             float introElapsed = 0.f;
-            if (!bEngineIntroOver) {
+            if (!g_bEngineIntroOver) {
                 if (engineIntroDuration < (introElapsed=Win32GetSecondsElapsed(IntroCounter, Win32GetWallClock(), g_PerfCountFrequency64))) {
-                    bEngineIntroOver = true;
+                    g_bEngineIntroOver = true;
                 }
             }
 
-            bool bAppOkNow = g_gameMemory.getInitialized() && bEngineIntroOver;
+            bool bAppOkNow = g_gameMemory.getInitialized() && g_bEngineIntroOver;
 
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
             if (isImGuiInitialized && bAppOkNow) {
