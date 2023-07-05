@@ -43,12 +43,15 @@ static void (*GameInit)(ae::game_memory_t *) = nullptr;
 static void (*GamePreInit)(ae::game_memory_t *) = nullptr;
 static void (*GameCleanup)(ae::game_memory_t *) = nullptr;
 
+LARGE_INTEGER Win32GetWallClock();
+
 namespace ae = automata_engine;
 
 // TODO(Noah): What do we do for the very first frame, where we do not have
 // data about the last frame?
 float ae::platform::lastFrameTime = 1 / 60.0f;
 float ae::platform::lastFrameTimeTotal = 1 / 60.0f;
+uint64_t ae::platform::maybeVblankTime = 0;
 bool ae::platform::_globalRunning = true;
 ae::update_model_t ae::platform::GLOBAL_UPDATE_MODEL =
     ae::AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC; // default.
@@ -199,6 +202,8 @@ VkFormat       g_vkSwapchainFormat     = VK_FORMAT_UNDEFINED;
 VkFence        g_vkPresentFence        = VK_NULL_HANDLE;
 uint32_t       g_vkCurrentImageIndex   = 0;
 
+static constexpr uint32_t g_vkDesiredSwapchainImageCount = 1;
+
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
 #include "imgui_impl_vulkan.h"
 VkFramebuffer *g_vkImguiFramebuffers = nullptr;
@@ -285,7 +290,7 @@ VkFence *ae::VK::getFrameEndFence()
     return &g_vkPresentFence;
 }
 
-static void vk_WaitForAndResetFence(VkDevice device, VkFence *pFence, uint64_t waitTime = 1000 * 1000 * 1000)
+static LARGE_INTEGER vk_WaitForAndResetFence(VkDevice device, VkFence *pFence, uint64_t waitTime = 1000 * 1000 * 1000)
 {
     VkResult result = (vkWaitForFences(device,
         1,
@@ -296,17 +301,22 @@ static void vk_WaitForAndResetFence(VkDevice device, VkFence *pFence, uint64_t w
     // TODO: there was an interesting bug where if I went 1ms on the timeout, things were failing,
     // where the fence was reset too soon. figure out what what going on in that case.
 
+    // grab a timestamp.
+    LARGE_INTEGER timestamp = Win32GetWallClock();
+
     if (result == VK_SUCCESS) {
         // reset fences back to unsignaled so that can use em' again;
         vkResetFences(device, 1, pFence);
     } else {
         AELoggerError("some error occurred during the fence wait thing., %s", ae::VK::VkResultToString(result));
     }
+
+    return timestamp;
 }
 
 // TODO: I'm noticing that there are some functions that are pure (don't touch globals), and other
 // functions do touch globals. so, how can we make it clear which are which? is it a naming convention?
-static void vk_getNextBackbuffer()
+static LARGE_INTEGER vk_getNextBackbuffer()
 {
 #if _DEBUG
     if (!(g_vkDevice && g_vkSwapchain && g_vkPresentFence)) {
@@ -324,8 +334,10 @@ static void vk_getNextBackbuffer()
         &g_vkCurrentImageIndex));
 
     if (ae::platform::GLOBAL_UPDATE_MODEL == ae::AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC) {
-        vk_WaitForAndResetFence(g_vkDevice, &g_vkPresentFence);
+        return vk_WaitForAndResetFence(g_vkDevice, &g_vkPresentFence);
     }
+
+    return Win32GetWallClock();
 }
 
 // TODO: this function is meant to be reentrant, so that we may recreate the swapchain when
@@ -384,8 +396,9 @@ static bool vk_initSwapchain(uint32_t desiredWidth, uint32_t desiredHeight)
         AELoggerError("swapchain extent different from window client area");
     }
 
-    // We desire at the minimum double buffering.
-    uint32_t desired_swapchain_images = surface_properties.minImageCount + 1;
+    // TODO: for atomic model, we should not require two swapchain images?
+    // there will never be two in flight, so these seem like wasted surfaces.
+    uint32_t desired_swapchain_images = ae::math::max(g_vkDesiredSwapchainImageCount, surface_properties.minImageCount);
     if ((surface_properties.maxImageCount > 0) && (desired_swapchain_images > surface_properties.maxImageCount)) {
         desired_swapchain_images = surface_properties.maxImageCount;
     }
@@ -425,28 +438,29 @@ static bool vk_initSwapchain(uint32_t desiredWidth, uint32_t desiredHeight)
     // TODO: the present mode is based on vsync setting. if vsync is adjusted, need to recreate the
     // swapchain. we also generally need to hook the setting here.
     info.presentMode = VK_PRESENT_MODE_FIFO_KHR;  // FIFO is supported by all implementations.
-    if (true) {
-        // try to find best present mode for no-vsync.
 
-        uint32_t presentModeCount;
-        ae::VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(g_vkGpu, g_vkSurface, &presentModeCount, NULL));
-        VkPresentModeKHR *presentModes = nullptr;
-        defer(StretchyBufferFree(presentModes));
-        StretchyBufferInitWithCount(presentModes, presentModeCount);
-        ae::VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(g_vkGpu, g_vkSurface, &presentModeCount, presentModes));
+    // try to find the present mode that we actually want.
 
-        bool bHasMailbox = false;
-        for (size_t i = 0; i < presentModeCount; i++) {
-            if ((presentModes[i] == VK_PRESENT_MODE_IMMEDIATE_KHR)) {
-                info.presentMode = VK_PRESENT_MODE_IMMEDIATE_KHR;
-            }
-            if (presentModes[i] == VK_PRESENT_MODE_MAILBOX_KHR) { bHasMailbox = true; }
+    uint32_t presentModeCount;
+    ae::VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(g_vkGpu, g_vkSurface, &presentModeCount, NULL));
+    VkPresentModeKHR *presentModes = nullptr;
+    defer(StretchyBufferFree(presentModes));
+    StretchyBufferInitWithCount(presentModes, presentModeCount);
+    ae::VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(g_vkGpu, g_vkSurface, &presentModeCount, presentModes));
+
+    bool             bHasFallback = false;
+    VkPresentModeKHR desiredMode  = VK_PRESENT_MODE_FIFO_KHR;
+    VkPresentModeKHR fallbackMode = VK_PRESENT_MODE_IMMEDIATE_KHR;
+    for (size_t i = 0; i < presentModeCount; i++) {
+        if (presentModes[i] == desiredMode) {
+            info.presentMode = desiredMode;
+            break;
         }
 
-        if ((info.presentMode == VK_PRESENT_MODE_FIFO_KHR) && (bHasMailbox)) {
-            info.presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
-        }
+        if ((presentModes[i] == fallbackMode)) { bHasFallback = true; }
     }
+
+    if ((info.presentMode == VK_PRESENT_MODE_FIFO_KHR) && (bHasFallback)) { info.presentMode = fallbackMode; }
 
     // (clipped = true) is allow for more efficient presentation methods. It is
     // a don't care on our part for what pixels vals are stored in surface, for example,
@@ -1893,6 +1907,7 @@ int CALLBACK WinMain(HINSTANCE instance,
         then we can remove all the globals!!
          */
 
+        // NOTE: this won't block since nothing has been presented yet.
         vk_getNextBackbuffer();
 #endif
 
@@ -1969,7 +1984,7 @@ int CALLBACK WinMain(HINSTANCE instance,
             // TODO: it is currently the case that the count of swapchain images is static.
             // but, how can we have out program statically assert that?
             uint32_t swapCount = StretchyBufferCount(g_vkSwapchainImages);
-            IM_ASSERT(swapCount >= 2);
+            IM_ASSERT(swapCount >= g_vkDesiredSwapchainImageCount);
             init_info.ImageCount      = swapCount;
             init_info.MSAASamples     = VK_SAMPLE_COUNT_1_BIT;
             init_info.Allocator       = nullptr;
@@ -2125,9 +2140,18 @@ int CALLBACK WinMain(HINSTANCE instance,
                     glFlush();   // push all buffered commands to GPU
                     glFinish();  // block until GPU is complete
                 }
+                // TODO: we might want to rethink how we do vsync on the GL side. there is some major oddness with
+                // the double wait idea that we are doing here.
                 SwapBuffers(gHdc);
             }
 #endif
+
+            // NOTE: we know this number through observation. this is an upper bound. this number includes windows message pump, cpu update time, gpu work + present
+            // via mailbox mode (does not include vblank, ends after the call to vkQueuePresentKHR returns).
+            static constexpr float GuaranteedFrameTime          = 0.007f;
+            static constexpr float TargetSecondsElapsedPerFrame = 1 / 60.f;
+
+            float endFrameTarget = TargetSecondsElapsedPerFrame;
 
 #if defined(AUTOMATA_ENGINE_VK_BACKEND)
             if (!bRenderFallback) {
@@ -2135,41 +2159,61 @@ int CALLBACK WinMain(HINSTANCE instance,
                     vk_WaitForAndResetFence(g_vkDevice, &g_vkPresentFence);
                 }
 
+                static bool vk_needSwapchainSync = true;
+
                 {
+                    uint32_t swapchainCount = 1;
+
                     VkPresentInfoKHR present = {};
                     present.sType            = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-                    present.swapchainCount   = 1;
+                    present.swapchainCount   = swapchainCount;
                     present.pSwapchains      = &g_vkSwapchain;
                     present.pImageIndices    = &g_vkCurrentImageIndex;
+
                     vkQueuePresentKHR(g_vkQueue, &present);
                 }
 
-                vk_getNextBackbuffer();
+                // TODO: use imgui on the app side + refactor to allow the app to see the exact frame timestamps.
+                // I want to see the graph for the events.
+                ae::platform::maybeVblankTime = vk_getNextBackbuffer().QuadPart;
+
+                // NOTE: the first frame we sync with vsync.
+                // TODO: what happens when due to small error that these two period functions shift over time?
+                // is it not the case that vsync is different than exactly 16.66 ms ?
+                if (vk_needSwapchainSync) {
+                    // reset timer to pretend the frame just started.
+                    LastCounter.QuadPart = ae::platform::maybeVblankTime;
+
+                    // do a wait to align the vsync where we want it in our frame.
+                    float frameLeft = TargetSecondsElapsedPerFrame - GuaranteedFrameTime;
+                    endFrameTarget  = frameLeft;
+
+                    vk_needSwapchainSync = false;
+                }
             }
 #endif
 
-            static constexpr float TargetSecondsElapsedPerFrame = 1 / 60.f;
-            {
-                float SecondsElapsedForFrame = Win32GetSecondsElapsed(LastCounter, Win32GetWallClock(), g_PerfCountFrequency64);
-                if (SecondsElapsedForFrame < TargetSecondsElapsedPerFrame) {
-                    if (SleepGranular && ae::platform::_globalVsync) {
-                        DWORD SleepMS = (DWORD)ae::math::max(
-                            int32_t(0), int32_t(1000.0f * (TargetSecondsElapsedPerFrame - SecondsElapsedForFrame)) - 1);
-                        if (SleepMS > 0) { Sleep(SleepMS); }
-                    }
-                    while ((SecondsElapsedForFrame < TargetSecondsElapsedPerFrame) && ae::platform::_globalVsync) {
-                        SecondsElapsedForFrame =
-                            Win32GetSecondsElapsed(LastCounter, Win32GetWallClock(), g_PerfCountFrequency64);
-                    }
-                } else {
-                    AELoggerWarn("missed target framerate!");
+            // wait until the 16.66ms mark. our frames are precisely timed to this.
+            float SecondsElapsedForFrame =
+                Win32GetSecondsElapsed(LastCounter, Win32GetWallClock(), g_PerfCountFrequency64);
+            if (SecondsElapsedForFrame < endFrameTarget) {
+                if (SleepGranular && ae::platform::_globalVsync) {
+                    DWORD SleepMS = (DWORD)ae::math::max(
+                        int32_t(0), int32_t(1000.0f * (endFrameTarget - SecondsElapsedForFrame)) - 1);
+                    if (SleepMS > 0) { Sleep(SleepMS); }
                 }
-
-                LARGE_INTEGER EndCounter = Win32GetWallClock();
-                ae::platform::lastFrameTimeTotal =
-                    (Win32GetSecondsElapsed(LastCounter, EndCounter, g_PerfCountFrequency64));
-                LastCounter = EndCounter;
+                while ((SecondsElapsedForFrame < endFrameTarget) && ae::platform::_globalVsync) {
+                    SecondsElapsedForFrame =
+                        Win32GetSecondsElapsed(LastCounter, Win32GetWallClock(), g_PerfCountFrequency64);
+                }
+            } else {
+                AELoggerWarn("missed target framerate!");
             }
+
+            LARGE_INTEGER EndCounter = Win32GetWallClock();
+            ae::platform::lastFrameTimeTotal =
+                (Win32GetSecondsElapsed(LastCounter, EndCounter, g_PerfCountFrequency64));
+            LastCounter = EndCounter;
 
             // TODO(Noah): for CPU backend, add sleep if vsync = ON.
             // and I suppose figure out how to sync with the monitor?

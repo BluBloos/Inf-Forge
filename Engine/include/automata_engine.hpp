@@ -830,6 +830,9 @@ namespace automata_engine {
         /// For eg. in ATOMIC update mode, this is the total `CPU -> Present-the-frame` time.
         extern float lastFrameTimeTotal;
 
+        /// @brief timestamp for when the engine records that the vblank occurs. this is not that accurate.
+        extern uint64_t maybeVblankTime;
+
         extern bool _globalRunning;                      // NOT to be set by the user.
         extern bool _globalVsync;                        // NOT to be set by the user.
         extern int  _globalProgramResult;                // NOT to be set by the user.
