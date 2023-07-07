@@ -150,9 +150,13 @@ namespace automata_engine {
             int item_current = _currentApp;
             ImGui::Combo("App", &item_current, appTable_name, StretchyBufferCount(appTable_name));
             if (item_current != _currentApp) { bifrost::updateApp(gameMemory, appTable_name[item_current]); }
-            ImGui::Text("lastFrameTimeCPU: %.3f ms", 1000.0f * platform::lastFrameTime);
-            ImGui::Text("lastFrameTimeTotal: %.3f ms (%.1f FPS)",
-                1000.0f * platform::lastFrameTimeTotal, 1.0f / platform::lastFrameTimeTotal);
+            ImGui::Text("lastFrameTimeUpdate: %.3f ms",
+                1000.0f * timing::getTimeElapsed(timing::lastFrameBeginTime, timing::lastFrameUpdateEndTime));
+            ImGui::Text("lastFrameTimeUpdate_&_Render: %.3f ms",
+                1000.0f * timing::getTimeElapsed(timing::lastFrameBeginTime, timing::lastFrameGpuEndTime));
+            ImGui::Text("input latency: %.4f s",
+                timing::getTimeElapsed(timing::lastFrameBeginTime, timing::lastFrameMaybeVblankTime));
+            ImGui::Text("frames per second: %.3f FPS", 1.f / timing::lastFrameVisibleTime);
             ImGui::Text("updateModel: %s", updateModelToString(platform::GLOBAL_UPDATE_MODEL));
             bool vsync = platform::_globalVsync;
             ImGui::Checkbox("vsync", &vsync);

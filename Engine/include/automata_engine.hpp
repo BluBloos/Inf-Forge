@@ -568,6 +568,32 @@ namespace automata_engine {
 
     namespace timing {
 
+        /// @brief the timestamp measured by the engine for right after the vblank.
+        /// this is based on blocking the thread to wait for the vblank. this is an imprecise
+        /// method. taking the delta of two vblank times gives variable results, when maybe
+        /// we might expect/want it to be consistently 16.66 ms.
+        extern uint64_t lastFrameMaybeVblankTime;
+        
+        /// @brief the timestamp taken right before the input message loop. for the last frame.
+        extern uint64_t lastFrameBeginTime;
+
+        /// @brief the timestamp taken right before the input message loop. for this frame.
+        extern uint64_t thisFrameBeginTime;
+
+        /// @brief the timestamp taken right after the game update function completes.
+        extern uint64_t lastFrameUpdateEndTime;
+
+        /// @brief the timestamp taken right after the GPU work that the update function recorded completes.
+        extern uint64_t lastFrameGpuEndTime;
+
+        /// @brief how long the last frame was visible on the monitor, before being replaced or overwritten.
+        extern float lastFrameVisibleTime;
+
+        // TODO: return double?
+        /// @brief get the time elapsed in seconds between two timestamps returned by wallClock/epoch,
+        /// or between two timestamps from any of the timestamp variables in this namespace.
+        float getTimeElapsed(uint64_t begin, uint64_t end);
+
         /// @brief Get the frequency of the timer in ticks.
         uint64_t getTimerFrequency();
         
@@ -823,15 +849,6 @@ namespace automata_engine {
         /// @brief a constant representing an info level of logging.
         static constexpr uint32_t AE_STDOUT = 1;
 
-        /// @brief the time in seconds that the last frame took on CPU.
-        extern float lastFrameTime;
-
-        /// @brief the time in seconds that the last frame took in total.
-        /// For eg. in ATOMIC update mode, this is the total `CPU -> Present-the-frame` time.
-        extern float lastFrameTimeTotal;
-
-        /// @brief timestamp for when the engine records that the vblank occurs. this is not that accurate.
-        extern uint64_t maybeVblankTime;
 
         extern bool _globalRunning;                      // NOT to be set by the user.
         extern bool _globalVsync;                        // NOT to be set by the user.

@@ -47,11 +47,23 @@ LARGE_INTEGER Win32GetWallClock();
 
 namespace ae = automata_engine;
 
-// TODO(Noah): What do we do for the very first frame, where we do not have
-// data about the last frame?
-float ae::platform::lastFrameTime = 1 / 60.0f;
-float ae::platform::lastFrameTimeTotal = 1 / 60.0f;
-uint64_t ae::platform::maybeVblankTime = 0;
+// the time we measured when we are "good to go" after the vblank.
+// but due to the nature of sleeping threads, we can't really get a precise
+// rdtsc timestamp for right after vblank. that's why this is a "maybe".
+uint64_t ae::timing::lastFrameMaybeVblankTime = 0;
+
+// timestamp for frame begin.
+uint64_t ae::timing::lastFrameBeginTime = 0;
+uint64_t ae::timing::thisFrameBeginTime = 0;
+
+// timestamp once update is complete.
+uint64_t ae::timing::lastFrameUpdateEndTime = 0;
+
+// timestamp when GPU is complete.
+uint64_t ae::timing::lastFrameGpuEndTime = 0;
+
+float ae::timing::lastFrameVisibleTime = 1/60.f;
+
 bool ae::platform::_globalRunning = true;
 ae::update_model_t ae::platform::GLOBAL_UPDATE_MODEL =
     ae::AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC; // default.
@@ -202,7 +214,7 @@ VkFormat       g_vkSwapchainFormat     = VK_FORMAT_UNDEFINED;
 VkFence        g_vkPresentFence        = VK_NULL_HANDLE;
 uint32_t       g_vkCurrentImageIndex   = 0;
 
-static constexpr uint32_t g_vkDesiredSwapchainImageCount = 1;
+static constexpr uint32_t g_vkDesiredSwapchainImageCount = 2;
 
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
 #include "imgui_impl_vulkan.h"
@@ -435,8 +447,6 @@ static bool vk_initSwapchain(uint32_t desiredWidth, uint32_t desiredHeight)
                               : surface_properties.currentTransform;
     info.compositeAlpha = composite;
 
-    // TODO: the present mode is based on vsync setting. if vsync is adjusted, need to recreate the
-    // swapchain. we also generally need to hook the setting here.
     info.presentMode = VK_PRESENT_MODE_FIFO_KHR;  // FIFO is supported by all implementations.
 
     // try to find the present mode that we actually want.
@@ -448,8 +458,10 @@ static bool vk_initSwapchain(uint32_t desiredWidth, uint32_t desiredHeight)
     StretchyBufferInitWithCount(presentModes, presentModeCount);
     ae::VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(g_vkGpu, g_vkSurface, &presentModeCount, presentModes));
 
+    // TODO: consider vsync ON/OFF setting by user. or maybe consider not having that
+    // setting at all.
     bool             bHasFallback = false;
-    VkPresentModeKHR desiredMode  = VK_PRESENT_MODE_FIFO_KHR;
+    VkPresentModeKHR desiredMode  = VK_PRESENT_MODE_IMMEDIATE_KHR;
     VkPresentModeKHR fallbackMode = VK_PRESENT_MODE_IMMEDIATE_KHR;
     for (size_t i = 0; i < presentModeCount; i++) {
         if (presentModes[i] == desiredMode) {
@@ -1443,9 +1455,15 @@ ae::game_window_info_t automata_engine::platform::getWindowInfo()
 
 LARGE_INTEGER g_epochCounter = {};
 
+float ae::timing::getTimeElapsed(uint64_t begin, uint64_t end)
+{
+    return float(end - begin) / ae::timing::getTimerFrequency();
+}
+
 uint64_t ae::timing::getTimerFrequency() { return g_PerfCountFrequency64; }
 
-uint64_t ae::timing::epoch() {
+uint64_t ae::timing::epoch()
+{
     LARGE_INTEGER counter = Win32GetWallClock();
     return counter.QuadPart - g_epochCounter.QuadPart;
 }
@@ -1877,9 +1895,33 @@ int CALLBACK WinMain(HINSTANCE instance,
         }
 
         // load the engine sound.
-        g_engineSound = ae::io::loadWav("res\\engine.wav"); // TODO: Actually make this asset copy via the CMake.
+        g_engineSound = ae::io::loadWav("res\\engine.wav");  // TODO: Actually make this asset copy via the CMake.
         defer(ae::io::freeWav(g_engineSound));
         g_engineVoice = ae::platform::createVoice();
+
+        IDXGIOutput   *gameMonitor = nullptr;
+        IDXGIAdapter1 *gameAdapter = nullptr;
+        defer(gameMonitor ? (void)gameMonitor->Release() : (void)0);
+        defer(gameAdapter ? (void)gameAdapter->Release() : (void)0);
+        // TODO: consider multiple monitor setups.
+        // TODO: consdier multiple GPU(adapter) setups.
+        // get information about the monitor connected.
+        {
+            IDXGIFactory4 *dxgiFactory = nullptr;
+            if (S_OK != CreateDXGIFactory1(IID_PPV_ARGS(&dxgiFactory))) {
+                AELoggerError("could not create factory");
+                automata_engine::platform::_globalProgramResult = -1;
+                break;
+            }
+            defer(dxgiFactory->Release());
+            dxgiFactory->EnumAdapters1(0, &gameAdapter);
+            HRESULT result = gameAdapter->EnumOutputs(0, &gameMonitor);
+            if (result != S_OK) {
+                AELoggerError("could not enumerate DXGI output 0");
+                automata_engine::platform::_globalProgramResult = -1;
+                break;
+            }
+        }
 
         if (GameInit != nullptr) {
             GameInit(&g_gameMemory);
@@ -1979,8 +2021,7 @@ int CALLBACK WinMain(HINSTANCE instance,
             init_info.PipelineCache             = VK_NULL_HANDLE;
             init_info.DescriptorPool            = imguiDescPool;
             init_info.Subpass                   = 0;  // TODO: why?
-            init_info.MinImageCount =
-                2;  // TODO: can we pull this value from somewhere? this is a common idea in this code.
+            init_info.MinImageCount             = 2;
             // TODO: it is currently the case that the count of swapchain images is static.
             // but, how can we have out program statically assert that?
             uint32_t swapCount = StretchyBufferCount(g_vkSwapchainImages);
@@ -2130,13 +2171,14 @@ int CALLBACK WinMain(HINSTANCE instance,
 
             {
                 LARGE_INTEGER WorkCounter   = Win32GetWallClock();
-                float WorkSecondsElapsed    = Win32GetSecondsElapsed(LastCounter, WorkCounter, g_PerfCountFrequency64);
-                ae::platform::lastFrameTime = WorkSecondsElapsed;
+                ae::timing::lastFrameUpdateEndTime = WorkCounter.QuadPart;
             }
+
+            bool bUsingAtomicUpdate = (ae::platform::GLOBAL_UPDATE_MODEL == ae::AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC);
 
 #if defined(AUTOMATA_ENGINE_GL_BACKEND)
             if (!bRenderFallback) {
-                if (ae::platform::GLOBAL_UPDATE_MODEL == ae::AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC) {
+                if (bUsingAtomicUpdate) {
                     glFlush();   // push all buffered commands to GPU
                     glFinish();  // block until GPU is complete
                 }
@@ -2148,15 +2190,27 @@ int CALLBACK WinMain(HINSTANCE instance,
 
             // NOTE: we know this number through observation. this is an upper bound. this number includes windows message pump, cpu update time, gpu work + present
             // via mailbox mode (does not include vblank, ends after the call to vkQueuePresentKHR returns).
+            //
+            // TODO: both these constants are adhoc. what if the monitor has a different refresh rate?
+            // what if the round trip frame time is different?
             static constexpr float GuaranteedFrameTime          = 0.007f;
             static constexpr float TargetSecondsElapsedPerFrame = 1 / 60.f;
 
             float endFrameTarget = TargetSecondsElapsedPerFrame;
 
+            // TODO: consider other update models.
+            if (bUsingAtomicUpdate)
+            {
+                ae::timing::lastFrameVisibleTime = TargetSecondsElapsedPerFrame;
+            }
+
 #if defined(AUTOMATA_ENGINE_VK_BACKEND)
             if (!bRenderFallback) {
-                if (ae::platform::GLOBAL_UPDATE_MODEL == ae::AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC) {
-                    vk_WaitForAndResetFence(g_vkDevice, &g_vkPresentFence);
+                LARGE_INTEGER gpuEnd;  // TODO: consider other update models.
+
+                if (bUsingAtomicUpdate) {
+                    gpuEnd                          = vk_WaitForAndResetFence(g_vkDevice, &g_vkPresentFence);
+                    ae::timing::lastFrameGpuEndTime = gpuEnd.QuadPart;
                 }
 
                 static bool vk_needSwapchainSync = true;
@@ -2173,23 +2227,24 @@ int CALLBACK WinMain(HINSTANCE instance,
                     vkQueuePresentKHR(g_vkQueue, &present);
                 }
 
-                // TODO: use imgui on the app side + refactor to allow the app to see the exact frame timestamps.
-                // I want to see the graph for the events.
-                ae::platform::maybeVblankTime = vk_getNextBackbuffer().QuadPart;
+                vk_getNextBackbuffer();
 
-                // NOTE: the first frame we sync with vsync.
-                // TODO: what happens when due to small error that these two period functions shift over time?
-                // is it not the case that vsync is different than exactly 16.66 ms ?
-                if (vk_needSwapchainSync) {
-                    // reset timer to pretend the frame just started.
-                    LastCounter.QuadPart = ae::platform::maybeVblankTime;
+                gameMonitor->WaitForVBlank();
 
-                    // do a wait to align the vsync where we want it in our frame.
-                    float frameLeft = TargetSecondsElapsedPerFrame - GuaranteedFrameTime;
-                    endFrameTarget  = frameLeft;
+                LARGE_INTEGER after = Win32GetWallClock();
+                ae::timing::lastFrameMaybeVblankTime = after.QuadPart;
 
-                    vk_needSwapchainSync = false;
+                // NOTE: if we're doing the frame pacing right, we're not gonna leave half the frame left.
+                // we're gonna get pretty close to the vblank.
+                if ((TargetSecondsElapsedPerFrame / 2.0f) <
+                    Win32GetSecondsElapsed(gpuEnd, after, g_PerfCountFrequency64)) {
+                    AELoggerWarn("missed the vblank!!!");
                 }
+
+                // do the frame pacing stuff.
+                LastCounter.QuadPart = ae::timing::lastFrameMaybeVblankTime; // begin wait from this point.
+                float frameLeft = TargetSecondsElapsedPerFrame - GuaranteedFrameTime;
+                endFrameTarget  = frameLeft;
             }
 #endif
 
@@ -2211,9 +2266,9 @@ int CALLBACK WinMain(HINSTANCE instance,
             }
 
             LARGE_INTEGER EndCounter = Win32GetWallClock();
-            ae::platform::lastFrameTimeTotal =
-                (Win32GetSecondsElapsed(LastCounter, EndCounter, g_PerfCountFrequency64));
             LastCounter = EndCounter;
+            ae::timing::lastFrameBeginTime = ae::timing::thisFrameBeginTime;
+            ae::timing::thisFrameBeginTime = EndCounter.QuadPart;
 
             // TODO(Noah): for CPU backend, add sleep if vsync = ON.
             // and I suppose figure out how to sync with the monitor?
@@ -2229,7 +2284,7 @@ int CALLBACK WinMain(HINSTANCE instance,
                 Win32DisplayBufferWindow(deviceContext, winInfo);
                 ReleaseDC(windowHandle, deviceContext);
             }
-        }
+        } // while(globalrunning)
 
     } while(0); // WinMainEnd
 

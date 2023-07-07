@@ -488,14 +488,13 @@ void GameUpdateAndRender(ae::game_memory_t *gameMemory)
     // NOTE(Noah): up and down movement go in world space. This is a game-feel thing.
     if (userInput.keyDown[ae::GAME_KEY_SHIFT]) { gd->cam.trans.pos += ae::math::vec3_t(0.0f, -speed, 0.0f); }
     if (userInput.keyDown[ae::GAME_KEY_SPACE]) { gd->cam.trans.pos += ae::math::vec3_t(0.0f, speed, 0.0f); }
-    if (userInput.mouseLBttnDown) {
-        // TODO: why is this ae::platform for the lastFrameTimeTotal?
+    if (userInput.mouseRBttnDown) {
         gd->cam.trans.eulerAngles +=
-            ae::math::vec3_t(0.0f, (float)userInput.deltaMouseX / 5 * ae::platform::lastFrameTimeTotal, 0.0f);
+            ae::math::vec3_t(0.0f, (float)userInput.deltaMouseX / 5 * ae::timing::lastFrameVisibleTime, 0.0f);
         gd->cam.trans.eulerAngles +=
-            ae::math::vec3_t(-(float)userInput.deltaMouseY / 5 * ae::platform::lastFrameTimeTotal, 0.0f, 0.0f);
+            ae::math::vec3_t(-(float)userInput.deltaMouseY / 5 * ae::timing::lastFrameVisibleTime, 0.0f, 0.0f);
     }
-    gd->suzanneTransform.eulerAngles += ae::math::vec3_t(0.0f, 2.0f * ae::platform::lastFrameTimeTotal, 0.0f);
+    gd->suzanneTransform.eulerAngles += ae::math::vec3_t(0.0f, 2.0f * ae::timing::lastFrameVisibleTime, 0.0f);
 
     // TODO: look into the depth testing stuff more deeply on the hardware side of things.
     // what is something that we can only do because we really get it?
@@ -646,7 +645,7 @@ void GameUpdateAndRender(ae::game_memory_t *gameMemory)
     ImGui::Text(
         "---CONTROLS---\n"
         "WASD to move\n"
-        "Left click hold to rotate camera.\n"
+        "Right click hold to rotate camera.\n"
         "ESC to exit first person cam.\n"
         "SPACE to fly up\n"
         "SHIFT to fly down\n\n");
