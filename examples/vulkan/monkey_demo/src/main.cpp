@@ -494,13 +494,16 @@ void GameUpdateAndRender(ae::game_memory_t *gameMemory)
     game_state_t    *gd        = getGameState(gameMemory);
     ae::user_input_t userInput = {};
     ae::platform::getUserInput(&userInput);
-    float speed = 5 / 60.0f;
 
-    static bool             bSpin            = true;
-    static float            ambientStrength  = 0.1f;
-    static float            specularStrength = 0.5f;
-    static ae::math::vec4_t lightColor       = {1, 1, 1, 1};
-    static ae::math::vec3_t lightPos         = {0, 1, 0};
+    float speed = 5.f * ae::timing::lastFrameVisibleTime;
+
+    static bool             bSpin               = true;
+    static float            ambientStrength     = 0.1f;
+    static float            specularStrength    = 0.5f;
+    static ae::math::vec4_t lightColor          = {1, 1, 1, 1};
+    static ae::math::vec3_t lightPos            = {0, 1, 0};
+    static float            cameraSensitivity   = 1.0f;
+    static bool             optInFirstPersonCam = false;
 
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
     ImGui::Begin("MonkeyDemo");
@@ -508,18 +511,22 @@ void GameUpdateAndRender(ae::game_memory_t *gameMemory)
     ImGui::Text(
         "---CONTROLS---\n"
         "WASD to move\n"
-        "Right click hold to rotate camera.\n"
+        "Right click to enter first person cam.\n"
         "ESC to exit first person cam.\n"
         "SPACE to fly up\n"
         "SHIFT to fly down\n\n");
 
     ImGui::Text("face count: %d", gd->suzanneIndexCount / 3);
 
+    ImGui::Text("");
+
+    // inputs.
     ImGui::Checkbox("bSpin", &bSpin);
     ImGui::SliderFloat("ambientStrength", &ambientStrength, 0.0f, 1.0f, "%.3f");
     ImGui::SliderFloat("specularStrength", &specularStrength, 0.0f, 1.0f, "%.3f");
     ImGui::ColorPicker4("lightColor", &lightColor[0]);
     ImGui::InputFloat3("lightPos", &lightPos[0]);
+    ImGui::SliderFloat("cameraSensitivity", &cameraSensitivity, 1, 10);
 
     ae::ImGuiRenderMat4("camProjMat", buildProjMatForVk(gd->cam));
     ae::ImGuiRenderMat4("camViewMat", buildViewMat(gd->cam));
@@ -532,26 +539,51 @@ void GameUpdateAndRender(ae::game_memory_t *gameMemory)
 
     ae::math::mat3_t camBasis =
         ae::math::mat3_t(buildRotMat4(ae::math::vec3_t(0.0f, gd->cam.trans.eulerAngles.y, 0.0f)));
-    if (userInput.keyDown[ae::GAME_KEY_W]) {
-        // NOTE(Noah): rotation matrix for a camera happens to also be the basis vectors
-        // defining the space for any children of the camera.
-        // ...
-        // we also note that as per a game-feel thing, WASD movement is only along cam
-        // local axis by Y rot. Ignore X and Z rot.
-        gd->cam.trans.pos += camBasis * ae::math::vec3_t(0.0f, 0.0f, -speed);
-    }
+    if (userInput.keyDown[ae::GAME_KEY_W]) { gd->cam.trans.pos += camBasis * ae::math::vec3_t(0.0f, 0.0f, -speed); }
     if (userInput.keyDown[ae::GAME_KEY_A]) { gd->cam.trans.pos += camBasis * ae::math::vec3_t(-speed, 0.0f, 0.0f); }
     if (userInput.keyDown[ae::GAME_KEY_S]) { gd->cam.trans.pos += camBasis * ae::math::vec3_t(0.0f, 0.0f, speed); }
     if (userInput.keyDown[ae::GAME_KEY_D]) { gd->cam.trans.pos += camBasis * ae::math::vec3_t(speed, 0.0f, 0.0f); }
-    // NOTE(Noah): up and down movement go in world space. This is a game-feel thing.
     if (userInput.keyDown[ae::GAME_KEY_SHIFT]) { gd->cam.trans.pos += ae::math::vec3_t(0.0f, -speed, 0.0f); }
     if (userInput.keyDown[ae::GAME_KEY_SPACE]) { gd->cam.trans.pos += ae::math::vec3_t(0.0f, speed, 0.0f); }
+
+    bool static bFocusedLastFrame = true;  // assume for first frame.
+    const bool bExitingFocus      = bFocusedLastFrame && !ae::platform::isWindowFocused();
+
+    // check if opt in.
     if (userInput.mouseRBttnDown) {
-        gd->cam.trans.eulerAngles +=
-            ae::math::vec3_t(0.0f, (float)userInput.deltaMouseX / 5 * ae::timing::lastFrameVisibleTime, 0.0f);
-        gd->cam.trans.eulerAngles +=
-            ae::math::vec3_t(-(float)userInput.deltaMouseY / 5 * ae::timing::lastFrameVisibleTime, 0.0f, 0.0f);
+        // exit GUI.
+        if (!optInFirstPersonCam) ae::platform::showMouse(false);
+        optInFirstPersonCam = true;
     }
+
+    if (userInput.keyDown[ae::GAME_KEY_ESCAPE] || bExitingFocus) {
+        // enter GUI.
+        if (optInFirstPersonCam) ae::platform::showMouse(true);
+        optInFirstPersonCam = false;
+    }
+
+    bFocusedLastFrame = ae::platform::isWindowFocused();
+
+    if (optInFirstPersonCam) {
+
+        float deltaX   = userInput.deltaMouseX;
+        float deltaY   = userInput.deltaMouseY;
+        float rotSpeed = (cameraSensitivity - 1) / 9.0f * 0.009f + 0.001f;
+
+        gd->cam.trans.eulerAngles +=
+            ae::math::vec3_t(0.0f,  deltaX * rotSpeed, 0.0f);
+        gd->cam.trans.eulerAngles +=
+            ae::math::vec3_t(-deltaY * rotSpeed, 0.0f, 0.0f);
+
+        // clamp mouse cursor.
+        ae::platform::setMousePos((int)(winInfo.width / 2.0f), (int)(winInfo.height / 2.0f));
+    }
+
+    // clamp camera pitch
+    float pitchClamp = PI / 2.0f - 0.01f;
+    if (gd->cam.trans.eulerAngles.x < -pitchClamp) gd->cam.trans.eulerAngles.x = -pitchClamp;
+    if (gd->cam.trans.eulerAngles.x > pitchClamp) gd->cam.trans.eulerAngles.x = pitchClamp;
+
     if (bSpin)
         gd->suzanneTransform.eulerAngles += ae::math::vec3_t(0.0f, 2.0f * ae::timing::lastFrameVisibleTime, 0.0f);
 
