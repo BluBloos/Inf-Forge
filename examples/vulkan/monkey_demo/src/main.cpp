@@ -704,20 +704,7 @@ void GameUpdateAndRender(ae::game_memory_t *gameMemory)
 
         }  // end render pass.
 
-#if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
-        // sync the backbuffer against the imgui render pass.
-        auto barrierInfo2 = ae::VK::imageMemoryBarrier(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-            VK_ACCESS_COLOR_ATTACHMENT_READ_BIT,  // load op.
-            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-            backbuffer);
-
-        ae::VK::cmdImageMemoryBarrier(cmd,
-            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-            1,
-            &barrierInfo2);
-#else
+#if defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
         // transit backbuffer from color attachment to present.
         auto barrierInfo2 = ae::VK::imageMemoryBarrier(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
             VK_ACCESS_MEMORY_READ_BIT,  // ensure cache flush.
