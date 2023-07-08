@@ -498,6 +498,8 @@ void GameUpdateAndRender(ae::game_memory_t *gameMemory)
     float speed = 5.f * ae::timing::lastFrameVisibleTime;
 
     static bool             bSpin               = true;
+    static bool             lockCamYaw          = false;
+    static bool             lockCamPitch        = false;
     static float            ambientStrength     = 0.1f;
     static float            specularStrength    = 0.5f;
     static ae::math::vec4_t lightColor          = {1, 1, 1, 1};
@@ -522,11 +524,16 @@ void GameUpdateAndRender(ae::game_memory_t *gameMemory)
 
     // inputs.
     ImGui::Checkbox("bSpin", &bSpin);
+    ImGui::Checkbox("lockCamYaw", &lockCamYaw);
+    ImGui::Checkbox("lockCamPitch", &lockCamPitch);
     ImGui::SliderFloat("ambientStrength", &ambientStrength, 0.0f, 1.0f, "%.3f");
     ImGui::SliderFloat("specularStrength", &specularStrength, 0.0f, 1.0f, "%.3f");
     ImGui::ColorPicker4("lightColor", &lightColor[0]);
     ImGui::InputFloat3("lightPos", &lightPos[0]);
     ImGui::SliderFloat("cameraSensitivity", &cameraSensitivity, 1, 10);
+
+    ImGui::Text("userInput.deltaMouseX: %d", userInput.deltaMouseX);
+    ImGui::Text("userInput.deltaMouseY: %d", userInput.deltaMouseY);
 
     ae::ImGuiRenderMat4("camProjMat", buildProjMatForVk(gd->cam));
     ae::ImGuiRenderMat4("camViewMat", buildViewMat(gd->cam));
@@ -565,15 +572,23 @@ void GameUpdateAndRender(ae::game_memory_t *gameMemory)
     bFocusedLastFrame = ae::platform::isWindowFocused();
 
     if (optInFirstPersonCam) {
+        // we'll assume that this is in pixels.
+        float deltaX = userInput.deltaMouseX * cameraSensitivity;
+        float deltaY = userInput.deltaMouseY * cameraSensitivity;
 
-        float deltaX   = userInput.deltaMouseX;
-        float deltaY   = userInput.deltaMouseY;
-        float rotSpeed = (cameraSensitivity - 1) / 9.0f * 0.009f + 0.001f;
+        if (lockCamYaw) deltaX = 0.f;
+        if (lockCamPitch) deltaY = 0.f;
 
-        gd->cam.trans.eulerAngles +=
-            ae::math::vec3_t(0.0f,  deltaX * rotSpeed, 0.0f);
-        gd->cam.trans.eulerAngles +=
-            ae::math::vec3_t(-deltaY * rotSpeed, 0.0f, 0.0f);
+        float r = tanf(gd->cam.fov * DEGREES_TO_RADIANS / 2.0f) * gd->cam.nearPlane;
+
+        deltaX *= r / (winInfo.width * 0.5f);
+        deltaY *= r / (winInfo.height * 0.5f);
+
+        float yaw   = ae::math::atan2(deltaX, gd->cam.nearPlane);
+        float pitch = ae::math::atan2(deltaY, gd->cam.nearPlane);
+
+        gd->cam.trans.eulerAngles += ae::math::vec3_t(0.0f, yaw, 0.0f);
+        gd->cam.trans.eulerAngles += ae::math::vec3_t(-pitch, 0.0f, 0.0f);
 
         // clamp mouse cursor.
         ae::platform::setMousePos((int)(winInfo.width / 2.0f), (int)(winInfo.height / 2.0f));

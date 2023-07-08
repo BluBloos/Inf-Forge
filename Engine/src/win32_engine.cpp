@@ -998,22 +998,25 @@ LRESULT CALLBACK Win32WindowProc(HWND window,
     LRESULT result = 0;
     switch(message) {
         case WM_INPUT: {
-            UINT dwSize = sizeof(RAWINPUT);
-            static BYTE lpb[sizeof(RAWINPUT)];
-            GetRawInputData((HRAWINPUT)lParam, RID_INPUT, lpb, &dwSize, sizeof(RAWINPUTHEADER));
-            RAWINPUT* raw = (RAWINPUT*)lpb;
-            if (raw->header.dwType == RIM_TYPEMOUSE) {
-                if ( !!(raw->data.mouse.usFlags & MOUSE_MOVE_RELATIVE) ) {
-                    AELoggerError("handle RAWINPUT for devices that provide relative motion");
-                    assert(false);
-                    globalUserInput.deltaMouseX += raw->data.mouse.lLastX;
-                    globalUserInput.deltaMouseY += raw->data.mouse.lLastY;
-                } else {
-                    // TODO(Noah): impl.
-                    globalUserInput.deltaMouseX += raw->data.mouse.lLastX;
-                    globalUserInput.deltaMouseY += raw->data.mouse.lLastY;
+            // TODO: we have registered just the mouse for raw input. yet, in the future we may register more things.
+            // here we would need to check what thing we just got the raw input from.
+            RAWINPUT       rawInput           = {};
+            constexpr UINT rawInputHeaderSize = sizeof(RAWINPUTHEADER);
+            constexpr UINT rawInputSize       = sizeof(RAWINPUT);
+            GetRawInputData((HRAWINPUT)lParam, RID_INPUT, &rawInput, (PUINT)&rawInputSize, sizeof(RAWINPUTHEADER));
+            auto mouseData = rawInput.data.mouse;
+            if (rawInput.header.dwType == RIM_TYPEMOUSE) {
+                // TODO: handle MOUSE_VIRTUAL_DESKTOP.
+                bool isVirtualDesktop = !!(mouseData.usFlags & MOUSE_VIRTUAL_DESKTOP);
+
+                if (!!(mouseData.usFlags & MOUSE_MOVE_ABSOLUTE)) {
+                    // TODO: handle this case.
+                } else if ((mouseData.lLastX != 0) || (mouseData.lLastY) != 0) {
+                    globalUserInput.deltaMouseX += mouseData.lLastX;
+                    globalUserInput.deltaMouseY += mouseData.lLastY;
                 }
             }
+            if (GET_RAWINPUT_CODE_WPARAM(wParam) == RIM_INPUT) result = DefWindowProc(window, message, wParam, lParam);
         } break;
         case WM_DPICHANGED: {
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
@@ -1835,9 +1838,9 @@ int CALLBACK WinMain(HINSTANCE instance,
         // Register mouse for raw input capture
         RAWINPUTDEVICE Rid[1];
         Rid[0].usUsagePage = HID_USAGE_PAGE_GENERIC;
-        Rid[0].usUsage = HID_USAGE_GENERIC_MOUSE;
-        Rid[0].dwFlags = RIDEV_INPUTSINK;
-        Rid[0].hwndTarget = windowHandle;
+        Rid[0].usUsage     = HID_USAGE_GENERIC_MOUSE;
+        Rid[0].dwFlags     = RIDEV_INPUTSINK;  // still get input when not in foreground.
+        Rid[0].hwndTarget  = windowHandle;
         RegisterRawInputDevices(Rid, 1, sizeof(Rid[0]));
 
         // Initialize XAudio2 !!!
