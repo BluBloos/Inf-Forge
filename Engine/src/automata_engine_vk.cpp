@@ -592,6 +592,20 @@ namespace automata_engine {
             return imb;
         }
 
+        BufferMemoryBarrier bufferMemoryBarrier(
+            VkAccessFlags src, VkAccessFlags dst, VkBuffer buffer, VkDeviceSize offset, VkDeviceSize size)
+        {
+            BufferMemoryBarrier    bmb     = {};
+            VkBufferMemoryBarrier &barrier = bmb;
+            barrier.sType                  = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+            barrier.srcAccessMask          = src;
+            barrier.dstAccessMask          = dst;
+            barrier.buffer                 = buffer;
+            barrier.offset                 = offset;
+            barrier.size                   = size;
+            return bmb;
+        }
+
         ImageView createImageView(VkImage image, VkFormat format)
         {
             ImageView              view           = {};
@@ -613,6 +627,15 @@ namespace automata_engine {
             VkImageMemoryBarrier                  *pBarriers)
         {
             vkCmdPipelineBarrier(cmd, before, after, 0, 0, nullptr, 0, nullptr, count, pBarriers);
+        }
+
+        void cmdBufferMemoryBarrier(VkCommandBuffer cmd,
+            VkPipelineStageFlags                    before,
+            VkPipelineStageFlags                    after,
+            uint32_t                                count,
+            VkBufferMemoryBarrier                  *pBarriers)
+        {
+            vkCmdPipelineBarrier(cmd, before, after, 0, 0, nullptr, count, pBarriers, 0, nullptr);
         }
 
         GraphicsPipeline createGraphicsPipeline(VkShaderModule vertShader,

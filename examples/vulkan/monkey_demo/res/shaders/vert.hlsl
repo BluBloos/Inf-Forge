@@ -9,32 +9,39 @@ struct V2P {
 };
 
 struct VertexInput {
-  [[vk::location(0)]] float3 position : POSITION0;
-  [[vk::location(1)]] float2 texCoord : TEXCOORD0;
-  [[vk::location(2)]] float3 normal : NORMAL0;
+  // NOTE: the semantic string is required for these input variables. why?
+  [[vk::location(0)]] float3 position : THIS_DOESNT_MATTER;
+  [[vk::location(1)]] float2 texCoord : THE_TEXCOORD_BOY;
+  [[vk::location(2)]] float3 normal : THE_NORMAL_BOY;
 };
 
-struct CBData {
-  float4x4 umodel;
-  float4x4 uprojView;
+struct UboView
+{
+  float4x4 modelMatrix;
+  float4x4 modelRotate;
+  float4x4 projView;
 };
 
-[[vk::push_constant]] CBData cb;
+[[vk::binding(2)]]
+cbuffer uboView { UboView uboView; };
 
 V2P main(VertexInput input)
 {
-  float4 vModel = mul(cb.umodel, float4(input.position.xyz, 1.0));
-
   V2P output = (V2P)0;
-  output.Pos = mul(cb.uprojView, vModel);
 
+  float4 vModel = mul(uboView.modelMatrix, float4(input.position.xyz, 1.0));
+
+  output.Pos = mul(uboView.projView, vModel);
   output.texCoord = input.texCoord;
   output.vPos = vModel.xyz;
 
-	// NOTE: for our contrived sample, it is OK to transform this normals like this.
-  // in the general case, this may not work. e.g., if the matrix transform scaled
-  // the object in the X dimension with a different factor to the scaling in the Y dim.
-	output.vNormal = mul(cb.umodel, float4(input.normal.xyz, 0)).xyz;
+  // TODO: we could use a normal map to get more accurate normals across the surface
+  // of the model. currently the normals are linearly interpolated from the vertices which
+  // is technically not the best approach.
+
+	// NOTE: we use just using the rotation matrix since tranlation for the normal vectors,
+  // which are just direction vectors, doesn't quite have a meaning.
+	output.vNormal = mul(uboView.modelRotate, float4(input.normal.xyz, 0)).xyz;
 
 	return output;
 }

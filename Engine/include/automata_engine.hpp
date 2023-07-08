@@ -177,6 +177,7 @@ namespace automata_engine {
         struct CommandPool;
         struct CommandBuffer;
         struct ImageMemoryBarrier;
+        struct BufferMemoryBarrier;
         struct ImageView;
         struct Image;
         struct GraphicsPipeline;
@@ -346,6 +347,13 @@ namespace automata_engine {
         /// for the frame is known to be complete once they signal this fence.
         VkFence *getFrameEndFence();
 
+        /// @brief call vkCmdPipelineBarrier but submit only VkBufferMemoryBarrier.
+        void cmdBufferMemoryBarrier(VkCommandBuffer cmd,
+            VkPipelineStageFlags                    before,
+            VkPipelineStageFlags                    after,
+            uint32_t                                count,
+            VkBufferMemoryBarrier                  *pBarriers);
+
         /// @brief call vkCmdPipelineBarrier but submit only VkImageMemoryBarrier.
         void cmdImageMemoryBarrier(VkCommandBuffer cmd,
             VkPipelineStageFlags                   before,
@@ -358,6 +366,11 @@ namespace automata_engine {
 
         /// @brief call vkUpdateDescriptorSets but do no copies.
         void updateDescriptorSets(VkDevice device, uint32_t count, VkWriteDescriptorSet *writes);
+
+        /// @brief return a wrapper class for a VkBufferMemoryBarrier structure. this
+        /// has sane default parameters which can be overriden by member calls.
+        BufferMemoryBarrier bufferMemoryBarrier(
+            VkAccessFlags src, VkAccessFlags dst, VkBuffer buffer, VkDeviceSize offset, VkDeviceSize size);
 
         /// @brief return a wrapper class for a VkImageMemoryBarrier structure. this
         /// has sane default parameters which can be overriden by member calls.
@@ -1355,6 +1368,8 @@ namespace automata_engine {
                 return *this;
             }
         };
+
+        struct BufferMemoryBarrier : public VkBufferMemoryBarrier {};
 
         struct ImageView : public VkImageViewCreateInfo {
             ImageView &aspectMask(VkImageAspectFlags mask)

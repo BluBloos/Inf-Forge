@@ -50,23 +50,28 @@ void ae::Init(game_memory_t *gameMemory)
         auto samplerInfo = ae::VK::samplerCreateInfo();
         ae::VK_CHECK(vkCreateSampler(gd->vkDevice, &samplerInfo, nullptr, &gd->sampler));
 
-        VkDescriptorSetLayoutBinding bindings[2] = {{.binding            = 0,
-                                                        .descriptorType  = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-                                                        .descriptorCount = 1,
-                                                        .stageFlags      = VK_SHADER_STAGE_FRAGMENT_BIT},
+        VkDescriptorSetLayoutBinding bindings[] = {{.binding            = 0,
+                                                       .descriptorType  = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                                                       .descriptorCount = 1,
+                                                       .stageFlags      = VK_SHADER_STAGE_FRAGMENT_BIT},
             {.binding               = 1,
                 .descriptorType     = VK_DESCRIPTOR_TYPE_SAMPLER,
                 .descriptorCount    = 1,
                 .stageFlags         = VK_SHADER_STAGE_FRAGMENT_BIT,
-                .pImmutableSamplers = &gd->sampler}};
-
+                .pImmutableSamplers = &gd->sampler},
+            {.binding            = 2,
+                .descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                .descriptorCount = 1,
+                .stageFlags      = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT}};
 
         auto setLayoutInfo = ae::VK::createDescriptorSetLayout(_countof(bindings), bindings);
         ae::VK_CHECK(vkCreateDescriptorSetLayout(gd->vkDevice, &setLayoutInfo, nullptr, &gd->setLayout));
 
-        VkPushConstantRange pushRange = {
-            .stageFlags = VK_SHADER_STAGE_VERTEX_BIT, .offset = 0, .size = sizeof(ae::math::mat4_t) * 2};
-        auto pipelineLayoutInfo = ae::VK::createPipelineLayout(1, &gd->setLayout).pushConstantRanges(1, &pushRange);
+        /*VkPushConstantRange pushRange = {
+            .stageFlags = VK_SHADER_STAGE_VERTEX_BIT, .offset = 0, .size = sizeof(PushDataVertex)};
+        */
+        auto pipelineLayoutInfo =
+            ae::VK::createPipelineLayout(1, &gd->setLayout);  //.pushConstantRanges(1, &pushRange);
         ae::VK_CHECK(vkCreatePipelineLayout(gd->vkDevice, &pipelineLayoutInfo, nullptr, &gd->pipelineLayout));
 
         // create the render pass
@@ -144,9 +149,20 @@ void ae::Init(game_memory_t *gameMemory)
             &gd->depthBufferBacking);
 
         // create image view.
-
         auto viewInfo = ae::VK::createImageView(gd->depthBuffer, depthFormat).aspectMask(VK_IMAGE_ASPECT_DEPTH_BIT);
         vkCreateImageView(gd->vkDevice, &viewInfo, nullptr, &gd->depthBufferView);
+    }
+
+    // create the dynamic frame ubo.
+    {
+        // NOTE: we never unmap this. that is valid VK usage. there would be a cost to remap per frame.
+        ae::VK::createUploadBufferDumb(gd->vkDevice,
+            sizeof(PushData),
+            uploadHeapIdx, // NOTE: don't need coherent heap because we will use the right barriers per frame to flush/invalidate.
+            VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+            &gd->dynamicFrameUbo,
+            &gd->dynamicFrameUboBacking,
+            &gd->dynamicFrameUboMapped);
     }
 
     // create THE command buffer (plus imgui command buffer).
@@ -275,12 +291,10 @@ void ae::Init(game_memory_t *gameMemory)
     // now that we have the checker image, we can create the descriptor for it.
     {
         // begin by create the pool.
-        VkDescriptorPoolSize pools[1] = {
-            {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 2},
-        };
+        VkDescriptorPoolSize pools[] = {{VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 2}, {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1}};
 
         VkDescriptorPoolCreateInfo ci = {};
-        ci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        ci.sType                      = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
         ci.maxSets                    = 1;
         ci.poolSizeCount              = _countof(pools);
         ci.pPoolSizes                 = pools;
@@ -300,14 +314,24 @@ void ae::Init(game_memory_t *gameMemory)
             VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL  // layout at the time of access through this descriptor.
         };
 
-        VkWriteDescriptorSet writes[1] = {};
+        VkDescriptorBufferInfo bufferInfo = {.buffer = gd->dynamicFrameUbo, .offset = 0, .range = sizeof(PushData)};
 
-        writes[0].sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writes[0].dstSet          = gd->theDescSet;
-        writes[0].dstBinding      = 0;  // binding within set to write.
-        writes[0].descriptorCount = 1;
-        writes[0].descriptorType  = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-        writes[0].pImageInfo      = &imageInfo;
+        VkWriteDescriptorSet writes[] = {
+            {.sType              = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                .dstSet          = gd->theDescSet,
+                .dstBinding      = 0,
+                .descriptorCount = 1,
+                .descriptorType  = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                .pImageInfo      = &imageInfo},
+            {
+                .sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                .dstSet          = gd->theDescSet,
+                .dstBinding      = 2,
+                .descriptorCount = 1,
+                .descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                .pBufferInfo     = &bufferInfo,
+            },
+        };
 
         ae::VK::updateDescriptorSets(gd->vkDevice, _countof(writes), writes);
     }
@@ -472,6 +496,40 @@ void GameUpdateAndRender(ae::game_memory_t *gameMemory)
     ae::platform::getUserInput(&userInput);
     float speed = 5 / 60.0f;
 
+    static bool             bSpin            = true;
+    static float            ambientStrength  = 0.1f;
+    static float            specularStrength = 0.5f;
+    static ae::math::vec4_t lightColor       = {1, 1, 1, 1};
+    static ae::math::vec3_t lightPos         = {0, 1, 0};
+
+#if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
+    ImGui::Begin("MonkeyDemo");
+
+    ImGui::Text(
+        "---CONTROLS---\n"
+        "WASD to move\n"
+        "Right click hold to rotate camera.\n"
+        "ESC to exit first person cam.\n"
+        "SPACE to fly up\n"
+        "SHIFT to fly down\n\n");
+
+    ImGui::Text("face count: %d", gd->suzanneIndexCount / 3);
+
+    ImGui::Checkbox("bSpin", &bSpin);
+    ImGui::SliderFloat("ambientStrength", &ambientStrength, 0.0f, 1.0f, "%.3f");
+    ImGui::SliderFloat("specularStrength", &specularStrength, 0.0f, 1.0f, "%.3f");
+    ImGui::ColorPicker4("lightColor", &lightColor[0]);
+    ImGui::InputFloat3("lightPos", &lightPos[0]);
+
+    ae::ImGuiRenderMat4("camProjMat", buildProjMatForVk(gd->cam));
+    ae::ImGuiRenderMat4("camViewMat", buildViewMat(gd->cam));
+    ae::ImGuiRenderMat4((char *)(std::string(gd->suzanne.modelName) + "Mat").c_str(),
+        ae::math::buildMat4fFromTransform(gd->suzanneTransform));
+    ae::ImGuiRenderVec3("camPos", gd->cam.trans.pos);
+    ae::ImGuiRenderVec3((char *)(std::string(gd->suzanne.modelName) + "Pos").c_str(), gd->suzanneTransform.pos);
+    ImGui::End();
+#endif
+
     ae::math::mat3_t camBasis =
         ae::math::mat3_t(buildRotMat4(ae::math::vec3_t(0.0f, gd->cam.trans.eulerAngles.y, 0.0f)));
     if (userInput.keyDown[ae::GAME_KEY_W]) {
@@ -494,7 +552,8 @@ void GameUpdateAndRender(ae::game_memory_t *gameMemory)
         gd->cam.trans.eulerAngles +=
             ae::math::vec3_t(-(float)userInput.deltaMouseY / 5 * ae::timing::lastFrameVisibleTime, 0.0f, 0.0f);
     }
-    gd->suzanneTransform.eulerAngles += ae::math::vec3_t(0.0f, 2.0f * ae::timing::lastFrameVisibleTime, 0.0f);
+    if (bSpin)
+        gd->suzanneTransform.eulerAngles += ae::math::vec3_t(0.0f, 2.0f * ae::timing::lastFrameVisibleTime, 0.0f);
 
     // TODO: look into the depth testing stuff more deeply on the hardware side of things.
     // what is something that we can only do because we really get it?
@@ -532,10 +591,20 @@ void GameUpdateAndRender(ae::game_memory_t *gameMemory)
             backbuffer);
 
         ae::VK::cmdImageMemoryBarrier(cmd,
-            VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,   // no stage before.
-            VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT,  // includes load op.
+            VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,              // no stage before.
+            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,  // includes load op.
             1,
             &barrierInfo);
+
+        // TODO: we could batch the barriers.
+        // put a barrier for the dynamic ubo write -> read.
+        auto bufferBarrier = ae::VK::bufferMemoryBarrier(
+            VK_ACCESS_HOST_WRITE_BIT, VK_ACCESS_UNIFORM_READ_BIT, gd->dynamicFrameUbo, 0, sizeof(PushData));
+        ae::VK::cmdBufferMemoryBarrier(cmd,
+            VK_PIPELINE_STAGE_HOST_BIT,
+            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
+            1,
+            &bufferBarrier);
 
         {
             VkRect2D renderArea = {VkOffset2D{0, 0}, VkExtent2D{winInfo.width, winInfo.height}};
@@ -588,13 +657,16 @@ void GameUpdateAndRender(ae::game_memory_t *gameMemory)
                 nullptr  // ^
             );
 
-            struct {
-                ae::math::mat4_t model;
-                ae::math::mat4_t projView;
-            } pushData = {ae::math::buildMat4fFromTransform(gd->suzanneTransform),
-                buildProjMatForVk(gd->cam) * buildViewMat(gd->cam)};
-
-            vkCmdPushConstants(cmd, gd->pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pushData), &pushData);
+            // write the dynamic ubo.
+            PushData pushData = {.modelMatrix = ae::math::buildMat4fFromTransform(gd->suzanneTransform),
+                .modelRotate                  = ae::math::buildRotMat4(gd->suzanneTransform.eulerAngles),
+                .projView                     = ae::math::buildProjMatForVk(gd->cam) * ae::math::buildViewMat(gd->cam),
+                .lightColor                   = lightColor,
+                .ambientStrength              = ambientStrength,
+                .lightPos                     = lightPos,
+                .specularStrength             = specularStrength,
+                .viewPos                      = gd->cam.trans.pos};  // NOTE: LOL, this looks like JS.
+            memcpy(gd->dynamicFrameUboMapped, &pushData, sizeof(PushData));
 
             vkCmdDrawIndexed(cmd, gd->suzanneIndexCount, 1, 0, 0, 0);
 
@@ -640,28 +712,6 @@ void GameUpdateAndRender(ae::game_memory_t *gameMemory)
     ae::super::updateAndRender(gameMemory);
 
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
-    ImGui::Begin("MonkeyDemo");
-
-    ImGui::Text(
-        "---CONTROLS---\n"
-        "WASD to move\n"
-        "Right click hold to rotate camera.\n"
-        "ESC to exit first person cam.\n"
-        "SPACE to fly up\n"
-        "SHIFT to fly down\n\n");
-
-    ImGui::Text("face count: %d", gd->suzanneIndexCount / 3);
-
-    ImGui::Text("");
-
-    ae::ImGuiRenderMat4("camProjMat", buildProjMatForVk(gd->cam));
-    ae::ImGuiRenderMat4("camViewMat", buildViewMat(gd->cam));
-    ae::ImGuiRenderMat4((char *)(std::string(gd->suzanne.modelName) + "Mat").c_str(),
-        ae::math::buildMat4fFromTransform(gd->suzanneTransform));
-    ae::ImGuiRenderVec3("camPos", gd->cam.trans.pos);
-    ae::ImGuiRenderVec3((char *)(std::string(gd->suzanne.modelName) + "Pos").c_str(), gd->suzanneTransform.pos);
-    ImGui::End();
-
     VkCommandBuffer ImguiCmd = gd->imgui_commandBuffer;
     ae::VK_CHECK(vkResetCommandBuffer(ImguiCmd, 0));
 

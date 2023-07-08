@@ -44,6 +44,10 @@ typedef struct game_state {
     VkImage        checkerTexture;
     VkDeviceMemory checkerTextureBacking;
 
+    VkBuffer       dynamicFrameUbo;
+    VkDeviceMemory dynamicFrameUboBacking;
+    void          *dynamicFrameUboMapped;
+
     VkSampler sampler;
 
     uint32_t              suzanneIndexCount;
@@ -60,4 +64,16 @@ struct Vertex {
     float x, y, z;
     float u, v;
     float nx, ny, nz;
+};
+
+struct PushData
+{
+    ae::math::mat4_t modelMatrix;
+    ae::math::mat4_t modelRotate;
+    ae::math::mat4_t projView;
+    ae::math::vec4_t lightColor;
+    float            ambientStrength;
+    ae::math::vec3_t lightPos;
+    float  specularStrength;
+	ae::math::vec3_t viewPos; // camera pos.
 };
