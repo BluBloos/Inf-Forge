@@ -23,15 +23,17 @@ struct CBData {
 
 V2P main(VertexInput input)
 {
-        float4 vModel = mul(cb.umodel, float4(input.position.xyz, 1.0));
+  float4 vModel = mul(cb.umodel, float4(input.position.xyz, 1.0));
 
-        V2P output = (V2P)0;
-        output.Pos = mul(cb.uprojView, vModel);
+  V2P output = (V2P)0;
+  output.Pos = mul(cb.uprojView, vModel);
 
-        output.texCoord = input.texCoord;
-        output.vPos = vModel.xyz;
+  output.texCoord = input.texCoord;
+  output.vPos = vModel.xyz;
 
-	// TODO: isn't it wrong to transform the normals like this?
+	// NOTE: for our contrived sample, it is OK to transform this normals like this.
+  // in the general case, this may not work. e.g., if the matrix transform scaled
+  // the object in the X dimension with a different factor to the scaling in the Y dim.
 	output.vNormal = mul(cb.umodel, float4(input.normal.xyz, 0)).xyz;
 
 	return output;
