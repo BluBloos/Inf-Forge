@@ -504,8 +504,11 @@ void GameUpdateAndRender(ae::game_memory_t *gameMemory)
     static float            specularStrength    = 0.5f;
     static ae::math::vec4_t lightColor          = {1, 1, 1, 1};
     static ae::math::vec3_t lightPos            = {0, 1, 0};
-    static float            cameraSensitivity   = 1.0f;
+    static float            cameraSensitivity   = 3.0f;
     static bool             optInFirstPersonCam = false;
+
+    static float deltaX = 0.f;
+    static float deltaY = 0.f;
 
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
     ImGui::Begin("MonkeyDemo");
@@ -532,8 +535,8 @@ void GameUpdateAndRender(ae::game_memory_t *gameMemory)
     ImGui::InputFloat3("lightPos", &lightPos[0]);
     ImGui::SliderFloat("cameraSensitivity", &cameraSensitivity, 1, 10);
 
-    ImGui::Text("userInput.deltaMouseX: %d", userInput.deltaMouseX);
-    ImGui::Text("userInput.deltaMouseY: %d", userInput.deltaMouseY);
+    ImGui::Text("userInput.deltaMouseX: %.3f", deltaX);
+    ImGui::Text("userInput.deltaMouseY: %.3f", deltaY);
 
     ae::ImGuiRenderMat4("camProjMat", buildProjMatForVk(gd->cam));
     ae::ImGuiRenderMat4("camViewMat", buildViewMat(gd->cam));
@@ -572,20 +575,37 @@ void GameUpdateAndRender(ae::game_memory_t *gameMemory)
     bFocusedLastFrame = ae::platform::isWindowFocused();
 
     if (optInFirstPersonCam) {
+        static float lastDeltaX = 0;
+        static float lastDeltaY = 0;
+
         // we'll assume that this is in pixels.
-        float deltaX = userInput.deltaMouseX * cameraSensitivity;
-        float deltaY = userInput.deltaMouseY * cameraSensitivity;
+        deltaX = userInput.deltaMouseX * cameraSensitivity;
+        deltaY = userInput.deltaMouseY * cameraSensitivity;
+
+        // TODO: maybe there is a better smoothing idea here?
+        // smooth out the "rough" input from the user to the "desired" function.
+        deltaX     = (deltaX + lastDeltaX) * 0.5f;
+        deltaY     = (deltaY + lastDeltaY) * 0.5f;
+        lastDeltaX = deltaX;
+        lastDeltaY = deltaY;
 
         if (lockCamYaw) deltaX = 0.f;
         if (lockCamPitch) deltaY = 0.f;
 
+        // NOTE: we do a variable shadowing here because we don't want the ImGui to show the deltas here
+        // that go as the input to atan2.
+        float currdeltaX = deltaX;
+        float currdeltaY = deltaY;
+
         float r = tanf(gd->cam.fov * DEGREES_TO_RADIANS / 2.0f) * gd->cam.nearPlane;
 
-        deltaX *= r / (winInfo.width * 0.5f);
-        deltaY *= r / (winInfo.height * 0.5f);
+        currdeltaX *= r / (winInfo.width * 0.5f);
 
-        float yaw   = ae::math::atan2(deltaX, gd->cam.nearPlane);
-        float pitch = ae::math::atan2(deltaY, gd->cam.nearPlane);
+        // TODO: this doesn't look correct?
+        currdeltaY *= r / (winInfo.height * 0.5f);
+
+        float yaw   = ae::math::atan2(currdeltaX, gd->cam.nearPlane);
+        float pitch = ae::math::atan2(currdeltaY, gd->cam.nearPlane);
 
         gd->cam.trans.eulerAngles += ae::math::vec3_t(0.0f, yaw, 0.0f);
         gd->cam.trans.eulerAngles += ae::math::vec3_t(-pitch, 0.0f, 0.0f);
