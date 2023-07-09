@@ -490,12 +490,9 @@ VkFramebuffer MaybeMakeFramebuffer(game_state_t *gd, VkImageView backbuffer, u32
 
 void GameUpdateAndRender(ae::game_memory_t *gameMemory)
 {
-    auto             winInfo   = ae::platform::getWindowInfo();
-    game_state_t    *gd        = getGameState(gameMemory);
-    ae::user_input_t userInput = {};
-    ae::platform::getUserInput(&userInput);
-
-    float speed = 5.f * ae::timing::lastFrameVisibleTime;
+    auto                    winInfo   = ae::platform::getWindowInfo();
+    game_state_t           *gd        = getGameState(gameMemory);
+    const ae::user_input_t &userInput = ae::platform::getUserInput();
 
     static bool             bSpin               = true;
     static bool             lockCamYaw          = false;
@@ -505,10 +502,9 @@ void GameUpdateAndRender(ae::game_memory_t *gameMemory)
     static ae::math::vec4_t lightColor          = {1, 1, 1, 1};
     static ae::math::vec3_t lightPos            = {0, 1, 0};
     static float            cameraSensitivity   = 3.0f;
-    static bool             optInFirstPersonCam = false;
 
-    static float deltaX = 0.f;
-    static float deltaY = 0.f;
+    //static float deltaX = 0.f;
+    //static float deltaY = 0.f;
 
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
     ImGui::Begin("MonkeyDemo");
@@ -535,8 +531,8 @@ void GameUpdateAndRender(ae::game_memory_t *gameMemory)
     ImGui::InputFloat3("lightPos", &lightPos[0]);
     ImGui::SliderFloat("cameraSensitivity", &cameraSensitivity, 1, 10);
 
-    ImGui::Text("userInput.deltaMouseX: %.3f", deltaX);
-    ImGui::Text("userInput.deltaMouseY: %.3f", deltaY);
+    //ImGui::Text("userInput.deltaMouseX: %.3f", deltaX);
+    //ImGui::Text("userInput.deltaMouseY: %.3f", deltaY);
 
     ae::ImGuiRenderMat4("camProjMat", buildProjMatForVk(gd->cam));
     ae::ImGuiRenderMat4("camViewMat", buildViewMat(gd->cam));
@@ -547,78 +543,134 @@ void GameUpdateAndRender(ae::game_memory_t *gameMemory)
     ImGui::End();
 #endif
 
-    ae::math::mat3_t camBasis =
-        ae::math::mat3_t(buildRotMat4(ae::math::vec3_t(0.0f, gd->cam.trans.eulerAngles.y, 0.0f)));
-    if (userInput.keyDown[ae::GAME_KEY_W]) { gd->cam.trans.pos += camBasis * ae::math::vec3_t(0.0f, 0.0f, -speed); }
-    if (userInput.keyDown[ae::GAME_KEY_A]) { gd->cam.trans.pos += camBasis * ae::math::vec3_t(-speed, 0.0f, 0.0f); }
-    if (userInput.keyDown[ae::GAME_KEY_S]) { gd->cam.trans.pos += camBasis * ae::math::vec3_t(0.0f, 0.0f, speed); }
-    if (userInput.keyDown[ae::GAME_KEY_D]) { gd->cam.trans.pos += camBasis * ae::math::vec3_t(speed, 0.0f, 0.0f); }
-    if (userInput.keyDown[ae::GAME_KEY_SHIFT]) { gd->cam.trans.pos += ae::math::vec3_t(0.0f, -speed, 0.0f); }
-    if (userInput.keyDown[ae::GAME_KEY_SPACE]) { gd->cam.trans.pos += ae::math::vec3_t(0.0f, speed, 0.0f); }
-
-    bool static bFocusedLastFrame = true;  // assume for first frame.
-    const bool bExitingFocus      = bFocusedLastFrame && !ae::platform::isWindowFocused();
-
     // check if opt in.
-    if (userInput.mouseRBttnDown) {
-        // exit GUI.
-        if (!optInFirstPersonCam) ae::platform::showMouse(false);
-        optInFirstPersonCam = true;
-    }
+    static bool optInFirstPersonCam = false;
+    {
+        bool static bFocusedLastFrame = true;  // assume for first frame.
+        const bool bExitingFocus      = bFocusedLastFrame && !ae::platform::isWindowFocused();
 
-    if (userInput.keyDown[ae::GAME_KEY_ESCAPE] || bExitingFocus) {
-        // enter GUI.
-        if (optInFirstPersonCam) ae::platform::showMouse(true);
-        optInFirstPersonCam = false;
-    }
+        if (userInput.mouseRBttnDown[0] || userInput.mouseRBttnDown[1]) {
+            // exit GUI.
+            if (!optInFirstPersonCam) ae::platform::showMouse(false);
+            optInFirstPersonCam = true;
+        }
 
-    bFocusedLastFrame = ae::platform::isWindowFocused();
+        if ((userInput.keyDown[0][ae::GAME_KEY_ESCAPE] || userInput.keyDown[1][ae::GAME_KEY_ESCAPE]) || bExitingFocus) {
+            // enter GUI.
+            if (optInFirstPersonCam) ae::platform::showMouse(true);
+            optInFirstPersonCam = false;
+        }
+
+        bFocusedLastFrame = ae::platform::isWindowFocused();
+    }
 
     if (optInFirstPersonCam) {
-        static float lastDeltaX = 0;
-        static float lastDeltaY = 0;
-
-        // we'll assume that this is in pixels.
-        deltaX = userInput.deltaMouseX * cameraSensitivity;
-        deltaY = userInput.deltaMouseY * cameraSensitivity;
-
-        // TODO: maybe there is a better smoothing idea here?
-        // smooth out the "rough" input from the user to the "desired" function.
-        deltaX     = (deltaX + lastDeltaX) * 0.5f;
-        deltaY     = (deltaY + lastDeltaY) * 0.5f;
-        lastDeltaX = deltaX;
-        lastDeltaY = deltaY;
-
-        if (lockCamYaw) deltaX = 0.f;
-        if (lockCamPitch) deltaY = 0.f;
-
-        // NOTE: we do a variable shadowing here because we don't want the ImGui to show the deltas here
-        // that go as the input to atan2.
-        float currdeltaX = deltaX;
-        float currdeltaY = deltaY;
-
-        float r = tanf(gd->cam.fov * DEGREES_TO_RADIANS / 2.0f) * gd->cam.nearPlane;
-        float t = r * (float(winInfo.height)/winInfo.width);
-
-        currdeltaX *= r / (winInfo.width * 0.5f);
-        currdeltaY *= t / (winInfo.height * 0.5f);
-
-        float yaw   = ae::math::atan2(currdeltaX, gd->cam.nearPlane);
-        float pitch = ae::math::atan2(currdeltaY, gd->cam.nearPlane);
-
-        gd->cam.trans.eulerAngles += ae::math::vec3_t(0.0f, yaw, 0.0f);
-        gd->cam.trans.eulerAngles += ae::math::vec3_t(-pitch, 0.0f, 0.0f);
-
         // clamp mouse cursor.
         ae::platform::setMousePos((int)(winInfo.width / 2.0f), (int)(winInfo.height / 2.0f));
     }
 
-    // clamp camera pitch
-    float pitchClamp = PI / 2.0f - 0.01f;
-    if (gd->cam.trans.eulerAngles.x < -pitchClamp) gd->cam.trans.eulerAngles.x = -pitchClamp;
-    if (gd->cam.trans.eulerAngles.x > pitchClamp) gd->cam.trans.eulerAngles.x = pitchClamp;
+    auto simulateWorldStep = [&](uint32_t                inputIdx,
+                                 const ae::math::vec3_t &beginPosVector,
+                                 const ae::math::vec3_t &beginEulerAngles,
+                                 ae::math::vec3_t       *pEndPosVector,
+                                 ae::math::vec3_t       *pEndEulerAngles) {
+        *pEndPosVector = beginPosVector;
+        *pEndEulerAngles = beginEulerAngles;
 
-    if (bSpin)
+        float yaw = 0.f;
+        if (optInFirstPersonCam) {
+            // we'll assume that this is in pixels.
+            float deltaX = userInput.deltaMouseX[inputIdx] * cameraSensitivity;
+            float deltaY = userInput.deltaMouseY[inputIdx] * cameraSensitivity;
+
+            if (lockCamYaw) deltaX = 0.f;
+            if (lockCamPitch) deltaY = 0.f;
+
+            float r = tanf(gd->cam.fov * DEGREES_TO_RADIANS / 2.0f) * gd->cam.nearPlane;
+            float t = r * (float(winInfo.height) / winInfo.width);
+
+            deltaX *= r / (winInfo.width * 0.5f);
+            deltaY *= t / (winInfo.height * 0.5f);
+
+            yaw   = ae::math::atan2(deltaX, gd->cam.nearPlane);
+            float pitch = ae::math::atan2(deltaY, gd->cam.nearPlane);
+
+            *pEndEulerAngles += ae::math::vec3_t(0.0f, yaw, 0.0f);
+            *pEndEulerAngles += ae::math::vec3_t(-pitch, 0.0f, 0.0f);
+        }
+
+        // clamp camera pitch
+        float pitchClamp = PI / 2.0f - 0.01f;
+        if (pEndEulerAngles->x < -pitchClamp) pEndEulerAngles->x = -pitchClamp;
+        if (pEndEulerAngles->x > pitchClamp) pEndEulerAngles->x = pitchClamp;
+
+        float timeStep = (ae::timing::lastFrameVisibleTime / 2.f);
+        float movementSpeed = 5.f;
+        float linearStep = movementSpeed * timeStep;
+
+        
+        ae::math::mat3_t camBasisBegin =
+            ae::math::mat3_t(buildRotMat4(ae::math::vec3_t(0.0f, beginEulerAngles.y, 0.0f)));
+
+        {
+            ae::math::vec3_t movDir = ae::math::vec3_t();
+            if (userInput.keyDown[inputIdx][ae::GAME_KEY_W]) {
+                movDir += camBasisBegin * ae::math::vec3_t(0.0f, 0.0f, -1);
+            }
+            if (userInput.keyDown[inputIdx][ae::GAME_KEY_A]) {
+                movDir += camBasisBegin * ae::math::vec3_t(-1, 0.0f, 0.0f);
+            }
+            if (userInput.keyDown[inputIdx][ae::GAME_KEY_S]) {
+                movDir += camBasisBegin * ae::math::vec3_t(0.0f, 0.0f, 1);
+            }
+            if (userInput.keyDown[inputIdx][ae::GAME_KEY_D]) {
+                movDir += camBasisBegin * ae::math::vec3_t(1, 0.0f, 0.0f);
+            }
+
+            if (userInput.keyDown[inputIdx][ae::GAME_KEY_SHIFT]) {
+                movDir += ae::math::vec3_t(0.0f, -1, 0.0f);
+            }
+            else if (userInput.keyDown[inputIdx][ae::GAME_KEY_SPACE]) {
+                movDir += ae::math::vec3_t(0.0f, 1, 0.0f);
+            }
+            
+            // NOTE: the camera is rotating smoothly. the below math is the result
+            // of doing the integral for that circular motion.
+            if (yaw != 0.f)
+            {
+                auto  t0       = ae::math::normalize(movDir) * movementSpeed; // velocity vector.
+                float oneOverW = timeStep / yaw;
+
+                float r_x =
+                    pEndPosVector->x + oneOverW * (t0.x * ae::math::sin(yaw) - t0.z * ae::math::cos(yaw) + t0.z);
+                float r_z =
+                    pEndPosVector->z + oneOverW * (t0.z * ae::math::sin(yaw) + t0.x * ae::math::cos(yaw) - t0.x);
+
+                pEndPosVector->x = r_x;
+                pEndPosVector->z = r_z;
+            }
+            else
+            {
+                pEndPosVector->x += ae::math::normalize(movDir).x * linearStep;
+                pEndPosVector->z += ae::math::normalize(movDir).z * linearStep;
+            }
+            pEndPosVector->y += ae::math::normalize(movDir).y * linearStep;
+        }
+
+    };
+
+    ae::math::vec3_t s1_posVector;
+    ae::math::vec3_t s1_eulerAngles;
+    simulateWorldStep(0, gd->cam.trans.pos, gd->cam.trans.eulerAngles, &s1_posVector, &s1_eulerAngles);
+
+    ae::math::vec3_t s2_posVector;
+    ae::math::vec3_t s2_eulerAngles;
+    simulateWorldStep(1, s1_posVector, s1_eulerAngles, &s2_posVector, &s2_eulerAngles);
+    
+    gd->cam.trans.pos = (s1_posVector + s2_posVector) * 0.5f;
+    gd->cam.trans.eulerAngles = (s1_eulerAngles + s2_eulerAngles) * 0.5f;
+    
+    if (bSpin) // TODO: this isn't really correct with the simulation model.
         gd->suzanneTransform.eulerAngles += ae::math::vec3_t(0.0f, 2.0f * ae::timing::lastFrameVisibleTime, 0.0f);
 
     // TODO: look into the depth testing stuff more deeply on the hardware side of things.
@@ -777,6 +829,12 @@ void GameUpdateAndRender(ae::game_memory_t *gameMemory)
 #endif
 
     (vkQueueSubmit(gd->vkQueue, 1, &si, *pFence));
+
+    // reset game state as the relative computation point for next frame.
+    // the state we computed to use in rendering the frame is just the 60Hz sample.
+    // but we need to retain the higher Hz sample.
+    gd->cam.trans.pos         = s2_posVector;
+    gd->cam.trans.eulerAngles = s2_eulerAngles;
 }
 
 void WaitForAndResetFence(VkDevice device, VkFence *pFence, uint64_t waitTime)

@@ -154,8 +154,20 @@ namespace automata_engine {
                 1000.0f * timing::getTimeElapsed(timing::lastFrameBeginTime, timing::lastFrameUpdateEndTime));
             ImGui::Text("lastFrameTimeUpdate_&_Render: %.3f ms",
                 1000.0f * timing::getTimeElapsed(timing::lastFrameBeginTime, timing::lastFrameGpuEndTime));
-            ImGui::Text("input latency: %.4f s",
-                timing::getTimeElapsed(timing::lastFrameBeginTime, timing::lastFrameMaybeVblankTime));
+
+            float collectPeriod = timing::lastFrameVisibleTime / 2.0f;
+            ImGui::Text("input latency: %.3f s", collectPeriod);
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("the phase shift of the input signal to the game signal.");
+
+            float gameSimulateFrameTime;  // time of second poll + 1/2 poll period.
+            ImGui::Text("present latency: %.3f s",
+                timing::getTimeElapsed(timing::lastFrameBeginTime, timing::lastFrameMaybeVblankTime) -
+                    collectPeriod / 2.f);
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip(
+                    "the phase shift of the game signal to the vblank signal.\n"
+                    "if this is negative, that implies the vblank leads the game signal.");
+
             ImGui::Text("frames per second: %.3f FPS", 1.f / timing::lastFrameVisibleTime);
             ImGui::Text("updateModel: %s", updateModelToString(platform::GLOBAL_UPDATE_MODEL));
             bool vsync = platform::_globalVsync;

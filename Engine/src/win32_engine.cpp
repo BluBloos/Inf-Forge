@@ -948,33 +948,45 @@ void Win32DisplayBufferWindow(HDC deviceContext,
         SRCCOPY);
 }
 
-void automata_engine::platform::getUserInput(user_input_t *userInput) {
-    *userInput = globalUserInput;
+const ae::user_input_t &automata_engine::platform::getUserInput() {
+    return globalUserInput;
 }
+
+// NOTE: we use the frameIndex to decouple the input polling from the game update.
+// we poll the input at a faster rate so that if the app wants it can supersample
+// the game world simulation to prevent temporal aliasing artifacts.
+uint32_t g_frameIndex = 0;
+
+// TODO: the user_input structure currently stores this hardcoded.
+// maybe in the future we care about dynamic poll rates at runtime.
+// but for right now, don't care bout that shit. 
+constexpr uint32_t g_inputPollRate = 2;
 
 static void ProccessKeyboardMessage(unsigned int vkCode, bool down)
 {
+    uint32_t idx = g_frameIndex % g_inputPollRate;
+
     if (vkCode >= 'A' && vkCode <= 'Z') {
-        globalUserInput.keyDown[(uint32_t)ae::GAME_KEY_A + (vkCode - 'A')] = down;
+        globalUserInput.keyDown[idx][(uint32_t)ae::GAME_KEY_A + (vkCode - 'A')] = down;
     } else if (vkCode >= '0' && vkCode <= '9') {
-        globalUserInput.keyDown[(uint32_t)ae::GAME_KEY_0 + (vkCode - '0')] = down;
+        globalUserInput.keyDown[idx][(uint32_t)ae::GAME_KEY_0 + (vkCode - '0')] = down;
     } else {
         switch (vkCode) {
             // TODO: this looks like copy-pasta. can be this be more expressive ???
             case VK_SPACE:
-                globalUserInput.keyDown[ae::GAME_KEY_SPACE] = down;
+                globalUserInput.keyDown[idx][ae::GAME_KEY_SPACE] = down;
                 break;
             case VK_SHIFT:
-                globalUserInput.keyDown[ae::GAME_KEY_SHIFT] = down;
+                globalUserInput.keyDown[idx][ae::GAME_KEY_SHIFT] = down;
                 break;
             case VK_ESCAPE:
-                globalUserInput.keyDown[ae::GAME_KEY_ESCAPE] = down;
+                globalUserInput.keyDown[idx][ae::GAME_KEY_ESCAPE] = down;
                 break;
             case VK_F5:
-                globalUserInput.keyDown[ae::GAME_KEY_F5] = down;
+                globalUserInput.keyDown[idx][ae::GAME_KEY_F5] = down;
                 break;
             case VK_TAB:
-                globalUserInput.keyDown[ae::GAME_KEY_TAB] = down;
+                globalUserInput.keyDown[idx][ae::GAME_KEY_TAB] = down;
                 break;
         }
     }
@@ -995,7 +1007,9 @@ LRESULT CALLBACK Win32WindowProc(HWND window,
 #endif
 
     PAINTSTRUCT ps;
-    LRESULT result = 0;
+    LRESULT     result = 0;
+    uint32_t    idx    = g_frameIndex % g_inputPollRate;
+
     switch(message) {
         case WM_INPUT: {
             // TODO: we have registered just the mouse for raw input. yet, in the future we may register more things.
@@ -1012,8 +1026,8 @@ LRESULT CALLBACK Win32WindowProc(HWND window,
                 if (!!(mouseData.usFlags & MOUSE_MOVE_ABSOLUTE)) {
                     // TODO: handle this case.
                 } else if ((mouseData.lLastX != 0) || (mouseData.lLastY) != 0) {
-                    globalUserInput.deltaMouseX += mouseData.lLastX;
-                    globalUserInput.deltaMouseY += mouseData.lLastY;
+                    globalUserInput.deltaMouseX[idx] += mouseData.lLastX;
+                    globalUserInput.deltaMouseY[idx] += mouseData.lLastY;
                 }
             }
             if (GET_RAWINPUT_CODE_WPARAM(wParam) == RIM_INPUT) result = DefWindowProc(window, message, wParam, lParam);
@@ -1039,22 +1053,24 @@ LRESULT CALLBACK Win32WindowProc(HWND window,
         case WM_MOUSEMOVE: {
             int x = (int)lParam & 0x0000FFFF;
             int y = ((int)lParam & 0xFFFF0000) >> 16;
-            globalUserInput.mouseX = x;
-            globalUserInput.mouseY = y;
+            globalUserInput.mouseX[idx] = x;
+            globalUserInput.mouseY[idx] = y;
         } break;
         // left mouse button
+
+        // TODO: consider the half transition count. we are loosing granularity here.
         case WM_LBUTTONDOWN: {
-            globalUserInput.mouseLBttnDown = true;
+            globalUserInput.mouseLBttnDown[idx] = true;
         } break;
         case WM_LBUTTONUP:{
-            globalUserInput.mouseLBttnDown = false;
+            globalUserInput.mouseLBttnDown[idx] = false;
         } break;
         // right mouse button
         case WM_RBUTTONDOWN: {
-            globalUserInput.mouseRBttnDown = true;
+            globalUserInput.mouseRBttnDown[idx] = true;
         } break;
         case WM_RBUTTONUP:{
-            globalUserInput.mouseRBttnDown = false;
+            globalUserInput.mouseRBttnDown[idx] = false;
         } break;
         //keyboard messages
         case WM_KEYUP: {
@@ -1063,6 +1079,7 @@ LRESULT CALLBACK Win32WindowProc(HWND window,
         case WM_KEYDOWN: {
             ProccessKeyboardMessage(wParam, true);
         } break;
+
         case WM_CREATE: {
 #if defined(AUTOMATA_ENGINE_GL_BACKEND)
             gHdc = GetDC(window);
@@ -2053,8 +2070,25 @@ int CALLBACK WinMain(HINSTANCE instance,
         g_bIsWindowFocused = true;//TODO: is this needed?
 
         while(automata_engine::platform::_globalRunning) {
-            // Reset input
-            globalUserInput.deltaMouseX = 0; globalUserInput.deltaMouseY = 0;
+
+            uint32_t localFrameIndex = g_frameIndex % g_inputPollRate;
+
+            // even for frameIndex == 0, this will init the globalUserInput.keyDown to zero.
+            uint32_t prevLocalFrameIndex = (localFrameIndex - 1) % g_inputPollRate;
+
+            // TODO: just have TWO globalUserInput structs instead? think about that and give is some good thought. this is important API.
+
+            // reset accumulation state.
+            globalUserInput.deltaMouseX[localFrameIndex] = 0; globalUserInput.deltaMouseY[localFrameIndex] = 0;
+
+            // carry over prev signals.
+            globalUserInput.mouseLBttnDown[localFrameIndex] = globalUserInput.mouseLBttnDown[prevLocalFrameIndex];
+            globalUserInput.mouseRBttnDown[localFrameIndex] = globalUserInput.mouseRBttnDown[prevLocalFrameIndex];
+
+            for (uint32_t idx = 0; idx < (uint32_t)ae::GAME_KEY_COUNT; idx++) {
+                globalUserInput.keyDown[localFrameIndex][idx] = globalUserInput.keyDown[prevLocalFrameIndex][idx];
+            }
+
             // Process windows messages
             {
                 MSG message;
@@ -2071,6 +2105,9 @@ int CALLBACK WinMain(HINSTANCE instance,
                 }
             }
 
+            const bool bGameShouldUpdate = ((localFrameIndex) != 0);
+            g_frameIndex++;
+
             static constexpr float engineIntroDuration = 4.f;
 
             // is engine intro over?
@@ -2084,7 +2121,7 @@ int CALLBACK WinMain(HINSTANCE instance,
             bool bAppOkNow = g_gameMemory.getInitialized() && g_bEngineIntroOver;
 
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
-            if (isImGuiInitialized && bAppOkNow) {
+            if (isImGuiInitialized && bAppOkNow && bGameShouldUpdate) {
 #if defined(AUTOMATA_ENGINE_GL_BACKEND)
                 ImGui_ImplOpenGL3_NewFrame();
 #endif
@@ -2099,11 +2136,13 @@ int CALLBACK WinMain(HINSTANCE instance,
             static bool bRenderFallbackFirstTime = true;
             bool        bRenderFallback          = false;
             if (bAppOkNow) {
-                auto gameUpdateAndRender = automata_engine::bifrost::getCurrentApp();
-                if ((gameUpdateAndRender != nullptr)) {
-                    gameUpdateAndRender(&g_gameMemory);
-                } else {
-                    AELoggerLog("WARN: gameUpdateAndRender == nullptr");
+                if (bGameShouldUpdate) {
+                    auto gameUpdateAndRender = automata_engine::bifrost::getCurrentApp();
+                    if ((gameUpdateAndRender != nullptr)) {
+                        gameUpdateAndRender(&g_gameMemory);
+                    } else {
+                        AELoggerLog("WARN: gameUpdateAndRender == nullptr");
+                    }
                 }
             } else {
                 // Fallback (i.e. Automata Engine loading scene).
@@ -2160,7 +2199,7 @@ int CALLBACK WinMain(HINSTANCE instance,
             }
 
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
-            if (isImGuiInitialized && bAppOkNow) {
+            if (isImGuiInitialized && bAppOkNow && bGameShouldUpdate) {
 #if defined(AUTOMATA_ENGINE_GL_BACKEND)
                 ImGui::Render();
                 ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
@@ -2172,6 +2211,7 @@ int CALLBACK WinMain(HINSTANCE instance,
 
 #endif
 
+            if (bGameShouldUpdate)
             {
                 LARGE_INTEGER WorkCounter   = Win32GetWallClock();
                 ae::timing::lastFrameUpdateEndTime = WorkCounter.QuadPart;
@@ -2179,6 +2219,7 @@ int CALLBACK WinMain(HINSTANCE instance,
 
             bool bUsingAtomicUpdate = (ae::platform::GLOBAL_UPDATE_MODEL == ae::AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC);
 
+// TODO: this needs fixing now that we have the bGameShouldUpdate boolean.
 #if defined(AUTOMATA_ENGINE_GL_BACKEND)
             if (!bRenderFallback) {
                 if (bUsingAtomicUpdate) {
@@ -2196,10 +2237,11 @@ int CALLBACK WinMain(HINSTANCE instance,
             //
             // TODO: both these constants are adhoc. what if the monitor has a different refresh rate?
             // what if the round trip frame time is different?
-            static constexpr float GuaranteedFrameTime          = 0.007f;
+            static constexpr float GuaranteedFrameTime          = 0.004f;
             static constexpr float TargetSecondsElapsedPerFrame = 1 / 60.f;
 
             float endFrameTarget = TargetSecondsElapsedPerFrame;
+            bool  doEndFrameWaitToTarget = true;
 
             // TODO: consider other update models.
             if (bUsingAtomicUpdate)
@@ -2208,15 +2250,13 @@ int CALLBACK WinMain(HINSTANCE instance,
             }
 
 #if defined(AUTOMATA_ENGINE_VK_BACKEND)
-            if (!bRenderFallback) {
+            if (!bRenderFallback && bGameShouldUpdate) {
                 LARGE_INTEGER gpuEnd;  // TODO: consider other update models.
 
                 if (bUsingAtomicUpdate) {
                     gpuEnd                          = vk_WaitForAndResetFence(g_vkDevice, &g_vkPresentFence);
                     ae::timing::lastFrameGpuEndTime = gpuEnd.QuadPart;
                 }
-
-                static bool vk_needSwapchainSync = true;
 
                 {
                     uint32_t swapchainCount = 1;
@@ -2235,46 +2275,56 @@ int CALLBACK WinMain(HINSTANCE instance,
                 gameMonitor->WaitForVBlank();
 
                 LARGE_INTEGER after = Win32GetWallClock();
-                ae::timing::lastFrameMaybeVblankTime = after.QuadPart;
+                LARGE_INTEGER before = {.QuadPart = LONGLONG(ae::timing::lastFrameMaybeVblankTime)};
 
-                // NOTE: if we're doing the frame pacing right, we're not gonna leave half the frame left.
-                // we're gonna get pretty close to the vblank.
-                if ((TargetSecondsElapsedPerFrame / 2.0f) <
-                    Win32GetSecondsElapsed(gpuEnd, after, g_PerfCountFrequency64)) {
+                // is this measured vblank greater than forecasted time based on last blank?
+                if ((TargetSecondsElapsedPerFrame * 1.5f) <
+                    Win32GetSecondsElapsed(before, after, g_PerfCountFrequency64)) {
                     AELoggerWarn("missed the vblank!!!");
                 }
 
+                ae::timing::lastFrameMaybeVblankTime = after.QuadPart;
+
                 // do the frame pacing stuff.
-                LastCounter.QuadPart = ae::timing::lastFrameMaybeVblankTime; // begin wait from this point.
-                float frameLeft = TargetSecondsElapsedPerFrame - GuaranteedFrameTime;
-                endFrameTarget  = frameLeft;
+                doEndFrameWaitToTarget = false;
+            }
+            // TODO: other backends are probably very much broken.
+            else if (!bGameShouldUpdate)
+            {
+                // wait until the next input poll.
+                LastCounter = Win32GetWallClock(); // begin wait from this point.
+                endFrameTarget = 0.008f;
             }
 #endif
 
-            // wait until the 16.66ms mark. our frames are precisely timed to this.
-            float SecondsElapsedForFrame =
-                Win32GetSecondsElapsed(LastCounter, Win32GetWallClock(), g_PerfCountFrequency64);
-            if (SecondsElapsedForFrame < endFrameTarget) {
-                if (SleepGranular && ae::platform::_globalVsync) {
-                    DWORD SleepMS = (DWORD)ae::math::max(
-                        int32_t(0), int32_t(1000.0f * (endFrameTarget - SecondsElapsedForFrame)) - 1);
-                    if (SleepMS > 0) { Sleep(SleepMS); }
+            // NOTE: the end frame wait utility for the above code (above code gets to set the wait time).
+            if (doEndFrameWaitToTarget) {
+                float SecondsElapsedForFrame =
+                    Win32GetSecondsElapsed(LastCounter, Win32GetWallClock(), g_PerfCountFrequency64);
+                if (SecondsElapsedForFrame < endFrameTarget) {
+                    if (SleepGranular && ae::platform::_globalVsync) {
+                        DWORD SleepMS = (DWORD)ae::math::max(
+                            int32_t(0), int32_t(1000.0f * (endFrameTarget - SecondsElapsedForFrame)) - 1);
+                        if (SleepMS > 0) { Sleep(SleepMS); }
+                    }
+                    while ((SecondsElapsedForFrame < endFrameTarget) && ae::platform::_globalVsync) {
+                        SecondsElapsedForFrame =
+                            Win32GetSecondsElapsed(LastCounter, Win32GetWallClock(), g_PerfCountFrequency64);
+                    }
+                } else {
+                    AELoggerWarn("missed end frame wait!");
                 }
-                while ((SecondsElapsedForFrame < endFrameTarget) && ae::platform::_globalVsync) {
-                    SecondsElapsedForFrame =
-                        Win32GetSecondsElapsed(LastCounter, Win32GetWallClock(), g_PerfCountFrequency64);
-                }
-            } else {
-                AELoggerWarn("missed target framerate!");
+            }
+
+            if (bGameShouldUpdate)
+            {
+                ae::timing::lastFrameBeginTime = LastCounter.QuadPart;
             }
 
             LARGE_INTEGER EndCounter = Win32GetWallClock();
             LastCounter = EndCounter;
-            ae::timing::lastFrameBeginTime = ae::timing::thisFrameBeginTime;
-            ae::timing::thisFrameBeginTime = EndCounter.QuadPart;
 
-            // TODO(Noah): for CPU backend, add sleep if vsync = ON.
-            // and I suppose figure out how to sync with the monitor?
+            // TODO(Noah): this path is likely broken now on non-VK backends.
             bool bCpuBackendEnabled = false;
 #if defined(AUTOMATA_ENGINE_CPU_BACKEND)
             bCpuBackendEnabled = true;
