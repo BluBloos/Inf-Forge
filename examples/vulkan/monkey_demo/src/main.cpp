@@ -598,11 +598,10 @@ void GameUpdateAndRender(ae::game_memory_t *gameMemory)
         float currdeltaY = deltaY;
 
         float r = tanf(gd->cam.fov * DEGREES_TO_RADIANS / 2.0f) * gd->cam.nearPlane;
+        float t = r * (float(winInfo.height)/winInfo.width);
 
         currdeltaX *= r / (winInfo.width * 0.5f);
-
-        // TODO: this doesn't look correct?
-        currdeltaY *= r / (winInfo.height * 0.5f);
+        currdeltaY *= t / (winInfo.height * 0.5f);
 
         float yaw   = ae::math::atan2(currdeltaX, gd->cam.nearPlane);
         float pitch = ae::math::atan2(currdeltaY, gd->cam.nearPlane);
