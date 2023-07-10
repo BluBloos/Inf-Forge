@@ -569,7 +569,10 @@ void GameUpdateAndRender(ae::game_memory_t *gameMemory)
         ae::platform::setMousePos((int)(winInfo.width / 2.0f), (int)(winInfo.height / 2.0f));
     }
 
+    const float fullTimeStep = ae::timing::lastFrameVisibleTime * 0.5f;
+
     auto simulateWorldStep = [&](uint32_t                inputIdx,
+                                 float                   timeStep,
                                  const ae::math::vec3_t &beginPosVector,
                                  const ae::math::vec3_t &beginEulerAngles,
                                  ae::math::vec3_t       *pEndPosVector,
@@ -592,8 +595,10 @@ void GameUpdateAndRender(ae::game_memory_t *gameMemory)
             deltaX *= r / (winInfo.width * 0.5f);
             deltaY *= t / (winInfo.height * 0.5f);
 
-            yaw   = ae::math::atan2(deltaX, gd->cam.nearPlane);
-            float pitch = ae::math::atan2(deltaY, gd->cam.nearPlane);
+            float rotationFactor = timeStep / fullTimeStep;
+            
+            yaw   = ae::math::atan2(deltaX, gd->cam.nearPlane) * rotationFactor;
+            float pitch = ae::math::atan2(deltaY, gd->cam.nearPlane) * rotationFactor;
 
             *pEndEulerAngles += ae::math::vec3_t(0.0f, yaw, 0.0f);
             *pEndEulerAngles += ae::math::vec3_t(-pitch, 0.0f, 0.0f);
@@ -604,10 +609,8 @@ void GameUpdateAndRender(ae::game_memory_t *gameMemory)
         if (pEndEulerAngles->x < -pitchClamp) pEndEulerAngles->x = -pitchClamp;
         if (pEndEulerAngles->x > pitchClamp) pEndEulerAngles->x = pitchClamp;
 
-        float timeStep = (ae::timing::lastFrameVisibleTime / 2.f);
         float movementSpeed = 5.f;
         float linearStep = movementSpeed * timeStep;
-
         
         ae::math::mat3_t camBasisBegin =
             ae::math::mat3_t(buildRotMat4(ae::math::vec3_t(0.0f, beginEulerAngles.y, 0.0f)));
@@ -636,9 +639,11 @@ void GameUpdateAndRender(ae::game_memory_t *gameMemory)
             
             // NOTE: the camera is rotating smoothly. the below math is the result
             // of doing the integral for that circular motion.
+            auto movDirNorm = ae::math::normalize(movDir);
+
             if (yaw != 0.f)
             {
-                auto  t0       = ae::math::normalize(movDir) * movementSpeed; // velocity vector.
+                auto  t0       = movDirNorm * movementSpeed * 1.414f;  // original velocity vector.
                 float oneOverW = timeStep / yaw;
 
                 float r_x =
@@ -651,25 +656,27 @@ void GameUpdateAndRender(ae::game_memory_t *gameMemory)
             }
             else
             {
-                pEndPosVector->x += ae::math::normalize(movDir).x * linearStep;
-                pEndPosVector->z += ae::math::normalize(movDir).z * linearStep;
+                pEndPosVector->x += movDirNorm.x * linearStep;
+                pEndPosVector->z += movDirNorm.z * linearStep;
             }
-            pEndPosVector->y += ae::math::normalize(movDir).y * linearStep;
+            pEndPosVector->y += movDirNorm.y * linearStep;
         }
-
     };
+
+    float timeStep = fullTimeStep;
 
     ae::math::vec3_t s1_posVector;
     ae::math::vec3_t s1_eulerAngles;
-    simulateWorldStep(0, gd->cam.trans.pos, gd->cam.trans.eulerAngles, &s1_posVector, &s1_eulerAngles);
+    simulateWorldStep(0, timeStep, gd->cam.trans.pos, gd->cam.trans.eulerAngles, &s1_posVector, &s1_eulerAngles);
 
+    // compute the interpolated game state for rendering.
+    simulateWorldStep(1, timeStep / 2.f, s1_posVector, s1_eulerAngles, &gd->cam.trans.pos, &gd->cam.trans.eulerAngles);
+
+    // get the next state.
     ae::math::vec3_t s2_posVector;
     ae::math::vec3_t s2_eulerAngles;
-    simulateWorldStep(1, s1_posVector, s1_eulerAngles, &s2_posVector, &s2_eulerAngles);
-    
-    gd->cam.trans.pos = (s1_posVector + s2_posVector) * 0.5f;
-    gd->cam.trans.eulerAngles = (s1_eulerAngles + s2_eulerAngles) * 0.5f;
-    
+    simulateWorldStep(1, timeStep, s1_posVector, s1_eulerAngles, &s2_posVector, &s2_eulerAngles);
+
     if (bSpin) // TODO: this isn't really correct with the simulation model.
         gd->suzanneTransform.eulerAngles += ae::math::vec3_t(0.0f, 2.0f * ae::timing::lastFrameVisibleTime, 0.0f);
 
