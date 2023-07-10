@@ -698,7 +698,7 @@ void GameUpdateAndRender(ae::game_memory_t *gameMemory)
     ae::math::vec3_t s2_eulerAngles;
     simulateWorldStep(1, timeStep, s1_posVector, s1_eulerAngles, &s2_posVector, &s2_eulerAngles);
 
-    if (bSpin) // TODO: this isn't really correct with the simulation model.
+    if (bSpin)
         gd->suzanneTransform.eulerAngles += ae::math::vec3_t(0.0f, 2.0f * ae::timing::lastFrameVisibleTime, 0.0f);
 
     // TODO: look into the depth testing stuff more deeply on the hardware side of things.
