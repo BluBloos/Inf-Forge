@@ -571,6 +571,9 @@ void GameUpdateAndRender(ae::game_memory_t *gameMemory)
 
     const float fullTimeStep = ae::timing::lastFrameVisibleTime * 0.5f;
 
+    static float lastDeltaX[2] = {0.f, 0.f};
+    static float lastDeltaY[2] = {0.f, 0.f};
+
     auto simulateWorldStep = [&](uint32_t                inputIdx,
                                  float                   timeStep,
                                  const ae::math::vec3_t &beginPosVector,
@@ -582,12 +585,30 @@ void GameUpdateAndRender(ae::game_memory_t *gameMemory)
 
         float yaw = 0.f;
         if (optInFirstPersonCam) {
+            // NOTE: we smooth the input because I have found that a stable input can produce a really stable output.
+            // (tested via hardcoding some constant input).
+            // so, the jerky camera stuff seems to come from responsiveness to the jerky player input.
+
             // we'll assume that this is in pixels.
-            float deltaX = userInput.deltaMouseX[inputIdx] * cameraSensitivity;
-            float deltaY = userInput.deltaMouseY[inputIdx] * cameraSensitivity;
+            float deltaX = userInput.deltaMouseX[inputIdx];
+            float deltaY = userInput.deltaMouseY[inputIdx];
+
+            auto sigmoid = [](float x) -> float { return 1.f / (1.f + ae::math::pow(2.71828f, -x)); };
+
+            float deltaDist = ae::math::sqrt(deltaX * deltaX + deltaY * deltaY);
+            float T         = ae::math::min(1.f, ae::math::max(0.f, 0.8f - sigmoid(deltaDist - 30.f)));
+            deltaX          = ae::math::lerp(deltaX, lastDeltaX[inputIdx], T);
+            deltaY          = ae::math::lerp(deltaY, lastDeltaY[inputIdx], T);
 
             if (lockCamYaw) deltaX = 0.f;
             if (lockCamPitch) deltaY = 0.f;
+
+            // NOTE: we store the last as the muted/smoothed version. so that's extra smoothness?
+            lastDeltaX[inputIdx] = deltaX;
+            lastDeltaY[inputIdx] = deltaY;
+
+            deltaX *= cameraSensitivity;
+            deltaY *= cameraSensitivity;
 
             float r = tanf(gd->cam.fov * DEGREES_TO_RADIANS / 2.0f) * gd->cam.nearPlane;
             float t = r * (float(winInfo.height) / winInfo.width);
