@@ -85,6 +85,8 @@ namespace automata_engine {
         vec3_t operator-(vec3_t b, vec3_t a) {
             return b + (-a);
         }
+        float pow(float base, float exp) { return powf(base, exp);}
+        float  lerp(float a, float b, float t) { return a * (1.f - t) + b * t; }
         float &vec3_t::operator[](int index) {
             return (&this->x)[index];
         }

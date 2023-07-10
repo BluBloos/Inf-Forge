@@ -653,6 +653,9 @@ namespace automata_engine {
         float *value_ptr(mat3_t &);
         float *value_ptr(mat4_t &);
 
+        /// @brief linear interpolate two floats by the parameter t.
+        float lerp(float a, float b, float t);
+
         /// @brief compute the magnitude of a vector.
         float magnitude(vec3_t a);
 
@@ -748,6 +751,9 @@ namespace automata_engine {
 
         /// @brief compute the base 2 logarithm of a float.
         float log2(float a);
+
+        /// @brief raise base to the power of exp. 
+        float pow(float base, float exp);
 
         /// @brief compute the division (a/b) followed by a ceiling operation.
         static uint32_t div_ceil(uint32_t a, uint32_t b) {
