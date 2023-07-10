@@ -662,7 +662,7 @@ void GameUpdateAndRender(ae::game_memory_t *gameMemory)
             // of doing the integral for that circular motion.
             auto movDirNorm = ae::math::normalize(movDir);
 
-            if (yaw != 0.f)
+            if (ae::math::abs(yaw) >= 0.0001f)
             {
                 auto  t0       = movDirNorm * movementSpeed * 1.414f;  // original velocity vector.
                 float oneOverW = timeStep / yaw;
