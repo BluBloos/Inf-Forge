@@ -97,6 +97,8 @@ set_target_properties(${ProjectName}
 
 set(COMMON_LIB gdi32 user32 kernel32 Xaudio2 XAPOBase ole32 Shcore)
 
+target_compile_definitions(${ProjectName} PUBLIC -DAUTOMATA_ENGINE_PROJECT_NAME="${ProjectName}")
+
 if (${ProjectDisableLogging})
     target_compile_definitions(${ProjectName} PUBLIC -DAUTOMATA_ENGINE_DISABLE_PLATFORM_LOGGING)
 endif()

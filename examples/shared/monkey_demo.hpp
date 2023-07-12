@@ -6,7 +6,7 @@ static game_state_t *getGameState(ae::game_memory_t *gameMemory) { return (game_
 void ae::PreInit(game_memory_t *gameMemory)
 {
     ae::defaultWinProfile = AUTOMATA_ENGINE_WINPROFILE_NORESIZE;
-    ae::defaultWindowName = "MonkeyDemo";
+    ae::defaultWindowName = AUTOMATA_ENGINE_PROJECT_NAME;
 }
 
 static void MonkeyDemoInit(ae::game_memory_t *gameMemory)
@@ -26,7 +26,7 @@ static void MonkeyDemoInit(ae::game_memory_t *gameMemory)
     gd->suzanneTransform.pos         = ae::math::vec3_t(0.0f, 0.0f, -3.0f);
     gd->suzanneTransform.eulerAngles = {};
 
-    ae::bifrost::registerApp("spinning_monkey", MonkeyDemoUpdate);
+    ae::bifrost::registerApp(AUTOMATA_ENGINE_PROJECT_NAME, MonkeyDemoUpdate);
     ae::setUpdateModel(ae::AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC);
 }
 
@@ -49,7 +49,7 @@ static void MonkeyDemoUpdate(ae::game_memory_t *gameMemory)
     static bool             optInFirstPersonCam = false;
 
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
-    ImGui::Begin("MonkeyDemo");
+    ImGui::Begin(AUTOMATA_ENGINE_PROJECT_NAME);
 
     ImGui::Text(
         "---CONTROLS---\n"

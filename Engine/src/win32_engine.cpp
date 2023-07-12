@@ -2305,12 +2305,12 @@ int CALLBACK WinMain(HINSTANCE instance,
                 float SecondsElapsedForFrame =
                     Win32GetSecondsElapsed(LastCounter, Win32GetWallClock(), g_PerfCountFrequency64);
                 if (SecondsElapsedForFrame < endFrameTarget) {
-                    if (SleepGranular && ae::platform::_globalVsync) {
+                    if (SleepGranular) {
                         DWORD SleepMS = (DWORD)ae::math::max(
                             int32_t(0), int32_t(1000.0f * (endFrameTarget - SecondsElapsedForFrame)) - 1);
                         if (SleepMS > 0) { Sleep(SleepMS); }
                     }
-                    while ((SecondsElapsedForFrame < endFrameTarget) && ae::platform::_globalVsync) {
+                    while ((SecondsElapsedForFrame < endFrameTarget)) {
                         SecondsElapsedForFrame =
                             Win32GetSecondsElapsed(LastCounter, Win32GetWallClock(), g_PerfCountFrequency64);
                     }
