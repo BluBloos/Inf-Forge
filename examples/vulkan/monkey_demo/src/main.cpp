@@ -624,6 +624,12 @@ void MonkeyDemoRender(ae::game_memory_t *gameMemory)
 #endif
 
     (vkQueueSubmit(gd->vkQueue, 1, &si, *pFence));
+
+    // reset game state as the relative computation point for next frame.
+    // the state we computed to use in rendering the frame is just the 60Hz sample.
+    // but we need to retain the higher Hz sample.
+    gd->cam.trans.pos         = s2_posVector;
+    gd->cam.trans.eulerAngles = s2_eulerAngles;
 }
 
 void WaitForAndResetFence(VkDevice device, VkFence *pFence, uint64_t waitTime)

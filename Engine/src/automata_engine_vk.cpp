@@ -304,7 +304,7 @@ namespace automata_engine {
                 StretchyBufferInitWithCount(supported_validation_layers, instance_layer_count);
                 VK_CHECK(vkEnumerateInstanceLayerProperties(&instance_layer_count, supported_validation_layers));
 
-                #if defined(_DEBUG)
+#if defined(_DEBUG)
                 {
                     std::vector<std::vector<const char *>> validation_layer_priority_list = {
                         // The preferred validation layer is "VK_LAYER_KHRONOS_validation"
@@ -339,8 +339,7 @@ namespace automata_engine {
 
 
                 if (requested_validation_layers == nullptr) { AELoggerWarn("No validation layers enabled"); }
-
-                #endif
+#endif
             }  // TODO: can we get rid of all the complexity above? I bet this kind of thing isn't really needed.
 
             // setup instance extensions.

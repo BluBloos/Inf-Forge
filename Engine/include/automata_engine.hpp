@@ -653,6 +653,9 @@ namespace automata_engine {
         float *value_ptr(mat3_t &);
         float *value_ptr(mat4_t &);
 
+        /// @brief linear interpolate two floats by the parameter t.
+        float lerp(float a, float b, float t);
+
         /// @brief compute the magnitude of a vector.
         float magnitude(vec3_t a);
 
@@ -748,6 +751,9 @@ namespace automata_engine {
 
         /// @brief compute the base 2 logarithm of a float.
         float log2(float a);
+
+        /// @brief raise base to the power of exp. 
+        float pow(float base, float exp);
 
         /// @brief compute the division (a/b) followed by a ceiling operation.
         static uint32_t div_ceil(uint32_t a, uint32_t b) {
@@ -886,8 +892,8 @@ namespace automata_engine {
         /// Must be freed with freeLoadedImage. The pixel data will be in 0xABGR (32bpp) format.
         loaded_image_t stbImageLoad(const char *fileName);
 
-        /// @brief get the lastly polled user input.
-        void getUserInput(user_input_t *userInput);
+        /// @brief get the user input poll(s).
+        const user_input_t &getUserInput(); 
 
         /// @brief get information about the platform window.
         game_window_info_t getWindowInfo();
@@ -1198,6 +1204,11 @@ namespace automata_engine {
     };
 
     /// @brief a struct representing a snapshot of user input.
+    ///
+    /// NOTE: the input is polled at a rate faster than the game renders frames.
+    /// hence, the structure below contains N many data points, where N is the poll
+    /// ratio to game frame ratio.   
+    ///
     /// @param mouseX         x position of the mouse in pixels.
     /// @param mouseY         y position of the mouse in pixels.
     /// @param deltaMouseX    change in x position of the mouse relative to the last snapshot.
@@ -1208,14 +1219,14 @@ namespace automata_engine {
     /// @param mouseRBttnDown state of the right mouse button.
     /// @param keyDown        an array of booleans corresponding to the state of each key.
     struct user_input_t {
-        int mouseX = 0;
-        int mouseY = 0;
-        int deltaMouseX = 0;
-        int deltaMouseY = 0;
-        bool mouseLBttnDown = false;
-        bool mouseRBttnDown = false;
+        int mouseX[2] = {0,0};
+        int mouseY[2] = {0,0};
+        int deltaMouseX[2] = {0,0};
+        int deltaMouseY[2] = {0,0};
+        bool mouseLBttnDown[2] = {false, false};
+        bool mouseRBttnDown[2] = {false, false};
         // TODO(Noah): We will prolly want to change how we represent keys.
-        bool keyDown[(uint32_t)GAME_KEY_COUNT];
+        bool keyDown[2][(uint32_t)GAME_KEY_COUNT];
     };
 
     // TODO: Since everything is already namespaced, we won't need to prefix enum IDs with `AUTOMATA_ENGINE_...`.
