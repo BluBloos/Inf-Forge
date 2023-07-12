@@ -1,12 +1,19 @@
 typedef struct game_state {
-uint32_t suzanneIndexCount;
+
+  ae::GL::vbo_t cubeVbo;
+  GLuint cubeVao;
+
+  GLuint gameShader;
 
   ae::raw_model_t suzanne;
-  GLuint gameShader;
+  uint32_t suzanneIndexCount;
   ae::GL::ibo_t suzanneIbo;
   ae::GL::vbo_t suzanneVbo;
   ae::math::transform_t suzanneTransform;
   GLuint suzanneVao;
-  GLuint checkerTexture;
+
   ae::math::camera_t cam;
+
+  GLuint checkerTexture;
+
 } game_state_t;

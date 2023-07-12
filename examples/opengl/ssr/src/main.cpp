@@ -45,7 +45,72 @@ void ae::Init(game_memory_t *gameMemory) {
   ae::GL::objToVao(gameState->suzanne, &gameState->suzanneIbo, &gameState->suzanneVbo, 
     &gameState->suzanneVao);
   gameState->suzanneIndexCount = gameState->suzanneIbo.count;
-  glBindVertexArray(gameState->suzanneVao);
+
+// clang-format off
+  // for rendering the cube outline.
+  float cubeVertices[] = {
+      // positions        // texture coords
+      // front                              // pos' from Z-perspective
+      1.0f, 1.0f, 0.0f,  1.0f, 1.0f,        // ff, top right
+      1.0f, 0.0f, 0.0f,  1.0f, 0.0f,        // ff, bottom right
+      0.0f, 1.0f, 0.0f,  0.0f, 1.0f,        // ff, top left
+      
+      0.0f, 1.0f, 0.0f,  0.0f, 1.0f,        // ff, top left
+      1.0f, 0.0f, 0.0f,  1.0f, 0.0f,        // ff, bottom right
+      0.0f, 0.0f, 0.0f,  0.0f, 0.0f,        // ff, bottom left
+      
+      // right
+      1.0f, 1.0f, 0.0f,  0.0f, 1.0f,        // ff, top right
+      1.0f, 1.0f, -1.0f,  1.0f, 1.0f,        // bf, top right
+      1.0f, 0.0f, -1.0f,  1.0f, 0.0f,        // bf, bottom right
+
+      1.0f, 1.0f, 0.0f,  0.0f, 1.0f,        // ff, top right
+      1.0f, 0.0f, -1.0f,  1.0f, 0.0f,        // bf, bottom right
+      1.0f, 0.0f, 0.0f,  0.0f, 0.0f,        // ff, bottom right
+
+      // back
+      1.0f, 1.0f, -1.0f,  0.0f, 1.0f,        // bf, top right
+      0.0f, 1.0f, -1.0f,  1.0f, 1.0f,        // bf, top left
+      0.0f, 0.0f, -1.0f,  1.0f, 0.0f,        // bf, bottom left
+
+      1.0f, 1.0f, -1.0f,  0.0f, 1.0f,        // bf, top right
+      0.0f, 0.0f, -1.0f,  1.0f, 0.0f,        // bf, bottom left
+      1.0f, 0.0f, -1.0f,  0.0f, 0.0f,        // bf, bottom right
+
+      // left
+      0.0f, 1.0f, -1.0f,  0.0f, 1.0f,        // bf, top left
+      0.0f, 1.0f, 0.0f,  1.0f, 1.0f,        // ff, top left
+      0.0f, 0.0f, -1.0f,  0.0f, 0.0f,        // bf, bottom left
+
+      0.0f, 1.0f, 0.0f,  1.0f, 1.0f,        // ff, top left
+      0.0f, 0.0f, 0.0f,  0.0f, 1.0f,        // ff, bottom left
+      0.0f, 0.0f, -1.0f,  0.0f, 0.0f,        // bf, bottom left
+
+      // top
+      0.0f, 1.0f, -1.0f,  0.0f, 1.0f,        // bf, top left
+      1.0f, 1.0f, -1.0f,  1.0f, 1.0f,        // bf, top right
+      1.0f, 1.0f, 0.0f,  1.0f, 0.0f,        // ff, top right
+
+      0.0f, 1.0f, -1.0f,  0.0f, 1.0f,        // bf, top left
+      1.0f, 1.0f, 0.0f,  1.0f, 0.0f,        // ff, top right
+      0.0f, 1.0f, 0.0f,  0.0f, 0.0f,        // ff, top left
+
+      // bottom
+      1.0f, 0.0f, -1.0f,  0.0f, 1.0f,        // bf, bottom right
+      0.0f, 0.0f, -1.0f,  1.0f, 1.0f,        // bf, bottom left
+      1.0f, 0.0f, 0.0f,  0.0f, 0.0f,        // ff, bottom right
+
+      0.0f, 0.0f, -1.0f,  1.0f, 1.0f,        // bf, bottom left
+      0.0f, 0.0f, 0.0f,  0.0f, 1.0f,        // ff, bottom left
+      1.0f, 0.0f, 0.0f,  0.0f, 0.0f,        // ff, bottom right
+  };
+  // clang-format on
+
+  gameState->cubeVbo =
+      ae::GL::createAndSetupVbo(2, ae::GL::vertex_attrib_t(GL_FLOAT, 3), ae::GL::vertex_attrib_t(GL_FLOAT, 2));
+  glBindBuffer(GL_ARRAY_BUFFER, gameState->cubeVbo.glHandle);
+  glBufferData(GL_ARRAY_BUFFER, sizeof(cubeVertices), cubeVertices, GL_STATIC_DRAW);
+  gameState->cubeVao = ae::GL::createAndSetupVao(1, ae::GL::vertex_attrib_desc_t(0, {0, 1}, gameState->cubeVbo, false));
 }
 
 void ae::InitAsync(game_memory_t *gameMemory) { gameMemory->setInitialized(true); }
@@ -53,10 +118,12 @@ void ae::InitAsync(game_memory_t *gameMemory) { gameMemory->setInitialized(true)
 void MonkeyDemoRender(ae::game_memory_t *gameMemory)
 {
   game_state_t *gameState = getGameState(gameMemory);
+
   // NOTE(Noah): Depth test is enabled, also clear depth buffer.
   // Depth testing culls frags that are occluded by other frags.
   glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
   // set pos of monke
   ae::GL::setUniformMat4f(gameState->gameShader, "umodel", 
     ae::math::buildMat4fFromTransform(gameState->suzanneTransform));
@@ -64,8 +131,18 @@ void MonkeyDemoRender(ae::game_memory_t *gameMemory)
   ae::GL::setUniformMat4f(gameState->gameShader, "uproj", buildProjMat(gameState->cam));
   ae::GL::setUniformMat4f(gameState->gameShader, "uview", buildViewMat(gameState->cam));
   // Do the draw call
+  glBindVertexArray(gameState->suzanneVao);
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, gameState->suzanneIbo.glHandle);
   glDrawElements(GL_TRIANGLES, gameState->suzanneIbo.count, GL_UNSIGNED_INT, NULL);
+
+  // draw the cube that's going to do the reflection stuff.
+  GL_CALL(glBindVertexArray(gameState->cubeVao));
+  GL_CALL(ae::GL::setUniformMat4f(gameState->gameShader,
+      "umodel",
+      ae::math::buildMat4fFromTransform({.pos = ae::math::vec3_t(-3, -3, -3 /*NOTE: VAO_CUBE render Z:[0,-1]*/),
+          .eulerAngles                        = ae::math::vec3_t(),
+          .scale                              = ae::math::vec3_t(1, 1, 1)})));
+  GL_CALL(glDrawArrays(GL_TRIANGLES, 0, 36));
 }
 
 void ae::Close(game_memory_t *gameMemory) {
