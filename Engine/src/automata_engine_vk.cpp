@@ -304,6 +304,7 @@ namespace automata_engine {
                 StretchyBufferInitWithCount(supported_validation_layers, instance_layer_count);
                 VK_CHECK(vkEnumerateInstanceLayerProperties(&instance_layer_count, supported_validation_layers));
 
+                #if defined(_DEBUG)
                 {
                     std::vector<std::vector<const char *>> validation_layer_priority_list = {
                         // The preferred validation layer is "VK_LAYER_KHRONOS_validation"
@@ -336,7 +337,10 @@ namespace automata_engine {
                     }
                 }
 
+
                 if (requested_validation_layers == nullptr) { AELoggerWarn("No validation layers enabled"); }
+
+                #endif
             }  // TODO: can we get rid of all the complexity above? I bet this kind of thing isn't really needed.
 
             // setup instance extensions.
@@ -357,7 +361,7 @@ namespace automata_engine {
                 // TODO: this is win32 specific. default init is win32??
                 StretchyBufferPush(active_instance_extensions, VK_KHR_WIN32_SURFACE_EXTENSION_NAME);
                 StretchyBufferPush(active_instance_extensions, VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-                StretchyBufferPush(active_instance_extensions, VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+                //StretchyBufferPush(active_instance_extensions, VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 
                 if (!validateExtensions(active_instance_extensions, instance_extensions)) {
                     AELoggerError("Required instance extensions are missing.");

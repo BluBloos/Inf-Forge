@@ -4,6 +4,7 @@
 #include <automata_engine.hpp>
 #include <win32_engine.h>
 
+#define NOMINMAX
 #include <windows.h>
 #include <io.h> // TODO(Noah): What is this used for again?
 #define XAUDIO2_HELPER_FUNCTIONS
