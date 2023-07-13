@@ -1,6 +1,6 @@
 #version 330 core
 
-layout(location = 0) out vec4 color;
+layout(location = 0) out vec2 ssr_uv;
 
 uniform vec3      iResolution; // viewport resolution (in pixels)
 uniform float     iNearPlane;
@@ -68,6 +68,15 @@ void main()
         }
     } // @ loop end, rayPos is as far as the ray went before we maybe found a hit.
 
+    if (didHit)
+    {
+        ssr_uv = currUV;
+    }
+    else
+    {
+        ssr_uv = uv;
+    }
+
     /*float depthNDC = texture(iDepth, uv).r;
         
         // z_ndc = (f + n) / (f -n) - 2 * f * n / (f -n) / -z
@@ -79,7 +88,7 @@ void main()
 
     // TODO: fine raymarch pass to get actual intersection.
 
-    uint whatToRender = 0;
+    /*uint whatToRender = 0;
 
     if (whatToRender == 0)
     {
@@ -98,5 +107,5 @@ void main()
 
         float depthColor = (-depthView-n)/(f-n);
         color = vec4( depthColor, depthColor, depthColor, 1);
-    }
+    }*/
 };

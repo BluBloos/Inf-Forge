@@ -9,8 +9,12 @@ typedef struct game_state {
   GLuint gDepth;
   GLuint gPos;
 
+  GLuint gBuffer2;
+  GLuint gUVs;
+
   GLuint gameShader;
   GLuint SSR_shader;
+  GLuint lightingPass;
 
   ae::raw_model_t suzanne;
   uint32_t suzanneIndexCount;
