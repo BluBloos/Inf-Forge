@@ -43,7 +43,7 @@ void main()
         // x_ndc = x / tanf(cam.fov * DEGREES_TO_RADIANS / 2.0f) * (1 / -z.
         // x_uv = x_ndc /2 + 0.5        
         currUV = rayPos.xy / (-rayPos.z * vec2(iCamTanHalfFov, iCamTanHalfFovTimesAspect) );
-        currUV = currUV * 2 + 0.5;
+        currUV = currUV / 2 + 0.5;
 
         if (currUV.x < 0.0 || currUV.x > 1.0 || currUV.y < 0.0 || currUV.y > 1.0)
         {
