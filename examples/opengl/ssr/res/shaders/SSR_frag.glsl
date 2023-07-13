@@ -60,7 +60,9 @@ void main()
         float n = iNearPlane;
         float depthView = 2.0 * f * n / (depthNDC * (f-n) - (f+n));
 
-        if (rayPos.z > depthView)
+        // NOTE: depth in the view space from the camera goes more negative when we get farther away from the camera.
+        // therefore we want to find that the ray is less, which makes it a larger negative.
+        if (rayPos.z < depthView)
         {
             // hit something.
             didHit = 1;
