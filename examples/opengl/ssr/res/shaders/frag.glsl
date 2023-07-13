@@ -2,11 +2,13 @@
 
 layout(location = 0) out vec4 color;
 layout(location = 1) out vec3 normal;
+layout(location = 2) out vec3 pos;
 in vec2 vTexCoord;
 in vec3 vPos;
 in vec3 vNormal;
 
 uniform sampler2D utexture;
+uniform mat4 uview;
 
 void main()
 {
@@ -21,4 +23,7 @@ void main()
 
   // dump the normals to gbuffer.
   normal = vNormal;
+
+  // dump positions to gbuffer.
+  pos = vec3(uview * vec4(vPos, 1));
 };

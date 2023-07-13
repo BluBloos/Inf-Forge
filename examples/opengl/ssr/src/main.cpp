@@ -42,100 +42,116 @@ void ae::Init(game_memory_t *gameMemory) {
 
 // clang-format off
   // for rendering the cube outline.
-  float cubeVertices[] = {
-      // positions        // texture coords
-      // front                              // pos' from Z-perspective
-      1.0f, 1.0f, 0.0f,  1.0f, 1.0f,        // ff, top right
-      1.0f, 0.0f, 0.0f,  1.0f, 0.0f,        // ff, bottom right
-      0.0f, 1.0f, 0.0f,  0.0f, 1.0f,        // ff, top left
-      
-      0.0f, 1.0f, 0.0f,  0.0f, 1.0f,        // ff, top left
-      1.0f, 0.0f, 0.0f,  1.0f, 0.0f,        // ff, bottom right
-      0.0f, 0.0f, 0.0f,  0.0f, 0.0f,        // ff, bottom left
-      
-      // right
-      1.0f, 1.0f, 0.0f,  0.0f, 1.0f,        // ff, top right
-      1.0f, 1.0f, -1.0f,  1.0f, 1.0f,        // bf, top right
-      1.0f, 0.0f, -1.0f,  1.0f, 0.0f,        // bf, bottom right
+  // clang-format off
+// for rendering the cube outline.
+float cubeVertices[] = {
+    // positions        // texture coords
+    // front                              // pos' from Z-perspective
+    1, 1, 0,  1, 1, 0,0,1,       // ff, top right
+    1, 0, 0,  1, 0, 0,0,1,       // ff, bottom right
+    0, 1, 0,  0, 1, 0,0,1,       // ff, top left
 
-      1.0f, 1.0f, 0.0f,  0.0f, 1.0f,        // ff, top right
-      1.0f, 0.0f, -1.0f,  1.0f, 0.0f,        // bf, bottom right
-      1.0f, 0.0f, 0.0f,  0.0f, 0.0f,        // ff, bottom right
+    1, 0, 0,  1, 0, 0,0,1,        // ff, bottom right
+    0, 0, 0,  0, 0, 0,0,1,        // ff, bottom left
+    0, 1, 0,  0, 1, 0,0,1,        // ff, top left
 
-      // back
-      1.0f, 1.0f, -1.0f,  0.0f, 1.0f,        // bf, top right
-      0.0f, 1.0f, -1.0f,  1.0f, 1.0f,        // bf, top left
-      0.0f, 0.0f, -1.0f,  1.0f, 0.0f,        // bf, bottom left
+    // right
+    1, 1, -1, 1, 1, 1,0,0,        // bf, top right
+    1, 0, -1, 1, 0, 1,0,0,        // bf, bottom right
+    1, 1, 0,  0, 1, 1,0,0,        // ff, top right
 
-      1.0f, 1.0f, -1.0f,  0.0f, 1.0f,        // bf, top right
-      0.0f, 0.0f, -1.0f,  1.0f, 0.0f,        // bf, bottom left
-      1.0f, 0.0f, -1.0f,  0.0f, 0.0f,        // bf, bottom right
+    1, 0, -1, 1, 0, 1,0,0,        // bf, bottom right
+    1, 0, 0,  0, 0, 1,0,0,        // ff, bottom right
+    1, 1, 0,  0, 1, 1,0,0,        // ff, top right
 
-      // left
-      0.0f, 1.0f, -1.0f,  0.0f, 1.0f,        // bf, top left
-      0.0f, 1.0f, 0.0f,  1.0f, 1.0f,        // ff, top left
-      0.0f, 0.0f, -1.0f,  0.0f, 0.0f,        // bf, bottom left
+    // back
+    0, 1, -1,  1, 1, 0,0,-1,        // bf, top left
+    0, 0, -1,  1, 0, 0,0,-1,        // bf, bottom left
+    1, 1, -1,  0, 1, 0,0,-1,        // bf, top right
 
-      0.0f, 1.0f, 0.0f,  1.0f, 1.0f,        // ff, top left
-      0.0f, 0.0f, 0.0f,  0.0f, 1.0f,        // ff, bottom left
-      0.0f, 0.0f, -1.0f,  0.0f, 0.0f,        // bf, bottom left
+    0, 0, -1,  1, 0, 0,0,-1,        // bf, bottom left
+    1, 0, -1,  0, 0, 0,0,-1,        // bf, bottom right
+    1, 1, -1,  0, 1, 0,0,-1,        // bf, top right
 
-      // top
-      0.0f, 1.0f, -1.0f,  0.0f, 1.0f,        // bf, top left
-      1.0f, 1.0f, -1.0f,  1.0f, 1.0f,        // bf, top right
-      1.0f, 1.0f, 0.0f,  1.0f, 0.0f,        // ff, top right
+    // left (new)
+    0, 1, 0,   1, 1, -1,0,0,        // ff, top left
+    0, 0, 0,   0, 1, -1,0,0,        // ff, bottom left
+    0, 1, -1,  0, 1, -1,0,0,        // bf, top left
 
-      0.0f, 1.0f, -1.0f,  0.0f, 1.0f,        // bf, top left
-      1.0f, 1.0f, 0.0f,  1.0f, 0.0f,        // ff, top right
-      0.0f, 1.0f, 0.0f,  0.0f, 0.0f,        // ff, top left
+    0, 0, 0,   0, 1, -1,0,0,        // ff, bottom left
+    0, 0, -1,  0, 0, -1,0,0,        // bf, bottom left
+    0, 1, -1,  0, 1, -1,0,0,        // bf, top left
 
-      // bottom
-      1.0f, 0.0f, -1.0f,  0.0f, 1.0f,        // bf, bottom right
-      0.0f, 0.0f, -1.0f,  1.0f, 1.0f,        // bf, bottom left
-      1.0f, 0.0f, 0.0f,  0.0f, 0.0f,        // ff, bottom right
+    // top
+    1, 1, -1,  1, 1, 0,1,0,        // bf, top right
+    1, 1, 0,   1, 0, 0,1,0,        // ff, top right
+    0, 1, -1,  0, 1, 0,1,0,        // bf, top left
 
-      0.0f, 0.0f, -1.0f,  1.0f, 1.0f,        // bf, bottom left
-      0.0f, 0.0f, 0.0f,  0.0f, 1.0f,        // ff, bottom left
-      1.0f, 0.0f, 0.0f,  0.0f, 0.0f,        // ff, bottom right
-  };
+    1, 1, 0,   1, 0, 0,1,0,        // ff, top right
+    0, 1, 0,   0, 0, 0,1,0,        // ff, top left
+    0, 1, -1,  0, 1, 0,1,0,        // bf, top left
+
+    // bottom (final attempt les go)
+    1, 0, 0,   1, 0, 0,-1,0,        // ff, bottom right
+    1, 0, -1,  0, 1, 0,-1,0,        // bf, bottom right
+    0, 0, 0,   0, 1, 0,-1,0,        // ff, bottom left
+
+    1, 0, -1,  0, 1, 0,-1,0,        // bf, bottom right
+    0, 0, -1,  1, 1, 0,-1,0,        // bf, bottom left
+    0, 0, 0,   0, 1, 0,-1,0,        // ff, bottom left
+
+};
+// clang-format on
   // clang-format on
 
-  gameState->cubeVbo =
-      ae::GL::createAndSetupVbo(2, ae::GL::vertex_attrib_t(GL_FLOAT, 3), ae::GL::vertex_attrib_t(GL_FLOAT, 2));
-  glBindBuffer(GL_ARRAY_BUFFER, gameState->cubeVbo.glHandle);
-  glBufferData(GL_ARRAY_BUFFER, sizeof(cubeVertices), cubeVertices, GL_STATIC_DRAW);
-  gameState->cubeVao = ae::GL::createAndSetupVao(1, ae::GL::vertex_attrib_desc_t(0, {0, 1}, gameState->cubeVbo, false));
+gameState->cubeVbo = ae::GL::createAndSetupVbo(3,
+    ae::GL::vertex_attrib_t(GL_FLOAT, 3),
+    ae::GL::vertex_attrib_t(GL_FLOAT, 2),
+    ae::GL::vertex_attrib_t(GL_FLOAT, 3));
+glBindBuffer(GL_ARRAY_BUFFER, gameState->cubeVbo.glHandle);
+glBufferData(GL_ARRAY_BUFFER, sizeof(cubeVertices), cubeVertices, GL_STATIC_DRAW);
+gameState->cubeVao =
+    ae::GL::createAndSetupVao(1, ae::GL::vertex_attrib_desc_t(0, {0, 1, 2}, gameState->cubeVbo, false));
 
-  // create this partial gbuffer sort of thing.
-  GLuint &gBuffer = gameState->gBuffer;
-  glGenFramebuffers(1, &gBuffer);
-  glBindFramebuffer(GL_FRAMEBUFFER, gBuffer);
+// create this partial gbuffer sort of thing.
+GLuint &gBuffer = gameState->gBuffer;
+glGenFramebuffers(1, &gBuffer);
+glBindFramebuffer(GL_FRAMEBUFFER, gBuffer);
 
-  GLuint &gNormal = gameState->gNormal;
-  GLuint &gColor  = gameState->gColor;
-    
-  // normals.
-  glGenTextures(1, &gNormal);
-  glBindTexture(GL_TEXTURE_2D, gNormal);
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F, winInfo.width, winInfo.height, 0, GL_RGB, GL_FLOAT, NULL);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, gNormal, 0);
+GLuint &gNormal = gameState->gNormal;
+GLuint &gColor  = gameState->gColor;
+GLuint &gPos    = gameState->gPos;
 
-  // color.
-  glGenTextures(1, &gColor);
-  glBindTexture(GL_TEXTURE_2D, gColor);
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, winInfo.width, winInfo.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, gColor, 0);
+// normals.
+glGenTextures(1, &gNormal);
+glBindTexture(GL_TEXTURE_2D, gNormal);
+glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F, winInfo.width, winInfo.height, 0, GL_RGB, GL_FLOAT, NULL);
+glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, gNormal, 0);
 
-  // - tell OpenGL which color attachments we'll use (of this framebuffer) for rendering 
-  unsigned int attachments[] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1};
-  glDrawBuffers(_countof(attachments), attachments);
+// pos.
+glGenTextures(1, &gPos);
+glBindTexture(GL_TEXTURE_2D, gPos);
+glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F, winInfo.width, winInfo.height, 0, GL_RGB, GL_FLOAT, NULL);
+glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT2, GL_TEXTURE_2D, gPos, 0);
 
-  // add the depth buffer to this framebuffer.
-  {
+// color.
+glGenTextures(1, &gColor);
+glBindTexture(GL_TEXTURE_2D, gColor);
+glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, winInfo.width, winInfo.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, gColor, 0);
+
+// - tell OpenGL which color attachments we'll use (of this framebuffer) for rendering
+unsigned int attachments[] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2};
+glDrawBuffers(_countof(attachments), attachments);
+
+// add the depth buffer to this framebuffer.
+{
     GLuint &depthTex = gameState->gDepth;
     glGenTextures(1, &depthTex);
     glBindTexture(GL_TEXTURE_2D, depthTex);
@@ -211,6 +227,8 @@ void MonkeyDemoRender(ae::game_memory_t *gameMemory)
         ae::math::buildMat4fFromTransform({.pos = ae::math::vec3_t(-3, -3, -3 /*NOTE: VAO_CUBE render Z:[0,-1]*/),
             .eulerAngles                        = ae::math::vec3_t(),
             .scale                              = ae::math::vec3_t(1, 1, 1)})));
+    GL_CALL(ae::GL::setUniformMat4f(
+        gameState->gameShader, "uModelRotate", ae::math::mat4_t())); // identity.
 
     GL_CALL(glDrawArrays(GL_TRIANGLES, 0, 36));
   };
@@ -225,14 +243,28 @@ void MonkeyDemoRender(ae::game_memory_t *gameMemory)
 
   // do the fullscreen pass for SSR.
   {
-    // bind gbuffer.
+    glUseProgram(gameState->SSR_shader);
+
+    // set the samplers to point to the right texture units
+    glUniform1i(glGetUniformLocation(gameState->SSR_shader, "iDepth"), 1);
+    glUniform1i(glGetUniformLocation(gameState->SSR_shader, "iPos"), 2);
+
+    // bind gbuffer images.
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, gameState->gNormal);
-
-    glUseProgram(gameState->SSR_shader);
+    GL_CALL(glActiveTexture(GL_TEXTURE1));
+    glBindTexture(GL_TEXTURE_2D, gameState->gDepth);
+    GL_CALL(glActiveTexture(GL_TEXTURE2));
+    glBindTexture(GL_TEXTURE_2D, gameState->gPos);
 
     const float iResolution[3] = {winInfo.width, winInfo.height, 1};
     glUniform3fv(glGetUniformLocation(gameState->SSR_shader, "iResolution"), 1, iResolution);
+    glUniform1f(glGetUniformLocation(gameState->SSR_shader, "iFarPlane"), gameState->cam.farPlane);
+    glUniform1f(glGetUniformLocation(gameState->SSR_shader, "iNearPlane"), gameState->cam.nearPlane);
+    float iCamTanHalfFov = tanf(gameState->cam.fov/2.0f*DEGREES_TO_RADIANS);
+    float aspectRatio = (float)gameState->cam.height / (float)gameState->cam.width;
+    glUniform1f(glGetUniformLocation(gameState->SSR_shader, "iCamTanHalfFov"), iCamTanHalfFov);
+    glUniform1f(glGetUniformLocation(gameState->SSR_shader, "iCamTanHalfFovTimesAspect"), iCamTanHalfFov * aspectRatio);
 
     // NOTE: we reuse the cube VAO but without modifying the viewport, we only render to the
     // top right of the screen.
@@ -241,6 +273,10 @@ void MonkeyDemoRender(ae::game_memory_t *gameMemory)
 
     // NOTE: here we reuse the cube VAO, where we draw just once face to do a fullscreen pass.
     GL_CALL(glDrawArrays(GL_TRIANGLES, 0, 6));
+
+    // reset bound texture.
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, gameState->checkerTexture);
   }
 
 }

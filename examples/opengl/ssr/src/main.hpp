@@ -7,6 +7,7 @@ typedef struct game_state {
   GLuint gNormal;
   GLuint gColor;
   GLuint gDepth;
+  GLuint gPos;
 
   GLuint gameShader;
   GLuint SSR_shader;
