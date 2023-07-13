@@ -3,6 +3,11 @@ typedef struct game_state {
   ae::GL::vbo_t cubeVbo;
   GLuint cubeVao;
 
+  GLuint gBuffer;
+  GLuint gNormal;
+  GLuint gColor;
+  GLuint gDepth;
+
   GLuint gameShader;
   GLuint SSR_shader;
 

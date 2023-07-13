@@ -1,7 +1,7 @@
 #version 330 core
 
 layout(location = 0) out vec4 color;
-
+layout(location = 1) out vec3 normal;
 in vec2 vTexCoord;
 in vec3 vPos;
 in vec3 vNormal;
@@ -16,6 +16,9 @@ void main()
   float d = dot(N, L);
   vec4 texColor = texture(utexture, vTexCoord);
   // vec4 texColor = texture(utexture, vec2(vPos.x, vPos.y));
-  //vec4 texColor = vec4(vTexCoord.x, vTexCoord.y, 0.0, 1.0);
+  // vec4 texColor = vec4(vTexCoord.x, vTexCoord.y, 0.0, 1.0);
   color = texColor * d;
+
+  // dump the normals to gbuffer.
+  normal = vNormal;
 };

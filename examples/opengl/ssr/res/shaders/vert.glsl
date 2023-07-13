@@ -10,6 +10,7 @@ out vec3 vPos;
 
 uniform mat4 uproj;
 uniform mat4 umodel;
+uniform mat4 uModelRotate;
 uniform mat4 uview;
 
 void main()
@@ -22,5 +23,8 @@ void main()
   gl_Position = uproj * uview * vModel;
   vTexCoord = texCoord;
   vPos = vec3(vModel);
-  vNormal = vec3(umodel * vec4(normal.x, normal.y, normal.z, 0));
+
+  // NOTE: we use just using the rotation matrix since tranlation for the normal vectors,
+  // which are just direction vectors, doesn't quite have a meaning.
+  vNormal = vec3(uModelRotate * vec4(normal.x, normal.y, normal.z, 0));
 };
