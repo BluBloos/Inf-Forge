@@ -4,6 +4,7 @@ typedef struct game_state {
   GLuint cubeVao;
 
   GLuint gameShader;
+  GLuint SSR_shader;
 
   ae::raw_model_t suzanne;
   uint32_t suzanneIndexCount;

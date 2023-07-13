@@ -14,9 +14,6 @@ void ae::Init(game_memory_t *gameMemory) {
 
   auto winInfo = ae::platform::getWindowInfo();
 
-  glViewport(
-    0, 0, winInfo.width, winInfo.height);
-
   game_state_t *gameState = getGameState(gameMemory);
 
   // TODO: is it possible to NOT collapse the directory structure of the assets as found?
@@ -28,6 +25,13 @@ void ae::Init(game_memory_t *gameMemory) {
   }
 
   glUseProgram(gameState->gameShader);
+
+  gameState->SSR_shader = ae::GL::createShader("res\\SSR_vert.glsl",
+                                               "res\\SSR_frag.glsl");
+  if ((int)gameState->SSR_shader == -1) {
+    ae::setFatalExit();
+    return;
+  }
 
   // create the texture used for SRV.
   ae::loaded_image_t bitmap = ae::io::loadBMP("res\\highres_checker.bmp");
@@ -117,12 +121,18 @@ void ae::InitAsync(game_memory_t *gameMemory) { gameMemory->setInitialized(true)
 
 void MonkeyDemoRender(ae::game_memory_t *gameMemory)
 {
+  auto winInfo = ae::platform::getWindowInfo();
   game_state_t *gameState = getGameState(gameMemory);
 
   // NOTE(Noah): Depth test is enabled, also clear depth buffer.
   // Depth testing culls frags that are occluded by other frags.
   glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+  glUseProgram(gameState->gameShader);
+
+  glViewport(
+    0, 0, winInfo.width, winInfo.height);
 
   // set pos of monke
   ae::GL::setUniformMat4f(gameState->gameShader, "umodel", 
@@ -143,6 +153,20 @@ void MonkeyDemoRender(ae::game_memory_t *gameMemory)
           .eulerAngles                        = ae::math::vec3_t(),
           .scale                              = ae::math::vec3_t(1, 1, 1)})));
   GL_CALL(glDrawArrays(GL_TRIANGLES, 0, 36));
+
+  // do the fullscreen SSR pass.
+  glUseProgram(gameState->SSR_shader);
+
+  const GLint iResolution[3] = {winInfo.width, winInfo.height, 1};
+  glUniform3iv(glGetUniformLocation(gameState->SSR_shader, "iResolution"), 1, iResolution);
+
+  // NOTE: we reuse the cube VAO but without modifying the viewport, we only render to the
+  // top right of the screen.
+  glViewport(
+    -winInfo.width, -winInfo.height, 2*winInfo.width, 2*winInfo.height);
+
+  // NOTE: here we reuse the cube VAO, where we draw just once face to do a fullscreen pass.
+  GL_CALL(glDrawArrays(GL_TRIANGLES, 0, 6));
 }
 
 void ae::Close(game_memory_t *gameMemory) {
