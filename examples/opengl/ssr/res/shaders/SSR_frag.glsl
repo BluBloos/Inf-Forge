@@ -45,7 +45,12 @@ void main()
         currUV = rayPos.xy / (-rayPos.z * vec2(iCamTanHalfFov, iCamTanHalfFovTimesAspect) );
         currUV = currUV / 2 + 0.5;
 
-        if (currUV.x < 0.0 || currUV.x > 1.0 || currUV.y < 0.0 || currUV.y > 1.0)
+        float f = iFarPlane;
+        float n = iNearPlane;
+
+        if (currUV.x < 0.0 || currUV.x > 1.0 || currUV.y < 0.0 || currUV.y > 1.0 ||
+            rayPos.z > -n || rayPos.z < -f
+        )
         {
             // out of bounds, no hit.
             break;
@@ -53,11 +58,19 @@ void main()
 
         // sample depth.
         float depthNDC = texture(iDepth, currUV).r;
+
+        // NOTE: the depth buffer stores values from [0, 1],
+        // but the idea of projection in opengl is that we map the z value to [-1, 1].
+        // thus, before we do the inverse projection transform, we need to get back to
+        // -1,-1.
+        depthNDC = depthNDC * 2 - 1;
         
         // z_ndc = (f + n) / (f -n) + 2 * f * n / (f - n) / z
         // rearrange the above and we get:
-        float f = iFarPlane;
-        float n = iNearPlane;
+
+        // TODO: i'm still skeptical of this. when we render the image for this,
+        // it just doesn't seem to give back depth values that have variance.
+        // its enormously quantized.
         float depthView = 2.0 * f * n / (depthNDC * (f-n) - (f+n));
 
         // NOTE: depth in the view space from the camera goes more negative when we get farther away from the camera.
@@ -90,17 +103,20 @@ void main()
 
     // TODO: fine raymarch pass to get actual intersection.
 
-    /*uint whatToRender = 0;
+    /*uint whatToRender = 2;
 
     if (whatToRender == 0)
     {
-        color = texture(iNormals, uv);
+        //color = texture(iNormals, uv);
     } else if (whatToRender == 1)
     {
-        color = vec4(vec3(didHit, 0, 0), 1.0);
+        //color = vec4(vec3(didHit, 0, 0), 1.0);
     } else if (whatToRender == 2)
     {
         float depthNDC = texture(iDepth, uv).r; // between [0,1]
+
+        depthNDC = depthNDC * 2 - 1;
+
         // z_ndc = (f + n) / (f -n) + 2 * f * n / (f - n) / z
         // rearrange the above and we get:
         float f = iFarPlane;
@@ -108,6 +124,6 @@ void main()
         float depthView = 2.0 * f * n / (depthNDC * (f-n) - (f+n));
 
         float depthColor = (-depthView-n)/(f-n);
-        color = vec4( depthColor, depthColor, depthColor, 1);
+        ssr_uv = vec2( depthColor, depthColor);
     }*/
 };
