@@ -14,7 +14,7 @@ uniform sampler2D iPos;     // in view space.
 
 // NOTE: this is in units of fragment.
 const float coarseRayStep = 0.1; // in view space.
-const uint maxRaySteps = 256;
+const uint maxRaySteps = 64;
 
 void main()
 {
@@ -62,7 +62,7 @@ void main()
 
         // NOTE: depth in the view space from the camera goes more negative when we get farther away from the camera.
         // therefore we want to find that the ray is less, which makes it a larger negative.
-        if (rayPos.z < depthView)
+        if ( (rayPos.z < depthView) && ((depthView - rayPos.z) < coarseRayStep*0.5 ) )
         {
             // hit something.
             didHit = 1;
