@@ -11,7 +11,7 @@ uniform sampler2D iUVs;     // from SSR.
 
 // uniform sampler2D iDepth;   // ndc.
 
-float ambientStrength = 0.1;
+float ambientStrength = 0.8;
 float specularStrength = 0.5;
 vec3 lightColor = vec3(1.0, 1.0, 1.0);
 
@@ -43,6 +43,7 @@ void main()
 	vec3 specular = specularStrength * spec * lightColor;
 
     // TODO: proper handle HDR?
+	vec3 albedo = texture(iAlbedo, uv).xyz;
     vec3 maybeReflectedColor = texture(iAlbedo, texture(iUVs, uv).xy).xyz;
-	color = vec4(maybeReflectedColor * (ambient + diffuse + specular), 1.0);
+	color = vec4(  maybeReflectedColor * ambient + albedo * (diffuse + specular), 1.0);
 };
