@@ -1,6 +1,7 @@
 #version 330 core
 
 layout(location = 0) out vec2 ssr_uv;
+layout(location = 1) out vec2 ssr_depth;
 
 uniform vec3      iResolution; // viewport resolution (in pixels)
 uniform float     iNearPlane;
@@ -30,11 +31,17 @@ void main()
     vec3 viewDir = normalize(vPos);
 	vec3 rayDir = reflect(viewDir, N);
 
+    float f = iFarPlane;
+    float n = iNearPlane;
+
+    // TODO: reject rays where the view is coming from
+    // underneath the surface.
+
     // coarse raymarch pass.
     vec2 currUV = uv;
     vec3 rayPos = vPos; // in view.
     uint didHit = 0;
-    for (uint i = 0; i < maxRaySteps; i += 1)
+    for (uint i = 0; (i < maxRaySteps) && (dot(viewDir, N) < 0); i += 1)
     {
         // iter the ray.
         rayPos += rayDir * coarseRayStep;
@@ -44,9 +51,6 @@ void main()
         // x_uv = x_ndc /2 + 0.5        
         currUV = rayPos.xy / (-rayPos.z * vec2(iCamTanHalfFov, iCamTanHalfFovTimesAspect) );
         currUV = currUV / 2 + 0.5;
-
-        float f = iFarPlane;
-        float n = iNearPlane;
 
         if (currUV.x < 0.0 || currUV.x > 1.0 || currUV.y < 0.0 || currUV.y > 1.0 ||
             rayPos.z > -n || rayPos.z < -f
@@ -68,9 +72,6 @@ void main()
         // z_ndc = (f + n) / (f -n) + 2 * f * n / (f - n) / z
         // rearrange the above and we get:
 
-        // TODO: i'm still skeptical of this. when we render the image for this,
-        // it just doesn't seem to give back depth values that have variance.
-        // its enormously quantized.
         float depthView = 2.0 * f * n / (depthNDC * (f-n) - (f+n));
 
         // NOTE: depth in the view space from the camera goes more negative when we get farther away from the camera.
@@ -86,10 +87,14 @@ void main()
     if (didHit)
     {
         ssr_uv = currUV;
+
+        // TODO.
+        ssr_depth = vec2((-rayPos.z-n)/(f), 0);
     }
     else
     {
         ssr_uv = uv;
+        ssr_depth = vec2(0, (-rayPos.z-n)/(f) );
     }
 
     /*float depthNDC = texture(iDepth, uv).r;

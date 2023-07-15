@@ -129,6 +129,23 @@ void ae::Init(game_memory_t *gameMemory) {
       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
       glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, gUVs, 0);
+
+      // depth (for debugging).
+      GLuint &depthTex = gameState->gDepthRay;
+      GL_CALL(glGenTextures(1, &depthTex));
+      GL_CALL(glBindTexture(GL_TEXTURE_2D, depthTex));
+      // NOTE: looks like opengl doesn't have a single component color format, so we use two here.
+      GL_CALL(glTexImage2D(GL_TEXTURE_2D, 0, GL_RG16F, winInfo.width, winInfo.height, 0, GL_RG, GL_FLOAT, NULL));
+      GL_CALL(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST));
+      GL_CALL(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST));
+      GL_CALL(glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, depthTex, 0));
+
+      // Assert complete attachments for the framebuffer.
+      if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) { assert(false); }
+
+      // NOTE: gldraw buffers works based on the current framebuffer bound.
+      GLenum attachments[] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1};
+      GL_CALL(glDrawBuffers(_countof(attachments), attachments));
   }
 
   // create the gbuffer sort of thing.
