@@ -87,8 +87,10 @@ void ae::Init(game_memory_t *gameMemory) {
 
   gameState->lightingPass = ae::GL::createShader("res\\screen_vert.glsl", "res\\deferred_frag.glsl");
 
+  gameState->debugRenderDepth = ae::GL::createShader("res\\screen_vert.glsl", "res\\depth_frag.glsl");
+
   if (((int)gameState->lightingPass == -1) || ((int)gameState->SSR_shader == -1) ||
-      ((int)gameState->gameShader == -1)) {
+      ((int)gameState->gameShader == -1) || ((int)gameState->debugRenderDepth == -1)) {
       ae::setFatalExit();
       return;
   }
@@ -164,7 +166,7 @@ void ae::Init(game_memory_t *gameMemory) {
       glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, gColor, 0);
 
       // - tell OpenGL which color attachments we'll use (of this framebuffer) for rendering
-      unsigned int attachments[] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2};
+      GLenum attachments[] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2};
       glDrawBuffers(_countof(attachments), attachments);
 
       // add the depth buffer to this framebuffer.
@@ -224,6 +226,7 @@ void MonkeyDemoRender(ae::game_memory_t *gameMemory)
   // opaque pass.
   auto fnRenderGeometry = [&]()
   {
+    glEnable(GL_DEPTH_TEST);
     // NOTE(Noah): Depth test is enabled, also clear depth buffer.
     // Depth testing culls frags that are occluded by other frags.
     glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
@@ -269,6 +272,7 @@ void MonkeyDemoRender(ae::game_memory_t *gameMemory)
   {
     glBindFramebuffer(GL_FRAMEBUFFER, gameState->gBuffer2);
 
+    glDisable(GL_DEPTH_TEST);
     glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -301,37 +305,60 @@ void MonkeyDemoRender(ae::game_memory_t *gameMemory)
 
     // NOTE: here we reuse the cube VAO, where we draw just once face to do a fullscreen pass.
     GL_CALL(glDrawArrays(GL_TRIANGLES, 0, 6));
-
-    
   }
 
   // finally do the lighting pass.
   {
+      glEnable(GL_DEPTH_TEST);
+
       glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
       glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
       glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-      glUseProgram(gameState->lightingPass);
+      auto shaderProgram = gameState->debugRenderDepth;
 
-      // set the samplers to point to the right texture units
-      glUniform1i(glGetUniformLocation(gameState->lightingPass, "iNormals"), 0);
-      glUniform1i(glGetUniformLocation(gameState->lightingPass, "iAlbedo"), 1);
-      glUniform1i(glGetUniformLocation(gameState->lightingPass, "iPos"), 2);
-      glUniform1i(glGetUniformLocation(gameState->lightingPass, "iUVs"), 3);
+      if (gameState->debugRenderDepthFlag)
+      {
+        glUseProgram(shaderProgram);
+
+        // set the samplers to point to the right texture units
+        glUniform1i(glGetUniformLocation(shaderProgram, "iDepth"), 0);
+        glUniform1i(glGetUniformLocation(shaderProgram, "iUVs"), 1);
+
+        // bind the gbuffer images.
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, gameState->gDepth);
+        GL_CALL(glActiveTexture(GL_TEXTURE1));
+        glBindTexture(GL_TEXTURE_2D, gameState->gUVs);
+
+        glUniform1f(glGetUniformLocation(shaderProgram, "f"), gameState->cam.farPlane);
+        glUniform1f(glGetUniformLocation(shaderProgram, "n"), gameState->cam.nearPlane);
+      }
+      else
+      {
+        shaderProgram = gameState->lightingPass;
+
+        glUseProgram(shaderProgram);
+        // set the samplers to point to the right texture units
+        glUniform1i(glGetUniformLocation(shaderProgram, "iNormals"), 0);
+        glUniform1i(glGetUniformLocation(shaderProgram, "iAlbedo"), 1);
+        glUniform1i(glGetUniformLocation(shaderProgram, "iPos"), 2);
+        glUniform1i(glGetUniformLocation(shaderProgram, "iUVs"), 3);
+
+        // bind the gbuffer images.
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, gameState->gNormal);
+        GL_CALL(glActiveTexture(GL_TEXTURE1));
+        glBindTexture(GL_TEXTURE_2D, gameState->gColor);
+        GL_CALL(glActiveTexture(GL_TEXTURE2));
+        glBindTexture(GL_TEXTURE_2D, gameState->gPos);
+        GL_CALL(glActiveTexture(GL_TEXTURE3));
+        glBindTexture(GL_TEXTURE_2D, gameState->gUVs);
+      }
 
       // set the uniforms.
-      glUniform3fv(glGetUniformLocation(gameState->lightingPass, "iResolution"), 1, iResolution);
-
-      // bind the gbuffer images.
-      glActiveTexture(GL_TEXTURE0);
-      glBindTexture(GL_TEXTURE_2D, gameState->gNormal);
-      GL_CALL(glActiveTexture(GL_TEXTURE1));
-      glBindTexture(GL_TEXTURE_2D, gameState->gColor);
-      GL_CALL(glActiveTexture(GL_TEXTURE2));
-      glBindTexture(GL_TEXTURE_2D, gameState->gPos);
-      GL_CALL(glActiveTexture(GL_TEXTURE3));
-      glBindTexture(GL_TEXTURE_2D, gameState->gUVs);
+      glUniform3fv(glGetUniformLocation(shaderProgram, "iResolution"), 1, iResolution);
 
       // NOTE: here we reuse the already bound VAO + viewport.      
       GL_CALL(glDrawArrays(GL_TRIANGLES, 0, 6));

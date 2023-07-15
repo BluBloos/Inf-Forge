@@ -19,7 +19,7 @@ static void MonkeyDemoInit(ae::game_memory_t *gameMemory)
     gd->cam.trans.scale              = ae::math::vec3_t(1.0f, 1.0f, 1.0f);
     gd->cam.fov                      = 90.0f;
     gd->cam.nearPlane                = 0.01f;
-    gd->cam.farPlane                 = 1000.0f;
+    gd->cam.farPlane                 = 100.0f;
     gd->cam.width                    = winInfo.width;
     gd->cam.height                   = winInfo.height;
     gd->suzanneTransform.scale       = ae::math::vec3_t(1.0f, 1.0f, 1.0f);
@@ -64,6 +64,7 @@ static void MonkeyDemoUpdate(ae::game_memory_t *gameMemory)
     ImGui::Text("");
 
     // inputs.
+    ImGui::Checkbox("debugRenderDepth", &gd->debugRenderDepthFlag);
     ImGui::Checkbox("bSpin", &bSpin);
     ImGui::Checkbox("lockCamYaw", &lockCamYaw);
     ImGui::Checkbox("lockCamPitch", &lockCamPitch);

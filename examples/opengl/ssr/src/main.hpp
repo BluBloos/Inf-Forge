@@ -15,6 +15,9 @@ typedef struct game_state {
   GLuint gameShader;
   GLuint SSR_shader;
   GLuint lightingPass;
+  GLuint debugRenderDepth;
+
+  bool debugRenderDepthFlag;
 
   ae::raw_model_t suzanne;
   uint32_t suzanneIndexCount;
