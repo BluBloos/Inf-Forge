@@ -38,12 +38,12 @@ namespace automata_engine {
             const char *filePathIn, const WCHAR *entryPoint, const WCHAR *profile, IDxcBlob **blobOut, bool emitSpirv)
         {
             // load from disk.
-            loaded_file_t lf = ae::platform::readEntireFile(filePathIn);
+            loaded_file_t lf = ae::EM->pfn.readEntireFile(filePathIn);
             if (!lf.contents) {
                 AELoggerError("unable to read file: %s", filePathIn);
                 return false;
             }
-            defer(ae::platform::freeLoadedFile(lf));
+            defer(ae::EM->pfn.freeLoadedFile(lf));
 
             const char *srcCode = (const char *)lf.contents;
 

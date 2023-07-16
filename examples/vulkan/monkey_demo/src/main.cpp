@@ -1,5 +1,7 @@
 #include <automata_engine.hpp>
 
+#define DllExport extern "C" __declspec(dllexport)
+
 #include <main.hpp>
 #include "../../shared/monkey_demo.hpp"
 
@@ -19,10 +21,28 @@ static struct {
     };
 } g_uploadResources[3] = {};
 
-void GameInit(ae::game_memory_t *gameMemory)
+
+void MonkeyDemoHotload(ae::game_memory_t *gameMemory)
+{
+    game_state_t *gd = getGameState(gameMemory);
+
+    if (gd->vkInstance != VK_NULL_HANDLE && gd->vkDevice != VK_NULL_HANDLE)
+    {
+        // get the fn pointers using Volk. the engine needs to make VK calls.
+        // TODO: remove need for volk.
+        if (volkInitialize()) {
+            AELoggerError("Failed to initialize volk.");
+            return;
+        }
+        volkLoadInstance(gd->vkInstance);
+        volkLoadDevice(gd->vkDevice);
+    }
+}
+
+DllExport void GameInit(ae::game_memory_t *gameMemory)
 {
     ae::engine_memory_t *EM      = gameMemory->pEngineMemory;
-    auto          winInfo = ae::platform::getWindowInfo();
+    auto                 winInfo = EM->pfn.getWindowInfo();
     game_state_t *gd      = getGameState(gameMemory);
 
     *gd = {};  // zero it out.
@@ -34,7 +54,7 @@ void GameInit(ae::game_memory_t *gameMemory)
 
     // NOTE: init the VK resources on the engine side. this lets it know what queue to wait for work
     // and to present on. at this time, the engine also initializes the swapchain for the first time.
-    ae::platform::VK::init(gd->vkInstance, gd->vkGpu, gd->vkDevice, gd->vkQueue, gd->gfxQueueIndex);
+    EM->vk_pfn.init(gd->vkInstance, gd->vkGpu, gd->vkDevice, gd->vkQueue, gd->gfxQueueIndex);
 
     const VkFormat depthFormat = VK_FORMAT_D32_SFLOAT;
 
@@ -72,7 +92,7 @@ void GameInit(ae::game_memory_t *gameMemory)
         // create the render pass
         {
             VkAttachmentDescription attachments[2] = {{
-                                                          .format        = ae::VK::getSwapchainFormat(),
+                                                          .format        = EM->vk_pfn.getSwapchainFormat(),
                                                           .samples       = VK_SAMPLE_COUNT_1_BIT,
                                                           .loadOp        = VK_ATTACHMENT_LOAD_OP_CLEAR,
                                                           .storeOp       = VK_ATTACHMENT_STORE_OP_STORE,
@@ -428,7 +448,7 @@ void GameInit(ae::game_memory_t *gameMemory)
     (vkQueueSubmit(gd->vkQueue, 1, &si, fence));
 }
 
-void GameInitAsync(ae::game_memory_t *gameMemory)
+DllExport void GameInitAsync(ae::game_memory_t *gameMemory)
 {
     game_state_t *gd = getGameState(gameMemory);
 
@@ -471,7 +491,8 @@ VkFramebuffer MaybeMakeFramebuffer(game_state_t *gd, VkImageView backbuffer, u32
 
 void MonkeyDemoRender(ae::game_memory_t *gameMemory)
 {
-    auto             winInfo   = ae::platform::getWindowInfo();
+    ae::engine_memory_t *EM        = gameMemory->pEngineMemory;
+    auto          winInfo = EM->pfn.getWindowInfo();
     game_state_t    *gd        = getGameState(gameMemory);
 
     VkCommandBuffer cmd = gd->commandBuffer;
@@ -487,7 +508,7 @@ void MonkeyDemoRender(ae::game_memory_t *gameMemory)
 
         VkImageView backbufferView;
         VkImage     backbuffer;
-        uint32_t    backbufferIdx = ae::VK::getCurrentBackbuffer(&backbuffer, &backbufferView);
+        uint32_t    backbufferIdx = EM->vk_pfn.getCurrentBackbuffer(&backbuffer, &backbufferView);
 
         // NOTE: since the window cannot be resized, the swapchain will never be resized.
         // for this reason, it is safe to rely that VkImageView is the same view across the entire
@@ -577,10 +598,10 @@ void MonkeyDemoRender(ae::game_memory_t *gameMemory)
             PushData pushData = {.modelMatrix = ae::math::buildMat4fFromTransform(gd->suzanneTransform),
                 .modelRotate                  = ae::math::buildRotMat4(gd->suzanneTransform.eulerAngles),
                 .projView                     = ae::math::buildProjMatForVk(gd->cam) * ae::math::buildViewMat(gd->cam),
-                .lightColor                   = lightColor,
-                .ambientStrength              = ambientStrength,
-                .lightPos                     = lightPos,
-                .specularStrength             = specularStrength,
+                .lightColor                   = gd->lightColor,
+                .ambientStrength              = gd->ambientStrength,
+                .lightPos                     = gd->lightPos,
+                .specularStrength             = gd->specularStrength,
                 .viewPos                      = gd->cam.trans.pos};  // NOTE: LOL, this looks like JS.
             memcpy(gd->dynamicFrameUboMapped, &pushData, sizeof(PushData));
 
@@ -605,7 +626,7 @@ void MonkeyDemoRender(ae::game_memory_t *gameMemory)
 
     // NOTE: the engine expects that we architect our frame such that all work for the frame is known to
     // be complete one we signal this fence.
-    auto pFence = ae::VK::getFrameEndFence();
+    auto pFence = EM->vk_pfn.getFrameEndFence();
 
     VkSubmitInfo si       = {};
     si.sType              = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -616,7 +637,7 @@ void MonkeyDemoRender(ae::game_memory_t *gameMemory)
     VkCommandBuffer ImguiCmd = gd->imgui_commandBuffer;
     ae::VK_CHECK(vkResetCommandBuffer(ImguiCmd, 0));
 
-    ae::VK::renderAndRecordImGui(ImguiCmd);
+    EM->vk_pfn.renderAndRecordImGui(ImguiCmd);
 
     VkCommandBuffer cmds[] = {cmd, ImguiCmd};
     si.commandBufferCount  = 2;
@@ -625,12 +646,6 @@ void MonkeyDemoRender(ae::game_memory_t *gameMemory)
 #endif
 
     (vkQueueSubmit(gd->vkQueue, 1, &si, *pFence));
-
-    // reset game state as the relative computation point for next frame.
-    // the state we computed to use in rendering the frame is just the 60Hz sample.
-    // but we need to retain the higher Hz sample.
-    gd->cam.trans.pos         = s2_posVector;
-    gd->cam.trans.eulerAngles = s2_eulerAngles;
 }
 
 void WaitForAndResetFence(VkDevice device, VkFence *pFence, uint64_t waitTime)
@@ -650,9 +665,4 @@ void WaitForAndResetFence(VkDevice device, VkFence *pFence, uint64_t waitTime)
     } else {
         AELoggerError("some error occurred during the fence wait thing., %s", ae::VK::VkResultToString(result));
     }
-}
-
-void GameClose(ae::game_memory_t *gameMemory)
-{
-    // TODO: destroy VK resources.
 }

@@ -371,7 +371,7 @@ namespace automata_engine {
 
             VkApplicationInfo app = {};
             app.sType             = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-            app.pApplicationName  = ae::defaultWindowName;
+            app.pApplicationName  = EM->defaultWindowName;
             // TODO: is there a place from AE that we can get this?
             app.pEngineName = "Automata Engine";
             app.apiVersion  = VK_MAKE_VERSION(1, 3, 0);  // highest version the app will use.

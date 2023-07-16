@@ -5,6 +5,14 @@
 #include <main.hpp>
 #include "../../shared/monkey_demo.hpp"
 
+void MonkeyDemoHotload(ae::game_memory_t *gameMemory)
+{
+    ae::engine_memory_t *EM = gameMemory->pEngineMemory;
+    // load the open GL funcs into this DLL.
+    // NOTE: this fails the first time since this DLL is hot-loaded before OpenGL is initialized.
+    if (EM->bOpenGLInitialized) glewInit();
+}
+
 DllExport void GameInit(ae::game_memory_t *gameMemory)
 {
     ae::engine_memory_t *EM = gameMemory->pEngineMemory;

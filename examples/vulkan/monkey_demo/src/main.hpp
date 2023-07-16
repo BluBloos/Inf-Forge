@@ -31,7 +31,7 @@ typedef struct game_state {
     VkDescriptorSet  theDescSet;
 
     // TODO: dyn rendering prefer.
-    VkRenderPass vkRenderPass;  
+    VkRenderPass vkRenderPass;
 
     // NOTE: 10 is certainly larger than swapchain count.
     VkFramebuffer vkFramebufferCache[10] = {};
@@ -57,6 +57,22 @@ typedef struct game_state {
     VkBuffer              suzanneVbo;
     VkDeviceMemory        suzanneVboBacking;
 
+    bool             bSpin;
+    bool             lockCamYaw;
+    bool             lockCamPitch;
+    float            ambientStrength;
+    float            specularStrength;
+    ae::math::vec4_t lightColor;
+    ae::math::vec3_t lightPos;
+    float            cameraSensitivity;
+    bool             optInFirstPersonCam;
+
+    bool  bFocusedLastFrame;
+    float lastDeltaX[2];
+    float lastDeltaY[2];
+    
+    bool debugRenderDepthFlag;
+
     ae::math::camera_t cam;
 } game_state_t;
 
@@ -66,14 +82,13 @@ struct Vertex {
     float nx, ny, nz;
 };
 
-struct PushData
-{
+struct PushData {
     ae::math::mat4_t modelMatrix;
     ae::math::mat4_t modelRotate;
     ae::math::mat4_t projView;
     ae::math::vec4_t lightColor;
     float            ambientStrength;
     ae::math::vec3_t lightPos;
-    float  specularStrength;
-	ae::math::vec3_t viewPos; // camera pos.
+    float            specularStrength;
+    ae::math::vec3_t viewPos;  // camera pos.
 };

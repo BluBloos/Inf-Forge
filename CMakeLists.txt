@@ -27,8 +27,7 @@ endif()
 # =================================
 set(ENGINE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/Engine")
 set(ENGINE_EXTERNAL "${CMAKE_CURRENT_SOURCE_DIR}/external")
-set(IMGUI_COMMON_INCLUDES "${ENGINE_EXTERNAL}/imgui-1.87" "${ENGINE_EXTERNAL}/freetype-2.12.1/include" "${ENGINE_EXTERNAL}/imgui-1.87/backends")
-set(IMGUI_COMMON_DEFINES IMGUI_USER_CONFIG="automata_engine_imgui_config.h")
+set(IMGUI_COMMON_INCLUDES "${ENGINE_ROOT}/src" "${ENGINE_EXTERNAL}/imgui-1.87" "${ENGINE_EXTERNAL}/freetype-2.12.1/include" "${ENGINE_EXTERNAL}/imgui-1.87/backends")
 set(ENGINE_INCLUDES "${ENGINE_ROOT}/src" "${ENGINE_ROOT}/include"  "${ENGINE_ROOT}" "${ENGINE_EXTERNAL}" )
 set(PROJECT_INCLUDES "${ProjectRoot}/include" "${ProjectRoot}" "${ProjectRoot}/src")
 set(PROJECT_CXX_VERSION cxx_std_20)
@@ -90,40 +89,49 @@ if (NOT ${ProjectDisableImGui})
         set_target_properties( freetype PROPERTIES FOLDER "external")
     endif()
 
-    # imgui target setup.
-    if (NOT TARGET ae_imgui)
+    set (IMGUI_SOURCES
+        "${ENGINE_EXTERNAL}/imgui-1.87/imgui.cpp"
+        "${ENGINE_EXTERNAL}/imgui-1.87/imgui_draw.cpp"
+        "${ENGINE_EXTERNAL}/imgui-1.87/imgui_tables.cpp"
+        "${ENGINE_EXTERNAL}/imgui-1.87/imgui_widgets.cpp"
+        "${ENGINE_EXTERNAL}/imgui-1.87/imgui_demo.cpp"
+        "${ENGINE_EXTERNAL}/imgui-1.87/backends/imgui_impl_win32.cpp"
+        "${ENGINE_EXTERNAL}/imgui-1.87/misc/freetype/imgui_freetype.cpp"
+        )
 
-        # TODO: don't always use win32 imgui backend. use only if building on win32.
-        file(GLOB IMGUI_SOURCES
-            "${ENGINE_EXTERNAL}/imgui-1.87/imgui*.cpp"
-            "${ENGINE_EXTERNAL}/imgui-1.87/backends/imgui_impl_win32.cpp"
-            "${ENGINE_EXTERNAL}/imgui-1.87/misc/freetype/imgui_freetype.cpp")
+    set(IMGUI_GL_SOURCES
+        "${ENGINE_EXTERNAL}/imgui-1.87/backends/imgui_impl_opengl3.cpp"
+        ${IMGUI_SOURCES})
+
+    set(IMGUI_VK_SOURCES
+        "${ENGINE_EXTERNAL}/imgui-1.87/backends/imgui_impl_vulkan.cpp"
+        ${IMGUI_SOURCES})
+
+    # imgui target setup.
+    if (NOT TARGET ae_imgui)        
         
         add_library(ae_imgui STATIC ${IMGUI_SOURCES})
         target_include_directories(ae_imgui PUBLIC ${IMGUI_COMMON_INCLUDES})
         set_target_properties( ae_imgui PROPERTIES FOLDER "external")
-
+        target_compile_definitions(ae_imgui PUBLIC IMGUI_USER_CONFIG=<automata_engine_imgui_config.h>)
         source_group(TREE "${ENGINE_EXTERNAL}/" PREFIX "external/" FILES ${IMGUI_SOURCES})
+    endif()
 
-        set(IMGUI_GL_SOURCES
-            "${ENGINE_EXTERNAL}/imgui-1.87/backends/imgui_impl_opengl3.cpp"
-            ${IMGUI_SOURCES})
-
+    if (NOT TARGET ae_imgui_gl)  
         add_library(ae_imgui_gl STATIC ${IMGUI_GL_SOURCES})
         target_include_directories(ae_imgui_gl PUBLIC ${IMGUI_COMMON_INCLUDES})
         set_target_properties( ae_imgui_gl PROPERTIES FOLDER "external")
+        target_compile_definitions(ae_imgui_gl PUBLIC IMGUI_USER_CONFIG=<automata_engine_imgui_config.h>)
+    endif()
 
-        set(IMGUI_VK_SOURCES
-            "${ENGINE_EXTERNAL}/imgui-1.87/backends/imgui_impl_vulkan.cpp"
-            ${IMGUI_SOURCES})
-
-        if(${Vulkan_FOUND})
+    if (NOT TARGET ae_imgui_vk)  
+        if( Vulkan_FOUND )
             add_library(ae_imgui_vk STATIC ${IMGUI_VK_SOURCES})
             target_include_directories(ae_imgui_vk PUBLIC ${IMGUI_COMMON_INCLUDES} ${Vulkan_INCLUDE_DIRS})
             set_target_properties( ae_imgui_vk PROPERTIES FOLDER "external")
+            target_compile_definitions(ae_imgui_vk PUBLIC IMGUI_USER_CONFIG=<automata_engine_imgui_config.h>)
         endif()
-
-    endif() # end check for if ae_imgui.
+    endif()
 
 endif()
 
@@ -144,7 +152,7 @@ function(SetupTarget TargetName)
     endif()
 
     if (NOT ${ProjectDisableImGui})
-        target_compile_definitions(${TargetName} PUBLIC ${IMGUI_COMMON_DEFINES})
+        target_compile_definitions(${TargetName} PUBLIC IMGUI_USER_CONFIG="automata_engine_imgui_config.h")
     else()
         target_compile_definitions(${TargetName} PUBLIC -DAUTOMATA_ENGINE_DISABLE_IMGUI)
     endif()

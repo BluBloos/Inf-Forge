@@ -1,6 +1,8 @@
+// backend GFX API specific versions.
 void MonkeyDemoRender(
-    ae::game_memory_t *gameMemory);  // forward declare. to define for GFX API backend specific version.
+    ae::game_memory_t *gameMemory);
 void MonkeyDemoUpdate(ae::game_memory_t *gameMemory);
+void MonkeyDemoHotload(ae::game_memory_t *gameMemory);
 
 static game_state_t *getGameState(ae::game_memory_t *gameMemory) { return (game_state_t *)gameMemory->data; }
 
@@ -24,9 +26,8 @@ DllExport void GameOnHotload(ae::game_memory_t *gameMemory)
     EM->pfn.imguiGetAllocatorFunctions(&allocFunc, &freeFunc, &userData);
     ImGui::SetAllocatorFunctions(allocFunc, freeFunc, userData);
 
-    // load the open GL funcs into this DLL.
-    // NOTE: this fails the first time since this DLL is hot-loaded before OpenGL is initialized.
-    if (EM->bOpenGLInitialized) glewInit();
+    // load the function pointers for the gfx API.
+    MonkeyDemoHotload(gameMemory);
 }
 
 // TODO: can we get rid of this shutdown thing?
@@ -283,7 +284,7 @@ static void MonkeyDemoUpdate(ae::game_memory_t *gameMemory)
     ae::math::vec3_t s2_eulerAngles;
     simulateWorldStep(1, timeStep, s1_posVector, s1_eulerAngles, &s2_posVector, &s2_eulerAngles);
 
-    if (bSpin) gd->suzanneTransform.eulerAngles += ae::math::vec3_t(0.0f, 3.0f * EM->timing.lastFrameVisibleTime, 0.0f);
+    if (bSpin) gd->suzanneTransform.eulerAngles += ae::math::vec3_t(0.0f, 0.5f * EM->timing.lastFrameVisibleTime, 0.0f);
 
     // TODO: look into the depth testing stuff more deeply on the hardware side of things.
     // what is something that we can only do because we really get it?

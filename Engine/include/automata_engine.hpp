@@ -266,16 +266,10 @@ namespace automata_engine {
     void ImGuiRenderVec3(const char *vecName, math::vec3_t vec);
 
 #if defined(AUTOMATA_ENGINE_VK_BACKEND)
-    void VK_CHECK(VkResult result);
+
+    void VK_CHECK(VkResult err);
 
     namespace VK {
-
-#if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
-        /// @brief record the imgui draw data into the command buffer. this records a render pass with the current backbuffer as
-        /// a color attachment.
-        /// @param cmd the command buffer to record into. must be in the initial state.
-        void renderAndRecordImGui(VkCommandBuffer cmd);
-#endif
 
         /// @brief create a structure suitable for creation of a VkRenderPass. this structure
         /// has sane default parameters which can be overriden by member calls.
@@ -311,21 +305,6 @@ namespace automata_engine {
         /// @brief create a structure suitable for creation of a VkImageView. this structure
         /// has sane default parameters which can be overriden by member calls.
         ImageView createImageView(VkImage image, VkFormat format);
-
-        /// @brief get the format that the swapchain image views have been created with.
-        VkFormat getSwapchainFormat();
-        
-        /// @brief get the current swapchain image for this frame.
-        /// @returns the index of the backbuffer as found in the swapchain.
-        uint32_t getCurrentBackbuffer(VkImage *image, VkImageView *view);
-
-        /// TODO: once we add support for more advanced update models, I think this will need
-        /// to be called per frame to get the specific fence for that frame.
-        /// in the atomic_update, only one fence is required.
-        ///
-        /// @brief the engine expects that the client architect their frame such that all work
-        /// for the frame is known to be complete once they signal this fence.
-        VkFence *getFrameEndFence();
 
         /// @brief call vkCmdPipelineBarrier but submit only VkBufferMemoryBarrier.
         void cmdBufferMemoryBarrier(VkCommandBuffer cmd,
@@ -846,22 +825,7 @@ namespace automata_engine {
 
         /// @brief  get the current dedicated video memory usage for a GPU.
         /// @param gpuAdapter the GPU to get the memory for.
-        size_t getGpuCurrentMemoryUsage(intptr_t gpuAdapter);
-
-// --------- [SECTION] PLATFORM VK ----------------
-//
-#if defined(AUTOMATA_ENGINE_VK_BACKEND)
-        namespace VK {
-            /// @brief the client is to call this function to let the engine know what queue that the
-            /// engine is to present the swapchain to. the engine also requires knowledge of the
-            /// instance,device,and physical device. those parameters are cached for later use.
-            /// the engine also initializes the swapchain for the first time through this call.
-            void init(VkInstance instance, VkPhysicalDevice gpu, VkDevice device, VkQueue queue, uint32_t queueIndex);
-        };  // namespace VK
-#endif
-//
-// --------- [END SECTION] PLATFORM VK ------------
-        
+        size_t getGpuCurrentMemoryUsage(intptr_t gpuAdapter);        
 
 // --------- [SECTION] PLATFORM AUDIO ----------------
 //
@@ -1209,6 +1173,35 @@ namespace automata_engine {
     typedef void (*PFN_imguiGetAllocatorFunctions)(ImGuiMemAllocFunc *, ImGuiMemFreeFunc *, void**);
 #endif
 
+#if defined(AUTOMATA_ENGINE_VK_BACKEND)
+#if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
+    /// @brief record the imgui draw data into the command buffer. this records a render pass with the current backbuffer as
+    /// a color attachment.
+    /// @param cmd the command buffer to record into. must be in the initial state.
+    typedef void (*PFN_renderAndRecordImGui)(VkCommandBuffer cmd);
+#endif
+    /// @brief get the format that the swapchain image views have been created with.
+    typedef VkFormat (*PFN_getSwapchainFormat)();
+
+    /// @brief get the current swapchain image for this frame.
+    /// @returns the index of the backbuffer as found in the swapchain.
+    typedef uint32_t (*PFN_getCurrentBackbuffer)(VkImage *image, VkImageView *view);
+
+    /// TODO: once we add support for more advanced update models, I think this will need
+    /// to be called per frame to get the specific fence for that frame.
+    /// in the atomic_update, only one fence is required.
+    ///
+    /// @brief the engine expects that the client architect their frame such that all work
+    /// for the frame is known to be complete once they signal this fence.
+    typedef VkFence *(*PFN_getFrameEndFence)();
+
+    /// @brief the client is to call this function to let the engine know what queue that the
+    /// engine is to present the swapchain to. the engine also requires knowledge of the
+    /// instance,device,and physical device. those parameters are cached for later use.
+    /// the engine also initializes the swapchain for the first time through this call.
+    typedef void (*PFN_init)(VkInstance instance, VkPhysicalDevice gpu, VkDevice device, VkQueue queue, uint32_t queueIndex);
+#endif
+
     /// @brief a struct allocated by the engine and accessible through the game
     /// memory struct passed to the game. this can be set directly by the game
     /// to control the engine in various ways. make sure to know what you are doing
@@ -1229,11 +1222,24 @@ namespace automata_engine {
             PFN_writeEntireFile     writeEntireFile;
             PFN_freeLoadedFile      freeLoadedFile;
             PFN_setAdditionalLogger setAdditionalLogger;
+
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
             PFN_imguiGetCurrentContext imguiGetCurrentContext; 
             PFN_imguiGetAllocatorFunctions imguiGetAllocatorFunctions;
-#endif            
+#endif
         } pfn;
+
+#if defined(AUTOMATA_ENGINE_VK_BACKEND)
+        struct {
+#if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
+            PFN_renderAndRecordImGui renderAndRecordImGui;
+#endif
+            PFN_getSwapchainFormat   getSwapchainFormat;
+            PFN_getCurrentBackbuffer getCurrentBackbuffer;
+            PFN_getFrameEndFence     getFrameEndFence;
+            PFN_init                 init;
+        } vk_pfn;
+#endif
 
         user_input_t userInput;
 

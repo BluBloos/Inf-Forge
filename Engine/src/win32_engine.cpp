@@ -7,6 +7,10 @@
 // TODO(Noah): Understand rvalues. Because, I'm a primitive ape, and,
 // they go right over my head, man.
 
+#if defined(AUTOMATA_ENGINE_VK_BACKEND)
+#define VOLK_IMPLEMENTATION
+#endif
+
 #include <automata_engine.hpp>
 #include <win32_engine.h>
 
@@ -230,6 +234,29 @@ void Platform_imguiGetAllocatorFunctions(ImGuiMemAllocFunc *af, ImGuiMemFreeFunc
 
 static HINSTANCE g_hInstance = NULL;
 
+static inline int sign(int x)
+{
+    // NOTE: this is branchless. that makes it fast because branch prediction is expensive to fail.
+    // it is expensive to fail due to the opportunity cost of the preemptive execution.
+    return (x > 0) - (x < 0);
+}
+
+ae::game_window_info_t Platform_getWindowInfo()
+{
+    ae::game_window_info_t winInfo;
+    winInfo.hWnd      = (intptr_t)g_hwnd;
+    winInfo.hInstance = (intptr_t)g_hInstance;
+    if (g_hwnd == NULL) { AELoggerError("g_hwnd == NULL"); }
+    RECT rect;
+    if (GetClientRect(g_hwnd, &rect)) {
+        winInfo.width    = rect.right - rect.left;
+        int signedHeight = rect.top - rect.bottom;
+        winInfo.height   = sign(signedHeight) * signedHeight;
+    }
+    winInfo.isFocused = g_bIsWindowFocused;
+    return winInfo;
+}
+
 #if defined(AUTOMATA_ENGINE_VK_BACKEND)
 
 // NOTE: currently there are some hard limitations on this system but that is OK.
@@ -252,6 +279,52 @@ uint32_t       g_vkCurrentImageIndex   = 0;
 
 static constexpr uint32_t g_vkDesiredSwapchainImageCount = 2;
 
+const char *VkResultToString(VkResult result)
+{
+#define STR(r)                                                                                                         \
+    case VK_##r:                                                                                                       \
+        return #r
+
+    switch (result) {
+        STR(NOT_READY);
+        STR(TIMEOUT);
+        STR(EVENT_SET);
+        STR(EVENT_RESET);
+        STR(INCOMPLETE);
+        STR(ERROR_OUT_OF_HOST_MEMORY);
+        STR(ERROR_OUT_OF_DEVICE_MEMORY);
+        STR(ERROR_INITIALIZATION_FAILED);
+        STR(ERROR_DEVICE_LOST);
+        STR(ERROR_MEMORY_MAP_FAILED);
+        STR(ERROR_LAYER_NOT_PRESENT);
+        STR(ERROR_EXTENSION_NOT_PRESENT);
+        STR(ERROR_FEATURE_NOT_PRESENT);
+        STR(ERROR_INCOMPATIBLE_DRIVER);
+        STR(ERROR_TOO_MANY_OBJECTS);
+        STR(ERROR_FORMAT_NOT_SUPPORTED);
+        STR(ERROR_SURFACE_LOST_KHR);
+        STR(ERROR_NATIVE_WINDOW_IN_USE_KHR);
+        STR(SUBOPTIMAL_KHR);
+        STR(ERROR_OUT_OF_DATE_KHR);
+        STR(ERROR_INCOMPATIBLE_DISPLAY_KHR);
+        STR(ERROR_VALIDATION_FAILED_EXT);
+        STR(ERROR_INVALID_SHADER_NV);
+        default:
+            return "UNKNOWN_ERROR";
+    }
+
+#undef STR
+}
+
+void VK_CHECK(VkResult err)
+{
+    if (err) {
+        AELoggerError("Detected Vulkan error: %s", VkResultToString(err));
+        // TODO: there is probably a much better way to handle this...
+        abort();
+    }
+}
+
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
 #include "imgui_impl_vulkan.h"
 VkFramebuffer *g_vkImguiFramebuffers = nullptr;
@@ -259,7 +332,7 @@ VkRenderPass   g_vkImguiRenderPass   = VK_NULL_HANDLE;
 
 static VkRenderPass vk_MaybeCreateImguiRenderPass()
 {
-        if (g_vkImguiRenderPass == VK_NULL_HANDLE) {
+    if (g_vkImguiRenderPass == VK_NULL_HANDLE) {
         VkAttachmentDescription attachment = {};
         attachment.format                  = g_vkSwapchainFormat;
         attachment.samples                 = VK_SAMPLE_COUNT_1_BIT;
@@ -282,22 +355,23 @@ static VkRenderPass vk_MaybeCreateImguiRenderPass()
         info.pAttachments                      = &attachment;
         info.subpassCount                      = 1;
         info.pSubpasses                        = &subpass;
-        ae::VK_CHECK(vkCreateRenderPass(g_vkDevice, &info, nullptr, &g_vkImguiRenderPass));
-        }
-        return g_vkImguiRenderPass;
+        VK_CHECK(vkCreateRenderPass(g_vkDevice, &info, nullptr, &g_vkImguiRenderPass));
+    }
+    return g_vkImguiRenderPass;
 }
 
 // TODO: impl other models. here would need an array for frame data!
-void ae::VK::renderAndRecordImGui(VkCommandBuffer cmd)
+void PlatformVK_renderAndRecordImGui(VkCommandBuffer cmd)
 {
-    if (ae::platform::GLOBAL_UPDATE_MODEL == ae::AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC) {
+    assert(g_engineMemory.g_updateModel == ae::AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC);
+    if (g_engineMemory.g_updateModel == ae::AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC) {
 
         ImGui::Render();
 
         VkCommandBufferBeginInfo info = {};
         info.sType                    = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-        ae::VK_CHECK(vkBeginCommandBuffer(cmd, &info));
+        VK_CHECK(vkBeginCommandBuffer(cmd, &info));
 
         ae::game_window_info_t winInfo = Platform_getWindowInfo();
 
@@ -314,7 +388,7 @@ void ae::VK::renderAndRecordImGui(VkCommandBuffer cmd)
 
         vkCmdEndRenderPass(cmd);
 
-        ae::VK_CHECK(vkEndCommandBuffer(cmd));
+        VK_CHECK(vkEndCommandBuffer(cmd));
     } else {
         // TODO:
         assert(false);
@@ -323,9 +397,9 @@ void ae::VK::renderAndRecordImGui(VkCommandBuffer cmd)
 
 #endif
 
-VkFormat ae::VK::getSwapchainFormat() { return g_vkSwapchainFormat; }
+VkFormat PlatformVK_getSwapchainFormat() { return g_vkSwapchainFormat; }
 
-uint32_t ae::VK::getCurrentBackbuffer(VkImage *image, VkImageView *view)
+uint32_t PlatformVK_getCurrentBackbuffer(VkImage *image, VkImageView *view)
 {
     *image = g_vkSwapchainImages[g_vkCurrentImageIndex];
     *view  = g_vkSwapchainImageViews[g_vkCurrentImageIndex];
@@ -333,7 +407,7 @@ uint32_t ae::VK::getCurrentBackbuffer(VkImage *image, VkImageView *view)
     return g_vkCurrentImageIndex;
 }
 
-VkFence *ae::VK::getFrameEndFence()
+VkFence *PlatformVK_getFrameEndFence()
 {
     return &g_vkPresentFence;
 }
@@ -356,7 +430,7 @@ static LARGE_INTEGER vk_WaitForAndResetFence(VkDevice device, VkFence *pFence, u
         // reset fences back to unsignaled so that can use em' again;
         vkResetFences(device, 1, pFence);
     } else {
-        AELoggerError("some error occurred during the fence wait thing., %s", ae::VK::VkResultToString(result));
+        AELoggerError("some error occurred during the fence wait thing., %s", VkResultToString(result));
     }
 
     return timestamp;
@@ -373,7 +447,7 @@ static LARGE_INTEGER vk_getNextBackbuffer()
 #endif
 
     // Retrieve the index of the next available presentable image
-    ae::VK_CHECK(vkAcquireNextImageKHR(g_vkDevice,
+    VK_CHECK(vkAcquireNextImageKHR(g_vkDevice,
         g_vkSwapchain,
         UINT64_MAX /* UINT64_MAX,timeout */,
         nullptr,
@@ -381,7 +455,7 @@ static LARGE_INTEGER vk_getNextBackbuffer()
         /* fence to signal */,
         &g_vkCurrentImageIndex));
 
-    if (ae::platform::GLOBAL_UPDATE_MODEL == ae::AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC) {
+    if (g_engineMemory.g_updateModel == ae::AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC) {
         return vk_WaitForAndResetFence(g_vkDevice, &g_vkPresentFence);
     }
 
@@ -394,7 +468,7 @@ static LARGE_INTEGER vk_getNextBackbuffer()
 static bool vk_initSwapchain(uint32_t desiredWidth, uint32_t desiredHeight)
 {
     VkSurfaceCapabilitiesKHR surface_properties;
-    ae::VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(g_vkGpu, g_vkSurface, &surface_properties));
+    VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(g_vkGpu, g_vkSurface, &surface_properties));
 
     uint32_t            format_count;
     VkSurfaceFormatKHR *formats = nullptr;
@@ -488,11 +562,11 @@ static bool vk_initSwapchain(uint32_t desiredWidth, uint32_t desiredHeight)
     // try to find the present mode that we actually want.
 
     uint32_t presentModeCount;
-    ae::VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(g_vkGpu, g_vkSurface, &presentModeCount, NULL));
+    VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(g_vkGpu, g_vkSurface, &presentModeCount, NULL));
     VkPresentModeKHR *presentModes = nullptr;
     defer(StretchyBufferFree(presentModes));
     StretchyBufferInitWithCount(presentModes, presentModeCount);
-    ae::VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(g_vkGpu, g_vkSurface, &presentModeCount, presentModes));
+    VK_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(g_vkGpu, g_vkSurface, &presentModeCount, presentModes));
 
     // TODO: consider vsync ON/OFF setting by user. or maybe consider not having that
     // setting at all.
@@ -516,7 +590,7 @@ static bool vk_initSwapchain(uint32_t desiredWidth, uint32_t desiredHeight)
     info.clipped      = true;
     info.oldSwapchain = oldSwapchain;
 
-    ae::VK_CHECK(vkCreateSwapchainKHR(g_vkDevice, &info, nullptr, &g_vkSwapchain));
+    VK_CHECK(vkCreateSwapchainKHR(g_vkDevice, &info, nullptr, &g_vkSwapchain));
 
     // need to remove the prior swapchain + other objects after now creating a new one
     if (oldSwapchain != VK_NULL_HANDLE) {
@@ -541,9 +615,9 @@ static bool vk_initSwapchain(uint32_t desiredWidth, uint32_t desiredHeight)
     }
 
     uint32_t image_count;
-    ae::VK_CHECK(vkGetSwapchainImagesKHR(g_vkDevice, g_vkSwapchain, &image_count, nullptr));
+    VK_CHECK(vkGetSwapchainImagesKHR(g_vkDevice, g_vkSwapchain, &image_count, nullptr));
     StretchyBufferInitWithCount(g_vkSwapchainImages, image_count);
-    ae::VK_CHECK(vkGetSwapchainImagesKHR(g_vkDevice, g_vkSwapchain, &image_count, g_vkSwapchainImages));
+    VK_CHECK(vkGetSwapchainImagesKHR(g_vkDevice, g_vkSwapchain, &image_count, g_vkSwapchainImages));
 
     // Create all additional objects for associated with the swapchain.
     for (size_t i = 0; i < image_count; i++) {
@@ -557,7 +631,7 @@ static bool vk_initSwapchain(uint32_t desiredWidth, uint32_t desiredHeight)
         view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
 
         VkImageView image_view;
-        ae::VK_CHECK(vkCreateImageView(g_vkDevice, &view_info, nullptr, &image_view));
+        VK_CHECK(vkCreateImageView(g_vkDevice, &view_info, nullptr, &image_view));
         StretchyBufferPush(g_vkSwapchainImageViews, image_view);
 
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
@@ -578,7 +652,7 @@ static bool vk_initSwapchain(uint32_t desiredWidth, uint32_t desiredHeight)
     return true;
 }
 
-void ae::platform::VK::init(
+void PlatformVK_init(
     VkInstance instance, VkPhysicalDevice gpu, VkDevice device, VkQueue queue, uint32_t queueIndex)
 {
     g_vkQueueIndex = queueIndex;
@@ -586,6 +660,15 @@ void ae::platform::VK::init(
     g_vkDevice     = device;
     g_vkGpu        = gpu;
     g_vkInstance   = instance;
+
+    // get the fn pointers using Volk. the engine needs to make VK calls.
+    // TODO: remove need for volk.
+    if (volkInitialize()) {
+        AELoggerError("Failed to initialize volk.");
+        return;
+    }
+    volkLoadInstance(g_vkInstance);
+    volkLoadDevice(g_vkDevice);
 
     // create the window surface
     if (instance != VK_NULL_HANDLE) {
@@ -602,7 +685,7 @@ void ae::platform::VK::init(
 
         if (g_hInstance == NULL) AELoggerError("ae::platform::VK::init called at an unexpected time");
 
-        ae::VK_CHECK(vkCreateWin32SurfaceKHR(instance, &surfaceCreateInfo, nullptr, &g_vkSurface));
+        VK_CHECK(vkCreateWin32SurfaceKHR(instance, &surfaceCreateInfo, nullptr, &g_vkSurface));
     }
 
     // create the swapchain.
@@ -764,29 +847,6 @@ void *Platform_alloc(uint32_t bytes) {
     return VirtualAlloc(0, bytes, MEM_COMMIT, PAGE_READWRITE);
 }
 
-static inline int sign(int x)
-{
-    // NOTE: this is branchless. that makes it fast because branch prediction is expensive to fail.
-    // it is expensive to fail due to the opportunity cost of the preemptive execution.
-    return (x > 0) - (x < 0);
-}
-
-ae::game_window_info_t Platform_getWindowInfo()
-{
-    ae::game_window_info_t winInfo;
-    winInfo.hWnd      = (intptr_t)g_hwnd;
-    winInfo.hInstance = (intptr_t)g_hInstance;
-    if (g_hwnd == NULL) { AELoggerError("g_hwnd == NULL"); }
-    RECT rect;
-    if (GetClientRect(g_hwnd, &rect)) {
-        winInfo.width    = rect.right - rect.left;
-        int signedHeight = rect.top - rect.bottom;
-        winInfo.height   = sign(signedHeight) * signedHeight;
-    }
-    winInfo.isFocused = g_bIsWindowFocused;
-    return winInfo;
-}
-
 #include <dxgi1_4.h>
 #pragma comment(lib, "dxgi.lib")
 
@@ -895,26 +955,26 @@ void ScaleImGuiForVK(VkCommandBuffer cmd, VkCommandPool cmdPool)
 
     ImGui::GetIO().Fonts->Build();
 
-    ae::VK_CHECK(vkResetCommandBuffer(cmd, 0));
-    ae::VK_CHECK(vkResetCommandPool(g_vkDevice, cmdPool, 0));
+    VK_CHECK(vkResetCommandBuffer(cmd, 0));
+    VK_CHECK(vkResetCommandPool(g_vkDevice, cmdPool, 0));
 
     VkCommandBufferBeginInfo begin_info = {};
     begin_info.sType                    = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     begin_info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-    ae::VK_CHECK(vkBeginCommandBuffer(cmd, &begin_info));
+    VK_CHECK(vkBeginCommandBuffer(cmd, &begin_info));
 
     // TODO: each time we do this, it creates data that is not freed. fix that.
     ImGui_ImplVulkan_CreateFontsTexture(cmd);
 
-    ae::VK_CHECK(vkEndCommandBuffer(cmd));
+    VK_CHECK(vkEndCommandBuffer(cmd));
 
     VkSubmitInfo end_info       = {};
     end_info.sType              = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     end_info.commandBufferCount = 1;
     end_info.pCommandBuffers    = &cmd;
-    ae::VK_CHECK(vkQueueSubmit(g_vkQueue, 1, &end_info, VK_NULL_HANDLE));
+    VK_CHECK(vkQueueSubmit(g_vkQueue, 1, &end_info, VK_NULL_HANDLE));
 
-    ae::VK_CHECK(vkDeviceWaitIdle(g_vkDevice));
+    VK_CHECK(vkDeviceWaitIdle(g_vkDevice));
     ImGui_ImplVulkan_DestroyFontUploadObjects();
 }
 #endif
@@ -1752,23 +1812,33 @@ int CALLBACK WinMain(HINSTANCE instance,
     AssertSanePlatform();
 
     // setup the engine memory PFNs + context.
-    ae::EM = &g_engineMemory;
-    ae::EM->pfn.getWindowInfo = Platform_getWindowInfo;
-    ae::EM->pfn.fprintf_proxy = Platform_fprintf_proxy;
-    ae::EM->pfn.setMousePos = Platform_setMousePos;
-    ae::EM->pfn.showMouse = Platform_showMouse;
-    ae::EM->pfn.getTimerFrequency = Platform_getTimerFrequency;
-    ae::EM->pfn.wallClock = Platform_wallClock;
-    ae::EM->pfn.free = Platform_free;
-    ae::EM->pfn.alloc = Platform_alloc;
-    ae::EM->pfn.readEntireFile = Platform_readEntireFile;
-    ae::EM->pfn.writeEntireFile = Platform_writeEntireFile;
-    ae::EM->pfn.freeLoadedFile = Platform_freeLoadedFile;
+    ae::EM                          = &g_engineMemory;
+    ae::EM->pfn.getWindowInfo       = Platform_getWindowInfo;
+    ae::EM->pfn.fprintf_proxy       = Platform_fprintf_proxy;
+    ae::EM->pfn.setMousePos         = Platform_setMousePos;
+    ae::EM->pfn.showMouse           = Platform_showMouse;
+    ae::EM->pfn.getTimerFrequency   = Platform_getTimerFrequency;
+    ae::EM->pfn.wallClock           = Platform_wallClock;
+    ae::EM->pfn.free                = Platform_free;
+    ae::EM->pfn.alloc               = Platform_alloc;
+    ae::EM->pfn.readEntireFile      = Platform_readEntireFile;
+    ae::EM->pfn.writeEntireFile     = Platform_writeEntireFile;
+    ae::EM->pfn.freeLoadedFile      = Platform_freeLoadedFile;
     ae::EM->pfn.setAdditionalLogger = Platform_setAdditionalLogger;
 
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
-    ae::EM->pfn.imguiGetCurrentContext = Platform_imguiGetCurrentContext;
+    ae::EM->pfn.imguiGetCurrentContext     = Platform_imguiGetCurrentContext;
     ae::EM->pfn.imguiGetAllocatorFunctions = Platform_imguiGetAllocatorFunctions;
+#endif
+
+#if defined(AUTOMATA_ENGINE_VK_BACKEND)
+#if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
+    ae::EM->vk_pfn.renderAndRecordImGui = PlatformVK_renderAndRecordImGui;
+#endif
+    ae::EM->vk_pfn.getSwapchainFormat   = PlatformVK_getSwapchainFormat;
+    ae::EM->vk_pfn.getCurrentBackbuffer = PlatformVK_getCurrentBackbuffer;
+    ae::EM->vk_pfn.getFrameEndFence     = PlatformVK_getFrameEndFence;
+    ae::EM->vk_pfn.init                 = PlatformVK_init;
 #endif
 
     // TODO: AE lib is a utility library for the game. it sits on top of the engine layer,
@@ -2072,7 +2142,7 @@ int CALLBACK WinMain(HINSTANCE instance,
         // create the present fence.
         VkFenceCreateInfo ci = {};
         ci.sType             = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-        ae::VK_CHECK(vkCreateFence(g_vkDevice, &ci, nullptr, &g_vkPresentFence));
+        VK_CHECK(vkCreateFence(g_vkDevice, &ci, nullptr, &g_vkPresentFence));
 
         // TODO:
         /*
@@ -2115,10 +2185,17 @@ int CALLBACK WinMain(HINSTANCE instance,
         VkCommandPool   vkImguiCommandPool   = VK_NULL_HANDLE;
         VkCommandBuffer vkImguiCommandBuffer = VK_NULL_HANDLE;
 
-        auto poolInfo = ae::VK::commandPoolCreateInfo(g_vkQueueIndex);
-        ae::VK_CHECK(vkCreateCommandPool(g_vkDevice, &poolInfo, nullptr, &vkImguiCommandPool));
-        auto cmdInfo = ae::VK::commandBufferAllocateInfo(1, vkImguiCommandPool);
-        ae::VK_CHECK(vkAllocateCommandBuffers(g_vkDevice, &cmdInfo, &vkImguiCommandBuffer));
+        VkCommandPoolCreateInfo poolInfo = {};
+        poolInfo.sType                   = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+        poolInfo.queueFamilyIndex        = g_vkQueueIndex;
+        poolInfo.flags                   = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+        VK_CHECK(vkCreateCommandPool(g_vkDevice, &poolInfo, nullptr, &vkImguiCommandPool));
+        VkCommandBufferAllocateInfo cmdInfo = {};
+        cmdInfo.sType                       = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        cmdInfo.commandPool                 = vkImguiCommandPool;
+        cmdInfo.level                       = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        cmdInfo.commandBufferCount          = 1;
+        VK_CHECK(vkAllocateCommandBuffers(g_vkDevice, &cmdInfo, &vkImguiCommandBuffer));
 
         {
             static VkDescriptorPool imguiDescPool = VK_NULL_HANDLE;
@@ -2142,7 +2219,7 @@ int CALLBACK WinMain(HINSTANCE instance,
                 pool_info.maxSets                    = 1000 * IM_ARRAYSIZE(pool_sizes);
                 pool_info.poolSizeCount              = (uint32_t)IM_ARRAYSIZE(pool_sizes);
                 pool_info.pPoolSizes                 = pool_sizes;
-                ae::VK_CHECK(vkCreateDescriptorPool(g_vkDevice, &pool_info, nullptr, &imguiDescPool));
+                VK_CHECK(vkCreateDescriptorPool(g_vkDevice, &pool_info, nullptr, &imguiDescPool));
             }
 
             ImGui_ImplVulkan_InitInfo init_info = {};
@@ -2162,7 +2239,7 @@ int CALLBACK WinMain(HINSTANCE instance,
             init_info.ImageCount      = swapCount;
             init_info.MSAASamples     = VK_SAMPLE_COUNT_1_BIT;
             init_info.Allocator       = nullptr;
-            init_info.CheckVkResultFn = ae::VK_CHECK;
+            init_info.CheckVkResultFn = VK_CHECK;
             ImGui_ImplVulkan_Init(&init_info, vk_MaybeCreateImguiRenderPass());
         }
 #endif
