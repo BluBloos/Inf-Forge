@@ -1,21 +1,57 @@
-void MonkeyDemoRender(ae::game_memory_t *gameMemory); // forward declare. to define for GFX API backend specific version.
+void MonkeyDemoRender(
+    ae::game_memory_t *gameMemory);  // forward declare. to define for GFX API backend specific version.
 void MonkeyDemoUpdate(ae::game_memory_t *gameMemory);
 
 static game_state_t *getGameState(ae::game_memory_t *gameMemory) { return (game_state_t *)gameMemory->data; }
 
-void GamePreInit(ae::game_memory_t *gameMemory)
+// NOTE: this is called every time that the game DLL is hot-loaded.
+DllExport void GameOnHotload(ae::game_memory_t *gameMemory)
 {
-    ae::engine_memory_t *EM   = gameMemory->pEngineMemory;
-    EM->defaultWinProfile = ae::AUTOMATA_ENGINE_WINPROFILE_NORESIZE;
+    ae::engine_memory_t *EM = gameMemory->pEngineMemory;
+
+    // NOTE: this inits the automata engine module globals.
+    ae::initModuleGlobals();
+    // TODO: we might be able to merge these two calls?
+    ae::setEngineContext(EM);
+
+    // NOTE: ImGui has global state. therefore, we need to make sure
+    // that we use the same state that the engine is using.
+    // there are different global states since both the engine and the game DLL statically link to ImGui.
+    ImGui::SetCurrentContext(EM->pfn.imguiGetCurrentContext());
+    ImGuiMemAllocFunc allocFunc;
+    ImGuiMemFreeFunc  freeFunc;
+    void *            userData;
+    EM->pfn.imguiGetAllocatorFunctions(&allocFunc, &freeFunc, &userData);
+    ImGui::SetAllocatorFunctions(allocFunc, freeFunc, userData);
+
+    // load the open GL funcs into this DLL.
+    // NOTE: this fails the first time since this DLL is hot-loaded before OpenGL is initialized.
+    if (EM->bOpenGLInitialized) glewInit();
+}
+
+// TODO: can we get rid of this shutdown thing?
+// NOTE: this is called every time that the game DLL is unloaded.
+DllExport void GameOnUnload() { ae::shutdownModuleGlobals(); }
+
+// NOTE: this is called by the engine to get the "current app" as defined by the game.
+DllExport ae::PFN_GameFunctionKind GameGetUpdateAndRender(ae::game_memory_t *gameMemory)
+{
+  return ae::bifrost::getCurrentApp(gameMemory);
+}
+
+DllExport void GamePreInit(ae::game_memory_t *gameMemory)
+{
+    ae::engine_memory_t *EM = gameMemory->pEngineMemory;
+    EM->defaultWinProfile   = ae::AUTOMATA_ENGINE_WINPROFILE_NORESIZE;
 }
 
 static void MonkeyDemoInit(ae::game_memory_t *gameMemory)
 {
     ae::engine_memory_t *EM      = gameMemory->pEngineMemory;
-    game_state_t *gd      = getGameState(gameMemory);
-    auto          winInfo = EM->pfn.getWindowInfo();
+    game_state_t *       gd      = getGameState(gameMemory);
+    auto                 winInfo = EM->pfn.getWindowInfo();
 
-    *gd = {}; // zero it out.
+    *gd = {};  // default initialize.
 
     gd->cam.trans.scale              = ae::math::vec3_t(1.0f, 1.0f, 1.0f);
     gd->cam.fov                      = 90.0f;
@@ -27,27 +63,39 @@ static void MonkeyDemoInit(ae::game_memory_t *gameMemory)
     gd->suzanneTransform.pos         = ae::math::vec3_t(0.0f, 0.0f, -3.0f);
     gd->suzanneTransform.eulerAngles = {};
 
-    ae::bifrost::registerApp(AUTOMATA_ENGINE_PROJECT_NAME, MonkeyDemoUpdate);
+    // init default settings in ImGui panel.
+    gd->bSpin               = true;
+    gd->lockCamYaw          = false;
+    gd->lockCamPitch        = false;
+    gd->ambientStrength     = 0.1f;
+    gd->specularStrength    = 0.5f;
+    gd->lightColor          = {1, 1, 1, 1};
+    gd->lightPos            = {0, 1, 0};
+    gd->cameraSensitivity   = 3.0f;
+    gd->optInFirstPersonCam = false;
+    gd->bFocusedLastFrame   = true;  // assume for first frame.
+
+    ae::bifrost::registerApp(gameMemory, AUTOMATA_ENGINE_PROJECT_NAME, MonkeyDemoUpdate);
 }
 
 static void MonkeyDemoUpdate(ae::game_memory_t *gameMemory)
 {
-    ae::engine_memory_t        *EM        = gameMemory->pEngineMemory;
+    ae::engine_memory_t *   EM        = gameMemory->pEngineMemory;
     auto                    winInfo   = EM->pfn.getWindowInfo();
-    game_state_t    *gd        = getGameState(gameMemory);
-    const ae::user_input_t     &userInput = EM->userInput;
+    game_state_t *          gd        = getGameState(gameMemory);
+    const ae::user_input_t &userInput = EM->userInput;
 
     float speed = 5.f * EM->timing.lastFrameVisibleTime;
 
-    static bool             bSpin               = true;
-    static bool             lockCamYaw          = false;
-    static bool             lockCamPitch        = false;
-    static float            ambientStrength     = 0.1f;
-    static float            specularStrength    = 0.5f;
-    static ae::math::vec4_t lightColor          = {1, 1, 1, 1};
-    static ae::math::vec3_t lightPos            = {0, 1, 0};
-    static float            cameraSensitivity   = 3.0f;
-    static bool             optInFirstPersonCam = false;
+    bool &            bSpin               = gd->bSpin;
+    bool &            lockCamYaw          = gd->lockCamYaw;
+    bool &            lockCamPitch        = gd->lockCamPitch;
+    float &           ambientStrength     = gd->ambientStrength;
+    float &           specularStrength    = gd->specularStrength;
+    ae::math::vec4_t &lightColor          = gd->lightColor;
+    ae::math::vec3_t &lightPos            = gd->lightPos;
+    float &           cameraSensitivity   = gd->cameraSensitivity;
+    bool &            optInFirstPersonCam = gd->optInFirstPersonCam;
 
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
     ImGui::Begin(AUTOMATA_ENGINE_PROJECT_NAME);
@@ -86,9 +134,9 @@ static void MonkeyDemoUpdate(ae::game_memory_t *gameMemory)
 
     // check if opt in.
     {
-        bool static bFocusedLastFrame = true;  // assume for first frame.
-        const bool isFocused          = winInfo.isFocused;
-        const bool bExitingFocus      = bFocusedLastFrame && !isFocused;
+        bool &     bFocusedLastFrame = gd->bFocusedLastFrame;
+        const bool isFocused         = winInfo.isFocused;
+        const bool bExitingFocus     = bFocusedLastFrame && !isFocused;
 
         if (userInput.mouseRBttnDown[0] || userInput.mouseRBttnDown[1]) {
             // exit GUI.
@@ -112,16 +160,16 @@ static void MonkeyDemoUpdate(ae::game_memory_t *gameMemory)
 
     const float fullTimeStep = EM->timing.lastFrameVisibleTime * 0.5f;
 
-    static float lastDeltaX[2] = {0.f, 0.f};
-    static float lastDeltaY[2] = {0.f, 0.f};
+    float (& lastDeltaX)[2] = gd->lastDeltaX;
+    float (&lastDeltaY)[2] = gd->lastDeltaY;
 
     auto simulateWorldStep = [&](uint32_t                inputIdx,
                                  float                   timeStep,
                                  const ae::math::vec3_t &beginPosVector,
                                  const ae::math::vec3_t &beginEulerAngles,
-                                 ae::math::vec3_t       *pEndPosVector,
-                                 ae::math::vec3_t       *pEndEulerAngles) {
-        *pEndPosVector = beginPosVector;
+                                 ae::math::vec3_t *      pEndPosVector,
+                                 ae::math::vec3_t *      pEndEulerAngles) {
+        *pEndPosVector   = beginPosVector;
         *pEndEulerAngles = beginEulerAngles;
 
         float yaw = 0.f;
@@ -158,8 +206,8 @@ static void MonkeyDemoUpdate(ae::game_memory_t *gameMemory)
             deltaY *= t / (winInfo.height * 0.5f);
 
             float rotationFactor = timeStep / fullTimeStep;
-            
-            yaw   = ae::math::atan2(deltaX, gd->cam.nearPlane) * rotationFactor;
+
+            yaw         = ae::math::atan2(deltaX, gd->cam.nearPlane) * rotationFactor;
             float pitch = ae::math::atan2(deltaY, gd->cam.nearPlane) * rotationFactor;
 
             *pEndEulerAngles += ae::math::vec3_t(0.0f, yaw, 0.0f);
@@ -172,8 +220,8 @@ static void MonkeyDemoUpdate(ae::game_memory_t *gameMemory)
         if (pEndEulerAngles->x > pitchClamp) pEndEulerAngles->x = pitchClamp;
 
         float movementSpeed = 5.f;
-        float linearStep = movementSpeed * timeStep;
-        
+        float linearStep    = movementSpeed * timeStep;
+
         ae::math::mat3_t camBasisBegin =
             ae::math::mat3_t(buildRotMat4(ae::math::vec3_t(0.0f, beginEulerAngles.y, 0.0f)));
 
@@ -194,17 +242,15 @@ static void MonkeyDemoUpdate(ae::game_memory_t *gameMemory)
 
             if (userInput.keyDown[inputIdx][ae::GAME_KEY_SHIFT]) {
                 movDir += ae::math::vec3_t(0.0f, -1, 0.0f);
-            }
-            else if (userInput.keyDown[inputIdx][ae::GAME_KEY_SPACE]) {
+            } else if (userInput.keyDown[inputIdx][ae::GAME_KEY_SPACE]) {
                 movDir += ae::math::vec3_t(0.0f, 1, 0.0f);
             }
-            
+
             // NOTE: the camera is rotating smoothly. the below math is the result
             // of doing the integral for that circular motion.
             auto movDirNorm = ae::math::normalize(movDir);
 
-            if (ae::math::abs(yaw) >= 0.0001f)
-            {
+            if (ae::math::abs(yaw) >= 0.0001f) {
                 auto  t0       = movDirNorm * movementSpeed * 1.414f;  // original velocity vector.
                 float oneOverW = timeStep / yaw;
 
@@ -215,9 +261,7 @@ static void MonkeyDemoUpdate(ae::game_memory_t *gameMemory)
 
                 pEndPosVector->x = r_x;
                 pEndPosVector->z = r_z;
-            }
-            else
-            {
+            } else {
                 pEndPosVector->x += movDirNorm.x * linearStep;
                 pEndPosVector->z += movDirNorm.z * linearStep;
             }
@@ -239,7 +283,7 @@ static void MonkeyDemoUpdate(ae::game_memory_t *gameMemory)
     ae::math::vec3_t s2_eulerAngles;
     simulateWorldStep(1, timeStep, s1_posVector, s1_eulerAngles, &s2_posVector, &s2_eulerAngles);
 
-    if (bSpin) gd->suzanneTransform.eulerAngles += ae::math::vec3_t(0.0f, 2.0f * EM->timing.lastFrameVisibleTime, 0.0f);
+    if (bSpin) gd->suzanneTransform.eulerAngles += ae::math::vec3_t(0.0f, 3.0f * EM->timing.lastFrameVisibleTime, 0.0f);
 
     // TODO: look into the depth testing stuff more deeply on the hardware side of things.
     // what is something that we can only do because we really get it?
