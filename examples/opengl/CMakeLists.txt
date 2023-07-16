@@ -1,2 +1,3 @@
 add_subdirectory(monkey_demo)
 add_subdirectory(compute_shader)
+add_subdirectory(ssr)

@@ -69,8 +69,7 @@ namespace automata_engine {
       char SubFormat[16]; // GUID, including the data format code
     } wav_fmt_t;
 
-    void freeWav(loaded_wav_t wavFile) {
-      ae::platform::freeLoadedFile(wavFile.parentFile);
+    void freeWav(loaded_wav_t wavFile) { EM->pfn.freeLoadedFile(wavFile.parentFile);
     }
     static wav_file_cursor LoadWav_ParseChunkAt(void *bytePointer, void *endOfFile) {
       wav_file_cursor result;
@@ -110,7 +109,7 @@ namespace automata_engine {
     // TODO(Noah): Think about failure cases for load file err.
     loaded_wav_t loadWav(const char *fileName) {
       loaded_wav_t wavFile = {};
-      loaded_file_t fileResult = ae::platform::readEntireFile(fileName);
+        loaded_file_t fileResult = EM->pfn.readEntireFile(fileName);
       wavFile.parentFile = fileResult;
       if (fileResult.contentSize != 0 ) {
         wav_header *wavHeader = (wav_header *)fileResult.contents;
@@ -159,12 +158,12 @@ namespace automata_engine {
     loaded_image_t loadBMP(const char *path) {
       loaded_image_t bitmap = {};
       // bitmap.scale = 1;
-      loaded_file_t fileResult = ae::platform::readEntireFile(path);
+      loaded_file_t fileResult = EM->pfn.readEntireFile(path);
       if (fileResult.contentSize != 0) {
         bitmap_header_t *header = (bitmap_header *)fileResult.contents;
         if (header->BitsPerPixel == 32) {
           uint32_t imgSize = header->Height * header->Width * sizeof(uint32_t);
-          uint32_t *newData = (uint32_t *)ae::platform::alloc(imgSize);
+            uint32_t *newData = (uint32_t *)EM->pfn.alloc(imgSize);
           if (newData != nullptr) {
             bitmap.pixelPointer = (unsigned int *) ((unsigned char *)fileResult.contents + header->BitmapOffset);
             memcpy(newData, bitmap.pixelPointer, imgSize);
@@ -184,12 +183,12 @@ namespace automata_engine {
                 *SourceDest++ = (A << 24) | (B << 16) | (G << 8) | (R << 0);
               }
             }
-            ae::platform::freeLoadedFile(fileResult);
+            EM->pfn.freeLoadedFile(fileResult);
           } else {
-            AELoggerError("loadBMP failed to alloc.");
+            // AELoggerError("loadBMP failed to alloc.");
           }
         } else {
-          AELoggerError("%s is %d bpp, not %d", path, header->BitsPerPixel, 32);
+          // AELoggerError("%s is %d bpp, not %d", path, header->BitsPerPixel, 32);
         }
       }
       return bitmap;
@@ -201,8 +200,8 @@ namespace automata_engine {
     }
     
     void freeLoadedImage(loaded_image_t img) {
-      ae::platform::free(img.pixelPointer);
-      ae::platform::freeLoadedFile(img.parentFile);
+        EM->pfn.free(img.pixelPointer);
+        EM->pfn.freeLoadedFile(img.parentFile);
     }
 
     // TODO(Noah): We probably even want unit tests for this sort of thing.
@@ -213,7 +212,7 @@ namespace automata_engine {
     // TODO(Noah): It's prob the case that we could parse OBJ files better. But, I just wanted
     // to get something working ...
     raw_model_t loadObj(const char *filePath) {
-      loaded_file_t loadedFile = ae::platform::readEntireFile(filePath);
+        loaded_file_t loadedFile = EM->pfn.readEntireFile(filePath);
       // NOTE(Noah): init the rawModel to null is important because we are
       // depending on the modelName to have null-terminating char.
       raw_model_t rawModel = {};
@@ -322,7 +321,7 @@ namespace automata_engine {
           line += lineLen;
           linesProcessed++;
         }
-        AELoggerLog("loadObj: %d lines processed", linesProcessed);
+        //AELoggerLog("loadObj: %d lines processed", linesProcessed);
         StretchyBufferFree(uvData);
         StretchyBufferFree(normalData);
         stbds_hmfree(vertex_uv_pair_map);
@@ -332,15 +331,15 @@ namespace automata_engine {
           float uvX = rawModel.vertexData[i * 8 + 3];
           float uvY = rawModel.vertexData[i * 8 + 4];
           if (uvX < 0.0f || uvX > 1.0f) {
-            AELoggerWarn("uvX out of bounds: %f", uvX);
+            //AELoggerWarn("uvX out of bounds: %f", uvX);
           }
           if (uvY < 0.0f || uvY > 1.0f) {
-            AELoggerWarn("uvY out of bounds: %f", uvY);
+            //AELoggerWarn("uvY out of bounds: %f", uvY);
           }
         }
 #endif
       } else {
-        AELoggerError("unable to open %s", filePath);
+        //AELoggerError("unable to open %s", filePath);
       }     
       return rawModel;
     }

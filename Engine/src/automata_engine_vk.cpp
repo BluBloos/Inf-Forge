@@ -337,6 +337,7 @@ namespace automata_engine {
                     }
                 }
 
+
                 if (requested_validation_layers == nullptr) { AELoggerWarn("No validation layers enabled"); }
 #endif
             }  // TODO: can we get rid of all the complexity above? I bet this kind of thing isn't really needed.
@@ -359,7 +360,7 @@ namespace automata_engine {
                 // TODO: this is win32 specific. default init is win32??
                 StretchyBufferPush(active_instance_extensions, VK_KHR_WIN32_SURFACE_EXTENSION_NAME);
                 StretchyBufferPush(active_instance_extensions, VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-                StretchyBufferPush(active_instance_extensions, VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+                //StretchyBufferPush(active_instance_extensions, VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 
                 if (!validateExtensions(active_instance_extensions, instance_extensions)) {
                     AELoggerError("Required instance extensions are missing.");

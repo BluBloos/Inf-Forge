@@ -1,9 +1,16 @@
+
+// TODO: the engine layer should not know about the stb_image. we want this to be a thing that
+// only the game knows how to do.
+#define STB_IMAGE_IMPLEMENTATION
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+
 // TODO(Noah): Understand rvalues. Because, I'm a primitive ape, and,
 // they go right over my head, man.
 
 #include <automata_engine.hpp>
 #include <win32_engine.h>
 
+#define NOMINMAX
 #include <windows.h>
 #include <io.h> // TODO(Noah): What is this used for again?
 #define XAUDIO2_HELPER_FUNCTIONS
@@ -28,62 +35,80 @@
 
 #pragma comment(lib, "Winmm.lib")
 
+// TODO: there is this idea where the engine is doing some logging.
+// it just seems like that this shouldn't happen?
+// it seems that the game should be responsible for this?
+// the "engine" should just be a lightweight thing that the game sits on.
+// that way, the game is the same exact thing every time.
+
+// TODO: it looks like there was a reason that the old Win32GameLoad used
+// this sort of struct thing. It was I think for reusability between projects.
+// so, we should strive to have all the Win32* functions to do _just_ win32 stuff.
+
 #define MAX_CONSOLE_LINES 500
 
 static bool g_bEngineIntroOver = false;
 static HWND g_hwnd             = NULL;
 
-// TODO(Noah): Hot reloading 😎 baby!.
+static ae::game_memory_t   g_gameMemory     = {};
+static ae::engine_memory_t g_engineMemory   = {};
+static win32_backbuffer_t  globalBackBuffer = {};
+
+static bool g_bIsWindowFocused = true;
+
+static ae::engine_memory_t *ae::EM = nullptr;
+
+void (*g_redirectedFprintf)(const char *) = nullptr;
+
+typedef void (*PFN_GameHandleWindowResize)(ae::game_memory_t *, int, int);
+typedef ae::PFN_GameFunctionKind (*PFN_GameGetUpdateAndRender)(ae::game_memory_t *);
+typedef void (*PFN_GameOnVoiceBufferEnd)(ae::game_memory_t *gameMemory, intptr_t voiceHandle);
+typedef void (*PFN_GameOnVoiceBufferProcess)(ae::game_memory_t *gameMemory,
+    intptr_t                                                    voiceHandle,
+    float *                                                     dst,
+    float *                                                     src,
+    uint32_t                                                    samplesToWrite,
+    int                                                         channels,
+    int                                                         bytesPerSample);
 
 /// On the Windows platform, when a WM_SIZE message is recieved, this callback is invoked.
 /// the provided width and height are the client dimensions of the window.
-static void (*GameHandleWindowResize)(ae::game_memory_t *, int, int) = nullptr;
+static PFN_GameHandleWindowResize GameHandleWindowResize = nullptr;
+static ae::PFN_GameFunctionKind GameInit = nullptr;
+static ae::PFN_GameFunctionKind GamePreInit = nullptr;
+static ae::PFN_GameFunctionKind GameCleanup = nullptr;
+static ae::PFN_GameFunctionKind GameInitAsync = nullptr;
+static PFN_GameGetUpdateAndRender GameGetUpdateAndRender = nullptr;
+static PFN_GameOnVoiceBufferProcess GameOnVoiceBufferProcess = nullptr;
+static PFN_GameOnVoiceBufferEnd GameOnVoiceBufferEnd = nullptr;
 
-static void (*GameInit)(ae::game_memory_t *) = nullptr;
-static void (*GamePreInit)(ae::game_memory_t *) = nullptr;
-static void (*GameCleanup)(ae::game_memory_t *) = nullptr;
+static ae::PFN_GameFunctionKind GameOnHotload = nullptr;
+static ae::PFN_GameFunctionKind GameOnUnload = nullptr;
 
 LARGE_INTEGER Win32GetWallClock();
 
 namespace ae = automata_engine;
 
-// the time we measured when we are "good to go" after the vblank.
-// but due to the nature of sleeping threads, we can't really get a precise
-// rdtsc timestamp for right after vblank. that's why this is a "maybe".
-uint64_t ae::timing::lastFrameMaybeVblankTime = 0;
-
-// timestamp for frame begin.
-uint64_t ae::timing::lastFrameBeginTime = 0;
-uint64_t ae::timing::thisFrameBeginTime = 0;
-
-// timestamp once update is complete.
-uint64_t ae::timing::lastFrameUpdateEndTime = 0;
-
-// timestamp when GPU is complete.
-uint64_t ae::timing::lastFrameGpuEndTime = 0;
-
-float ae::timing::lastFrameVisibleTime = 1/60.f;
-
-bool ae::platform::_globalRunning = true;
-ae::update_model_t ae::platform::GLOBAL_UPDATE_MODEL =
-    ae::AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC; // default.
-bool ae::platform::_globalVsync = false;
 static LONGLONG g_PerfCountFrequency64;
 
-void ae::platform::setMousePos(int xPos, int yPos)
+void Platform_setMousePos(int xPos, int yPos)
 {
     POINT pt = {xPos, yPos};
     ClientToScreen(g_hwnd, &pt);
     SetCursorPos(pt.x, pt.y);
 }
 
-void ae::platform::showMouse(bool show) {
+void Platform_showMouse(bool show) {
     ShowCursor(show);
 }
 
-// TODO: this looks dangerous. why does loaded_file_t work
-// here without being qualified?
-void ae::platform::freeLoadedFile(loaded_file_t file) {
+void Platform_setAdditionalLogger(void (*fn)(const char *))
+{
+    g_redirectedFprintf = fn;
+}
+
+void Platform_freeLoadedFile(ae::loaded_file_t file)
+{
     if (file.contents)
         VirtualFree(file.contents, 0, MEM_RELEASE);
 }
@@ -108,7 +133,7 @@ static void LogLastError(DWORD lastError, const char *message) {
     LocalFree(lpMsgBuf);
 }
 
-bool ae::platform::writeEntireFile(
+bool Platform_writeEntireFile(
     const char *fileName, void *memory, uint32_t memorySize)
 {
     bool Result = false;
@@ -135,7 +160,8 @@ bool ae::platform::writeEntireFile(
 	return Result;
 }
 
-ae::loaded_file_t ae::platform::readEntireFile(const char *fileName) {
+ae::loaded_file_t Platform_readEntireFile(const char *fileName)
+{
     AELoggerLog("Reading file: %s", fileName);
 	void *result = 0;
 	int fileSize32 = 0;
@@ -190,6 +216,16 @@ static bool isImGuiInitialized = false;
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
 #include "imgui.h"
 #include "imgui_impl_win32.h" // includes Windows.h for us
+
+ImGuiContext* Platform_imguiGetCurrentContext()
+{
+    return ImGui::GetCurrentContext();
+}
+
+void Platform_imguiGetAllocatorFunctions(ImGuiMemAllocFunc *af, ImGuiMemFreeFunc *ff, void**pdata){
+    ImGui::GetAllocatorFunctions(af, ff, pdata);
+}
+
 #endif
 
 static HINSTANCE g_hInstance = NULL;
@@ -263,7 +299,7 @@ void ae::VK::renderAndRecordImGui(VkCommandBuffer cmd)
         info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
         ae::VK_CHECK(vkBeginCommandBuffer(cmd, &info));
 
-        ae::game_window_info_t winInfo = automata_engine::platform::getWindowInfo();
+        ae::game_window_info_t winInfo = Platform_getWindowInfo();
 
         VkRenderPassBeginInfo rpInfo    = {};
         rpInfo.sType                    = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -570,7 +606,7 @@ void ae::platform::VK::init(
     }
 
     // create the swapchain.
-    auto winInfo = ae::platform::getWindowInfo();
+    auto winInfo = Platform_getWindowInfo();
     vk_initSwapchain(winInfo.width, winInfo.height);
 }
 
@@ -590,8 +626,8 @@ static HDC gHdc;
 typedef BOOL WINAPI wgl_swap_interval_ext(int interval);
 static wgl_swap_interval_ext *wglSwapInterval;
 HGLRC glContext;
-static bool win32_glInitialized = false;
-static bool CreateContext(HWND windowHandle, HDC dc) {
+
+static bool CreateOpenGLContext(HWND windowHandle, HDC dc) {
     HGLRC tempContext = wglCreateContext(dc);
     if(wglMakeCurrent(dc, tempContext)) {
 
@@ -633,50 +669,29 @@ static void InitOpenGL(HWND windowHandle, HDC dc) {
     DescribePixelFormat(dc, suggestedPixelFormatIndex,
         sizeof(suggestedPixelFormat), &suggestedPixelFormat);
     SetPixelFormat(dc, suggestedPixelFormatIndex, &suggestedPixelFormat);
-    win32_glInitialized = CreateContext(windowHandle, dc);
-    if(win32_glInitialized) {
-        // setup VSYNC
+    g_engineMemory.bOpenGLInitialized = CreateOpenGLContext(windowHandle, dc);
+    if(g_engineMemory.bOpenGLInitialized) {
+        // TODO: vsync?
         wglSwapInterval = (wgl_swap_interval_ext *)wglGetProcAddress("wglSwapIntervalEXT");
-        if(wglSwapInterval && ae::platform::_globalVsync) {
-            wglSwapInterval(1);
-        }
-        // NOTE(Noah): We are permitted to init glew here and expect this to be fine with our game
-        // because we are doing a static linkage between all code at the moment. In this case, there
-        // is only one storage location for glewInit param. And at the same time, glew is init everywhere.
-        // all glew is doing is loading func pointer via GetProcAddr.
-        ae::GL::initGlew();
+        wglSwapInterval(0);
+
+        // NOTE: init openGL func params for the engine side.
+        glewInit();
     } else {
         //TODO(Noah): openGL did not initialize, what the heck do we do?
-        AELoggerError("OpenGL did not initialize");
+        // AELoggerError("OpenGL did not initialize");
+        (ae::EM->pfn.fprintf_proxy(ae::platform::AE_STDERR,
+            "\033[0;31m"
+            "\n[error] on line=%d in file=%s\n"
+            "OpenGL did not initialize"
+            "\n"
+            "\033[0m",
+            __LINE__,
+            _AUTOMATA_ENGINE_FILE_RELATIVE_));
         assert(false);
     }
 }
-
-// TODO(Noah): thinking this might belong back in platform.
-bool automata_engine::GL::getGLInitialized() {
-    return win32_glInitialized;
-}
 #endif
-
-// TODO(Noah): Need to also impl for DirectX, and same goes with update models ...
-void ae::platform::setVsync(bool b) {
-    ae::platform::_globalVsync = b;
-#if defined(AUTOMATA_ENGINE_GL_BACKEND)
-    if (wglSwapInterval) {
-        (b) ? wglSwapInterval(1) : wglSwapInterval(0);
-    }
-#endif
-}
-
-inline void GetAssetsPath(_Out_writes_(pathSize) WCHAR* path, UINT pathSize)
-{
-    if (path == nullptr)
-    {
-        throw std::exception();
-    }
-
-    
-}
 
 bool ae::platform::pathExists(const char *path) {
     // TODO: ensure path is less than MAX_PATH
@@ -739,13 +754,37 @@ char *ae::platform::getRuntimeExeDirPath(char *pathOut, uint32_t pathSize)
     return nullptr;
 }
 
-void automata_engine::platform::free(void *data) {
+void Platform_free(void *data)
+{
     if (data)
         VirtualFree((void *)data, 0, MEM_RELEASE);
 }
 
-void *automata_engine::platform::alloc(uint32_t bytes) {
+void *Platform_alloc(uint32_t bytes) {
     return VirtualAlloc(0, bytes, MEM_COMMIT, PAGE_READWRITE);
+}
+
+static inline int sign(int x)
+{
+    // NOTE: this is branchless. that makes it fast because branch prediction is expensive to fail.
+    // it is expensive to fail due to the opportunity cost of the preemptive execution.
+    return (x > 0) - (x < 0);
+}
+
+ae::game_window_info_t Platform_getWindowInfo()
+{
+    ae::game_window_info_t winInfo;
+    winInfo.hWnd      = (intptr_t)g_hwnd;
+    winInfo.hInstance = (intptr_t)g_hInstance;
+    if (g_hwnd == NULL) { AELoggerError("g_hwnd == NULL"); }
+    RECT rect;
+    if (GetClientRect(g_hwnd, &rect)) {
+        winInfo.width    = rect.right - rect.left;
+        int signedHeight = rect.top - rect.bottom;
+        winInfo.height   = sign(signedHeight) * signedHeight;
+    }
+    winInfo.isFocused = g_bIsWindowFocused;
+    return winInfo;
 }
 
 #include <dxgi1_4.h>
@@ -813,10 +852,6 @@ size_t ae::platform::getGpuCurrentMemoryUsage(intptr_t gpuAdapter)
     assert(false);
     return 0;
 }
-
-static ae::user_input_t globalUserInput = {};
-static ae::game_memory_t g_gameMemory = {};
-static win32_backbuffer_t globalBackBuffer = {};
 
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
 void ScaleImGui_Impl()
@@ -948,10 +983,6 @@ void Win32DisplayBufferWindow(HDC deviceContext,
         SRCCOPY);
 }
 
-const ae::user_input_t &automata_engine::platform::getUserInput() {
-    return globalUserInput;
-}
-
 // NOTE: we use the frameIndex to decouple the input polling from the game update.
 // we poll the input at a faster rate so that if the app wants it can supersample
 // the game world simulation to prevent temporal aliasing artifacts.
@@ -966,27 +997,29 @@ static void ProccessKeyboardMessage(unsigned int vkCode, bool down)
 {
     uint32_t idx = g_frameIndex % g_inputPollRate;
 
+    ae::user_input_t &userInput = g_engineMemory.userInput;
+
     if (vkCode >= 'A' && vkCode <= 'Z') {
-        globalUserInput.keyDown[idx][(uint32_t)ae::GAME_KEY_A + (vkCode - 'A')] = down;
+        userInput.keyDown[idx][(uint32_t)ae::GAME_KEY_A + (vkCode - 'A')] = down;
     } else if (vkCode >= '0' && vkCode <= '9') {
-        globalUserInput.keyDown[idx][(uint32_t)ae::GAME_KEY_0 + (vkCode - '0')] = down;
+        userInput.keyDown[idx][(uint32_t)ae::GAME_KEY_0 + (vkCode - '0')] = down;
     } else {
         switch (vkCode) {
             // TODO: this looks like copy-pasta. can be this be more expressive ???
             case VK_SPACE:
-                globalUserInput.keyDown[idx][ae::GAME_KEY_SPACE] = down;
+                userInput.keyDown[idx][ae::GAME_KEY_SPACE] = down;
                 break;
             case VK_SHIFT:
-                globalUserInput.keyDown[idx][ae::GAME_KEY_SHIFT] = down;
+                userInput.keyDown[idx][ae::GAME_KEY_SHIFT] = down;
                 break;
             case VK_ESCAPE:
-                globalUserInput.keyDown[idx][ae::GAME_KEY_ESCAPE] = down;
+                userInput.keyDown[idx][ae::GAME_KEY_ESCAPE] = down;
                 break;
             case VK_F5:
-                globalUserInput.keyDown[idx][ae::GAME_KEY_F5] = down;
+                userInput.keyDown[idx][ae::GAME_KEY_F5] = down;
                 break;
             case VK_TAB:
-                globalUserInput.keyDown[idx][ae::GAME_KEY_TAB] = down;
+                userInput.keyDown[idx][ae::GAME_KEY_TAB] = down;
                 break;
         }
     }
@@ -1010,6 +1043,8 @@ LRESULT CALLBACK Win32WindowProc(HWND window,
     LRESULT     result = 0;
     uint32_t    idx    = g_frameIndex % g_inputPollRate;
 
+    ae::user_input_t &userInput = g_engineMemory.userInput;
+
     switch(message) {
         case WM_INPUT: {
             // TODO: we have registered just the mouse for raw input. yet, in the future we may register more things.
@@ -1026,8 +1061,8 @@ LRESULT CALLBACK Win32WindowProc(HWND window,
                 if (!!(mouseData.usFlags & MOUSE_MOVE_ABSOLUTE)) {
                     // TODO: handle this case.
                 } else if ((mouseData.lLastX != 0) || (mouseData.lLastY) != 0) {
-                    globalUserInput.deltaMouseX[idx] += mouseData.lLastX;
-                    globalUserInput.deltaMouseY[idx] += mouseData.lLastY;
+                    userInput.deltaMouseX[idx] += mouseData.lLastX;
+                    userInput.deltaMouseY[idx] += mouseData.lLastY;
                 }
             }
             if (GET_RAWINPUT_CODE_WPARAM(wParam) == RIM_INPUT) result = DefWindowProc(window, message, wParam, lParam);
@@ -1053,24 +1088,24 @@ LRESULT CALLBACK Win32WindowProc(HWND window,
         case WM_MOUSEMOVE: {
             int x = (int)lParam & 0x0000FFFF;
             int y = ((int)lParam & 0xFFFF0000) >> 16;
-            globalUserInput.mouseX[idx] = x;
-            globalUserInput.mouseY[idx] = y;
+            userInput.mouseX[idx]       = x;
+            userInput.mouseY[idx] = y;
         } break;
         // left mouse button
 
         // TODO: consider the half transition count. we are loosing granularity here.
         case WM_LBUTTONDOWN: {
-            globalUserInput.mouseLBttnDown[idx] = true;
+            userInput.mouseLBttnDown[idx] = true;
         } break;
         case WM_LBUTTONUP:{
-            globalUserInput.mouseLBttnDown[idx] = false;
+            userInput.mouseLBttnDown[idx] = false;
         } break;
         // right mouse button
         case WM_RBUTTONDOWN: {
-            globalUserInput.mouseRBttnDown[idx] = true;
+            userInput.mouseRBttnDown[idx] = true;
         } break;
         case WM_RBUTTONUP:{
-            globalUserInput.mouseRBttnDown[idx] = false;
+            userInput.mouseRBttnDown[idx] = false;
         } break;
         //keyboard messages
         case WM_KEYUP: {
@@ -1105,7 +1140,7 @@ LRESULT CALLBACK Win32WindowProc(HWND window,
             ) {
                 GameHandleWindowResize(&g_gameMemory, width, height);
             } else {
-                AELoggerLog("WARN: (GameHandleWindowResize == nullptr) OR\n"
+                AELoggerWarn("(GameHandleWindowResize == nullptr) OR\n"
                     "(g_gameMemory.data == nullptr)");
             }
             Win32ResizeBackbuffer(&globalBackBuffer, width,height);
@@ -1120,18 +1155,18 @@ LRESULT CALLBACK Win32WindowProc(HWND window,
             bool bDuringInit = !(g_gameMemory.getInitialized() && g_bEngineIntroOver);
             if (bDuringInit || bCpuBackend) {
                 HDC DeviceContext = BeginPaint(window, &ps);
-                ae::game_window_info_t winInfo = automata_engine::platform::getWindowInfo();
+                ae::game_window_info_t winInfo = Platform_getWindowInfo();
                 Win32DisplayBufferWindow(DeviceContext, winInfo);
                 EndPaint(window, &ps);
             }
         } break;
         case WM_DESTROY: {
             // TODO(Noah): Handle as error
-            automata_engine::platform::_globalRunning = false;
+            g_engineMemory.globalRunning = false;
         } break;
         case WM_CLOSE: {
             //TODO(Noah): Handle as message to user
-            automata_engine::platform::_globalRunning = false;
+            g_engineMemory.globalRunning = false;
         } break;
         case WM_NCCREATE: {
             EnableNonClientDpiScaling(window);
@@ -1143,7 +1178,77 @@ LRESULT CALLBACK Win32WindowProc(HWND window,
 	return result;
 }
 
-static void CheckSanePlatform(void) {
+static HMODULE g_gameCodeDLL = NULL;
+
+static inline FILETIME Win32GetLastWriteTime(const char *FileName)
+{
+	FILETIME LastFileWrite = {};
+	WIN32_FIND_DATA FindData; 
+	HANDLE FindHandle = FindFirstFileA(FileName, &FindData);
+	if (FindHandle != INVALID_HANDLE_VALUE)
+	{
+		FindClose(FindHandle);
+		LastFileWrite = FindData.ftLastWriteTime;
+	}
+	return LastFileWrite;
+}
+
+static void Win32LoadGameCode(const char *SourceDLLName, const char *TempDLLName)
+{	
+	CopyFile(SourceDLLName, TempDLLName, FALSE); // NOTE: this is a win32 API call, although it doesn't look it.
+
+    // NOTE: should never be override the dll thing here. where, this func is expected to be called
+    // after some sort of "unloadcode" call.
+    assert(g_gameCodeDLL == NULL);
+
+	g_gameCodeDLL = LoadLibraryA(TempDLLName);
+	
+	if(g_gameCodeDLL)
+	{
+        // TODO: we could likely greatly simplify this stuff, where the game gets to decide
+        // that it is going to do async stuff if it wants to. or maybe the game is ready to go
+        // ASAP.
+		GameInit = (ae::PFN_GameFunctionKind)GetProcAddress(g_gameCodeDLL, "GameInit");
+        GamePreInit   = (ae::PFN_GameFunctionKind)GetProcAddress(g_gameCodeDLL, "GamePreInit");
+        GameInitAsync = (ae::PFN_GameFunctionKind)GetProcAddress(g_gameCodeDLL, "GameInitAsync");
+
+        GameOnVoiceBufferEnd     = (PFN_GameOnVoiceBufferEnd)GetProcAddress(g_gameCodeDLL, "GameOnVoiceBufferEnd");
+        GameOnVoiceBufferProcess =
+            (PFN_GameOnVoiceBufferProcess)GetProcAddress(g_gameCodeDLL, "GameOnVoiceBufferProcess");
+        GameCleanup              = (ae::PFN_GameFunctionKind)GetProcAddress(g_gameCodeDLL, "GameClose");
+
+        // TODO: prolly don't need this. window resize happens at a predictable time.
+        // we can just have HandleInput() thing and the fact that the window resized is part
+        // of the input, because it's a windows message. like literally we just have a dirty flag.
+        GameHandleWindowResize = (PFN_GameHandleWindowResize)GetProcAddress(g_gameCodeDLL, "GameHandleWindowResize");
+
+        GameGetUpdateAndRender = (PFN_GameGetUpdateAndRender)GetProcAddress(g_gameCodeDLL, "GameGetUpdateAndRender");
+
+        GameOnHotload = (ae::PFN_GameFunctionKind)GetProcAddress(g_gameCodeDLL, "GameOnHotload");
+        GameOnUnload = (ae::PFN_GameFunctionKind)GetProcAddress(g_gameCodeDLL, "GameOnUnload");
+	}
+}
+
+static inline void Win32UnloadGameCode()
+{
+	if (g_gameCodeDLL)
+	{
+		::FreeLibrary(g_gameCodeDLL);
+        g_gameCodeDLL = NULL;
+	}
+	GameInit = NULL;
+    GamePreInit = NULL;
+    GameInitAsync = NULL;
+    GameOnVoiceBufferEnd = NULL;
+    GameOnVoiceBufferProcess = NULL;
+    GameCleanup = NULL;
+    GameOnHotload = NULL;
+    GameOnUnload = NULL;
+    GameHandleWindowResize = NULL;
+    GameGetUpdateAndRender = NULL;
+}
+
+static void AssertSanePlatform(void) {
     assert(sizeof(uint8_t) == 1);
     assert(sizeof(uint16_t) == 2);
     assert(sizeof(uint32_t) == 4);
@@ -1155,8 +1260,6 @@ static void CheckSanePlatform(void) {
     assert(sizeof(float32_t) == 4);
     assert(sizeof(float64_t) == 8);
 }
-
-int automata_engine::platform::_globalProgramResult = 0;
 
 namespace automata_engine {
     class IXAudio2VoiceCallback : public ::IXAudio2VoiceCallback  {
@@ -1174,7 +1277,8 @@ namespace automata_engine {
         }
         void OnStreamEnd() {
             AELoggerLog("voice: %d, OnStreamEnd", m_voiceHandle);
-            OnVoiceBufferEnd((game_memory_t *)&g_gameMemory, m_voiceHandle);
+            if (GameOnVoiceBufferEnd)
+                GameOnVoiceBufferEnd((game_memory_t *)&g_gameMemory, m_voiceHandle);
         }
         void OnVoiceError(void    *pBufferContext, HRESULT Error) {
             AELoggerLog("voice: %d, OnVoiceError", m_voiceHandle);
@@ -1263,12 +1367,15 @@ public:
         }
         else if( pInputProcessParameters[0].BufferFlags == XAPO_BUFFER_VALID )
         {
-            ae::OnVoiceBufferProcess(
-                (ae::game_memory_t *)m_pContext, m_voiceHandle,
-                (float*)pInputProcessParameters[0].pBuffer,
-                (float*)pOutputProcessParameters[0].pBuffer,
-                pInputProcessParameters[0].ValidFrameCount,
-                m_wfx.nChannels, m_wfx.wBitsPerSample >> 3);
+            if (GameOnVoiceBufferProcess) {
+                GameOnVoiceBufferProcess((ae::game_memory_t *)m_pContext,
+                    m_voiceHandle,
+                    (float *)pInputProcessParameters[0].pBuffer,
+                    (float *)pOutputProcessParameters[0].pBuffer,
+                    pInputProcessParameters[0].ValidFrameCount,
+                    m_wfx.nChannels,
+                    m_wfx.wBitsPerSample >> 3);
+            }
         }
         
         //EndProcess();
@@ -1458,42 +1565,14 @@ void ae::platform::showWindowAlert(const char *windowTitle, const char *windowMe
     }
 }
 
-ae::game_window_info_t automata_engine::platform::getWindowInfo()
-{
-    ae::game_window_info_t winInfo;
-    winInfo.hWnd      = (intptr_t)g_hwnd;
-    winInfo.hInstance = (intptr_t)g_hInstance;
-    if (g_hwnd == NULL) { AELoggerError("g_hwnd == NULL"); }
-    RECT rect;
-    if (GetClientRect(g_hwnd, &rect)) {
-        winInfo.width    = rect.right - rect.left;
-        int signedHeight = rect.top - rect.bottom;
-        winInfo.height   = ae::math::sign(signedHeight) * signedHeight;
-    }
-    return winInfo;
-}
+uint64_t Platform_getTimerFrequency() { return g_PerfCountFrequency64; }
 
-LARGE_INTEGER g_epochCounter = {};
-
-float ae::timing::getTimeElapsed(uint64_t begin, uint64_t end)
-{
-    return float(end - begin) / ae::timing::getTimerFrequency();
-}
-
-uint64_t ae::timing::getTimerFrequency() { return g_PerfCountFrequency64; }
-
-uint64_t ae::timing::epoch()
-{
-    LARGE_INTEGER counter = Win32GetWallClock();
-    return counter.QuadPart - g_epochCounter.QuadPart;
-}
-
-uint64_t ae::timing::wallClock() {
+uint64_t Platform_wallClock() {
     LARGE_INTEGER counter = Win32GetWallClock();
     return counter.QuadPart;
 }
 
-void automata_engine::platform::fprintf_proxy(int h, const char *fmt, ...)
+void Platform_fprintf_proxy(int h, const char *fmt, ...)
 {
     static std::mutex mut={};
     // only one person printing at a time. very important...
@@ -1523,10 +1602,10 @@ void automata_engine::platform::fprintf_proxy(int h, const char *fmt, ...)
     }
     WriteConsoleA(handle, (void *)_buf, strlen(_buf), NULL, NULL);
 
-    if (automata_engine::platform::_redirectedFprintf) { automata_engine::platform::_redirectedFprintf(_buf); }
+    if (g_redirectedFprintf) { g_redirectedFprintf(_buf); }
 }
 
-// TODO: back into .EXE
+// TODO: we need to be doing this again.
 static ae::loaded_image_t g_engineLogo = {};
 
 static int FloatToInt(float Value)
@@ -1568,13 +1647,13 @@ static void DrawBitmapScaled(win32_backbuffer_t *buffer,
     if (MaxDrawY > buffer->height) { MaxY = (buffer->height - MinY) / (int)Scalar + MinY; }
 
     if (MinX < 0) {
-        PixelShift = (unsigned int)ae::math::abs((float)MinX / (float)Scalar);
+        PixelShift = (unsigned int)abs((float)MinX / (float)Scalar);
         MinX       = 0;
     }
 
     if (MinY < 0) {
-        PitchShift = (unsigned int)ae::math::abs((float)MinY / (float)Scalar);
-        MaxY += FloatToInt(ae::math::abs((float)MinY / (float)Scalar));
+        PitchShift = (unsigned int)abs((float)MinY / (float)Scalar);
+        MaxY += FloatToInt(abs((float)MinY / (float)Scalar));
         MinY = 0;
     }
 
@@ -1643,10 +1722,6 @@ static void DrawBitmap(win32_backbuffer_t *buffer,
     }
 }
 
-static bool g_bIsWindowFocused = true;
-
-bool ae::platform::isWindowFocused() { return g_bIsWindowFocused; }
-
 HWINEVENTHOOK g_windowEventHookProc = {};
 void          Wineventproc(HWINEVENTHOOK hWinEventHook,
              DWORD                       event,
@@ -1674,25 +1749,49 @@ int CALLBACK WinMain(HINSTANCE instance,
   LPSTR cmdLine,
   int showCode)
 {
-    CheckSanePlatform();
-    automata_engine::super::_init();
+    AssertSanePlatform();
 
-    // TODO: Do some hot reloading stuff! Game is a DLL to the engine :)
-    {
-        GameInit = automata_engine::Init; // after window creation
-        GamePreInit = ae::PreInit; // before window creation
-        GameCleanup = automata_engine::Close;
-        GameHandleWindowResize = automata_engine::HandleWindowResize;
-    }
+    // setup the engine memory PFNs + context.
+    ae::EM = &g_engineMemory;
+    ae::EM->pfn.getWindowInfo = Platform_getWindowInfo;
+    ae::EM->pfn.fprintf_proxy = Platform_fprintf_proxy;
+    ae::EM->pfn.setMousePos = Platform_setMousePos;
+    ae::EM->pfn.showMouse = Platform_showMouse;
+    ae::EM->pfn.getTimerFrequency = Platform_getTimerFrequency;
+    ae::EM->pfn.wallClock = Platform_wallClock;
+    ae::EM->pfn.free = Platform_free;
+    ae::EM->pfn.alloc = Platform_alloc;
+    ae::EM->pfn.readEntireFile = Platform_readEntireFile;
+    ae::EM->pfn.writeEntireFile = Platform_writeEntireFile;
+    ae::EM->pfn.freeLoadedFile = Platform_freeLoadedFile;
+    ae::EM->pfn.setAdditionalLogger = Platform_setAdditionalLogger;
 
-    g_epochCounter = Win32GetWallClock();
+#if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
+    ae::EM->pfn.imguiGetCurrentContext = Platform_imguiGetCurrentContext;
+    ae::EM->pfn.imguiGetAllocatorFunctions = Platform_imguiGetAllocatorFunctions;
+#endif
+
+    // TODO: AE lib is a utility library for the game. it sits on top of the engine layer,
+    // where it can use the engine layer functions. the engine layer is meant to be lightweight.
+    // and not do too many things, giving maximum control to the game.
+    // of course, there are _some_ decisions that the engine makes on behalf of the game, at least for now.
+    //
+    // so e.g., loading an image using the stb_image library could be considered a higher level
+    // function that only the game knows how to do.
+    //
+    // and therefore, we want to see about giving more control to the game when it comes to this
+    // engine intro sequence.
+    //
+    // like, for now we have to manually do the initModuleGlobals() stuff because the engine
+    // needs to do the STB image stuff.
+    //
+    // stbi_set_flip_vertically_on_load(true);
+    // stbi_flip_vertically_on_write(true);
+    // g_engineLogo = ae::platform::stbImageLoad("res\\logo.png");
+    // defer(ae::io::freeLoadedImage(g_engineLogo));
 
     UINT DesiredSchedularGranularity = 1;
 	bool SleepGranular = (timeBeginPeriod(DesiredSchedularGranularity) == TIMERR_NOERROR);
-
-    // load the engine logo.
-    g_engineLogo = ae::platform::stbImageLoad("res\\logo.png");
-    defer(ae::io::freeLoadedImage(g_engineLogo));
 
     // NOTE(Noah): There is a reason that when you read C code, all the variables are defined
     // at the top of the function. I'm just guessing here, but maybe back in the day people
@@ -1704,12 +1803,11 @@ int CALLBACK WinMain(HINSTANCE instance,
     WNDCLASS windowClass = {};
 
     // Before doing ANYTHING, we alloc memory.
+    g_gameMemory.pEngineMemory = &g_engineMemory;
     g_gameMemory.setInitialized(false);
-    g_gameMemory.dataBytes = 67108864;
-    g_gameMemory.data =
-        automata_engine::platform::alloc(g_gameMemory.dataBytes); // will allocate 64 MB
+    g_gameMemory.dataBytes = 67108864; // will allocate 64 MB
+    g_gameMemory.data = Platform_alloc(g_gameMemory.dataBytes); 
     if (g_gameMemory.data == nullptr) {
-        automata_engine::platform::_globalProgramResult = -1;
         return -1;
     }
 
@@ -1784,13 +1882,34 @@ int CALLBACK WinMain(HINSTANCE instance,
     windowClass.hCursor = LoadCursor(0, IDC_ARROW);
     windowClass.lpszClassName = "Automata Engine";
 
+    int &globalProgramResult = g_engineMemory.globalProgramResult;
+
+    // NOTE: we need to init enough of ImGui before we hotload the game since
+    // the game will steal our imgui context on hotload.
+#if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
+        // Setup Dear ImGui context
+        IMGUI_CHECKVERSION();
+        ImGui::CreateContext();
+        ImGui::StyleColorsDark();
+#endif
+
+    FILETIME gameCodeLastWriteTime = {};
+
+    const char *SourceDLLName = AUTOMATA_ENGINE_PROJECT_NAME ".dll";
+    const char *TempDLLName   = AUTOMATA_ENGINE_PROJECT_NAME "_temp.dll";
+
+    // NOTE: we call get last write time first because the load game code does a copy to the
+    // temp DLL, and maybe that copy is considered a write and thus modifies the last write time.
+    gameCodeLastWriteTime = Win32GetLastWriteTime(SourceDLLName);
+    Win32LoadGameCode(SourceDLLName, TempDLLName);
+    if (GameOnHotload) GameOnHotload(&g_gameMemory);
     
     do {
         // TODO(Noah): Here would be a nice instance for the defer statement.
         classAtom = RegisterClassA(&windowClass);
         if(classAtom == 0) {
             AELoggerError("Unable to create window class \"%s\"", windowClass.lpszClassName);
-            automata_engine::platform::_globalProgramResult = -1;
+            globalProgramResult = -1;
             break;
         }
 
@@ -1801,22 +1920,21 @@ int CALLBACK WinMain(HINSTANCE instance,
         }
 
         const DWORD windowStyle = (WS_OVERLAPPEDWINDOW | WS_VISIBLE) &
-            ((ae::defaultWinProfile == ae::AUTOMATA_ENGINE_WINPROFILE_NORESIZE)
+            ((g_engineMemory.defaultWinProfile == ae::AUTOMATA_ENGINE_WINPROFILE_NORESIZE)
                 ?
                 (~WS_MAXIMIZEBOX & ~WS_THICKFRAME) : (DWORD)(0xFFFFFFFF));
         
-        const bool beginMaximized = (ae::defaultWidth == UINT32_MAX) &&
-            (ae::defaultHeight == UINT32_MAX);
+        const bool beginMaximized = (g_engineMemory.defaultWidth == UINT32_MAX) && (g_engineMemory.defaultHeight == UINT32_MAX);
 
         windowHandle = CreateWindowExA(
             0, // dwExStyle
             windowClass.lpszClassName,
-            ae::defaultWindowName,
+            g_engineMemory.defaultWindowName,
             windowStyle,
             CW_USEDEFAULT, // init X
             CW_USEDEFAULT, // init Y
-            (ae::defaultWidth == UINT32_MAX) ? CW_USEDEFAULT : ae::defaultWidth,
-            (ae::defaultHeight == UINT32_MAX) ? CW_USEDEFAULT : ae::defaultHeight,
+            (g_engineMemory.defaultWidth == UINT32_MAX) ? CW_USEDEFAULT : g_engineMemory.defaultWidth,
+            (g_engineMemory.defaultHeight == UINT32_MAX) ? CW_USEDEFAULT : g_engineMemory.defaultHeight,
             NULL, // parent handle
             NULL, // menu
             instance,
@@ -1827,7 +1945,7 @@ int CALLBACK WinMain(HINSTANCE instance,
         if (windowHandle == NULL) {
             DWORD resultCode = GetLastError();
             LogLastError(resultCode, "Unable to create window");
-            automata_engine::platform::_globalProgramResult = -1;
+            globalProgramResult = -1;
             break;
         }
 
@@ -1846,8 +1964,7 @@ int CALLBACK WinMain(HINSTANCE instance,
 
         // Create the globalBackBuffer
         {
-            ae::game_window_info_t winInfo =
-                automata_engine::platform::getWindowInfo();
+            ae::game_window_info_t winInfo = Platform_getWindowInfo();
             Win32ResizeBackbuffer(&globalBackBuffer, winInfo.width, winInfo.height);
         }
 
@@ -1867,7 +1984,7 @@ int CALLBACK WinMain(HINSTANCE instance,
             // Initializes the COM library for use by the calling thread.
             if (FAILED(comResult = CoInitializeEx(nullptr, COINIT_MULTITHREADED))) {
                 AELoggerError("Unable to initialize COM library (XAudio2)");
-                automata_engine::platform::_globalProgramResult = -1;
+                globalProgramResult = -1;
                 break;
             }
 
@@ -1877,7 +1994,7 @@ int CALLBACK WinMain(HINSTANCE instance,
     #endif
             if (FAILED(XAudio2Create(&g_pXAudio2, 0, flags))) {
                 AELoggerError("Unable to to create an instance of the XAudio2 engine");
-                automata_engine::platform::_globalProgramResult = -1;
+                globalProgramResult = -1;
                 break;
             }
 
@@ -1899,7 +2016,7 @@ int CALLBACK WinMain(HINSTANCE instance,
 
             if (FAILED(g_pXAudio2->CreateMasteringVoice(&pMasterVoice))) {
                 AELoggerError("Unable to create a mastering voice (XAudio2)");
-                automata_engine::platform::_globalProgramResult = -1;
+                globalProgramResult = -1;
                 break;
             }
 
@@ -1914,9 +2031,10 @@ int CALLBACK WinMain(HINSTANCE instance,
             g_xa2Buffer.pContext = (void *)&g_gameMemory;
         }
 
+        // TODO: get this working again.
         // load the engine sound.
-        g_engineSound = ae::io::loadWav("res\\engine.wav");  // TODO: Actually make this asset copy via the CMake.
-        defer(ae::io::freeWav(g_engineSound));
+        //g_engineSound = ae::io::loadWav("res\\engine.wav");  // TODO: Actually make this asset copy via the CMake.
+        //defer(ae::io::freeWav(g_engineSound));
         g_engineVoice = ae::platform::createVoice();
 
         IDXGIOutput   *gameMonitor = nullptr;
@@ -1930,7 +2048,7 @@ int CALLBACK WinMain(HINSTANCE instance,
             IDXGIFactory4 *dxgiFactory = nullptr;
             if (S_OK != CreateDXGIFactory1(IID_PPV_ARGS(&dxgiFactory))) {
                 AELoggerError("could not create factory");
-                automata_engine::platform::_globalProgramResult = -1;
+                globalProgramResult = -1;
                 break;
             }
             defer(dxgiFactory->Release());
@@ -1938,7 +2056,7 @@ int CALLBACK WinMain(HINSTANCE instance,
             HRESULT result = gameAdapter->EnumOutputs(0, &gameMonitor);
             if (result != S_OK) {
                 AELoggerError("could not enumerate DXGI output 0");
-                automata_engine::platform::_globalProgramResult = -1;
+                globalProgramResult = -1;
                 break;
             }
         }
@@ -1946,7 +2064,7 @@ int CALLBACK WinMain(HINSTANCE instance,
         if (GameInit != nullptr) {
             GameInit(&g_gameMemory);
         } else {
-            AELoggerLog("WARN: GameInit == nullptr");
+            AELoggerWarn("GameInit == nullptr");
         }
 
 #if defined(AUTOMATA_ENGINE_VK_BACKEND)
@@ -1974,17 +2092,12 @@ int CALLBACK WinMain(HINSTANCE instance,
 #endif
 
         // kick-off async init.
-        std::thread([&]{ ae::InitAsync(&g_gameMemory);}).detach();
+        std::thread([&]{ 
+            GameInitAsync ? (void)GameInitAsync(&g_gameMemory) : (void)(0);
+        }).detach();
 
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
-        // ImGUI initialization code :)
-
-        // Setup Dear ImGui context
-        IMGUI_CHECKVERSION();
-        ImGui::CreateContext();
-        // ImGuiIO& io = ImGui::GetIO(); (void)io;
-        // Setup Dear ImGui style
-        ImGui::StyleColorsDark();
+        // some more ImGUI initialization code :)
         // Setup Platform/Renderer backends
         ImGui_ImplWin32_Init(windowHandle);
 #if defined(AUTOMATA_ENGINE_GL_BACKEND)
@@ -2069,24 +2182,40 @@ int CALLBACK WinMain(HINSTANCE instance,
 
         g_bIsWindowFocused = true;//TODO: is this needed?
 
-        while(automata_engine::platform::_globalRunning) {
+        bool &globalRunning = g_engineMemory.globalRunning;
+
+        while(globalRunning) {
+
+            // TODO: could this have better placement in the frame?
+            FILETIME NewDLLWriteTime = Win32GetLastWriteTime(SourceDLLName);
+            if (CompareFileTime(&NewDLLWriteTime, &gameCodeLastWriteTime))
+            {
+                if (GameOnUnload) GameOnUnload(&g_gameMemory);
+                Win32UnloadGameCode();
+                gameCodeLastWriteTime = Win32GetLastWriteTime(SourceDLLName);
+                Win32LoadGameCode(SourceDLLName, TempDLLName);
+                if (GameOnHotload) GameOnHotload(&g_gameMemory);
+            }
+
+            ae::user_input_t &userInput = g_engineMemory.userInput;
 
             uint32_t localFrameIndex = g_frameIndex % g_inputPollRate;
 
-            // even for frameIndex == 0, this will init the globalUserInput.keyDown to zero.
+            // even for frameIndex == 0, this will init the userInput.keyDown to zero.
             uint32_t prevLocalFrameIndex = (localFrameIndex - 1) % g_inputPollRate;
 
-            // TODO: just have TWO globalUserInput structs instead? think about that and give is some good thought. this is important API.
+            // TODO: just have TWO userInput structs instead? think about that and give is some good thought. this is important API.
 
             // reset accumulation state.
-            globalUserInput.deltaMouseX[localFrameIndex] = 0; globalUserInput.deltaMouseY[localFrameIndex] = 0;
+            userInput.deltaMouseX[localFrameIndex]       = 0;
+            userInput.deltaMouseY[localFrameIndex] = 0;
 
             // carry over prev signals.
-            globalUserInput.mouseLBttnDown[localFrameIndex] = globalUserInput.mouseLBttnDown[prevLocalFrameIndex];
-            globalUserInput.mouseRBttnDown[localFrameIndex] = globalUserInput.mouseRBttnDown[prevLocalFrameIndex];
+            userInput.mouseLBttnDown[localFrameIndex] = userInput.mouseLBttnDown[prevLocalFrameIndex];
+            userInput.mouseRBttnDown[localFrameIndex] = userInput.mouseRBttnDown[prevLocalFrameIndex];
 
             for (uint32_t idx = 0; idx < (uint32_t)ae::GAME_KEY_COUNT; idx++) {
-                globalUserInput.keyDown[localFrameIndex][idx] = globalUserInput.keyDown[prevLocalFrameIndex][idx];
+                userInput.keyDown[localFrameIndex][idx] = userInput.keyDown[prevLocalFrameIndex][idx];
             }
 
             // Process windows messages
@@ -2095,7 +2224,7 @@ int CALLBACK WinMain(HINSTANCE instance,
                 while(PeekMessage(&message, NULL, 0, 0, PM_REMOVE)) {
                     switch (message.message) {
                         case WM_QUIT:
-                        automata_engine::platform::_globalRunning = false;
+                            globalRunning = false;
                         break;
                         default:
                         TranslateMessage(&message);
@@ -2137,12 +2266,17 @@ int CALLBACK WinMain(HINSTANCE instance,
             bool        bRenderFallback          = false;
             if (bAppOkNow) {
                 if (bGameShouldUpdate) {
-                    auto gameUpdateAndRender = automata_engine::bifrost::getCurrentApp();
-                    if ((gameUpdateAndRender != nullptr)) {
-                        gameUpdateAndRender(&g_gameMemory);
-                    } else {
-                        AELoggerLog("WARN: gameUpdateAndRender == nullptr");
+                    bool bFoundUpdate = false;
+                    if (GameGetUpdateAndRender)
+                    {
+                        auto gameUpdateAndRender = GameGetUpdateAndRender(&g_gameMemory);
+                        if ((gameUpdateAndRender != nullptr)) {
+                            bFoundUpdate = true;
+                            gameUpdateAndRender(&g_gameMemory);
+                        }
                     }
+                    if (!bFoundUpdate)
+                        AELoggerWarn("gameUpdateAndRender == nullptr");
                 }
             } else {
                 // Fallback (i.e. Automata Engine loading scene).
@@ -2150,7 +2284,7 @@ int CALLBACK WinMain(HINSTANCE instance,
 
                 if (bRenderFallbackFirstTime) {
                     IntroCounter = Win32GetWallClock();
-                    srand(automata_engine::timing::wallClock());
+                    srand(Platform_wallClock());
                     ae::platform::voiceSubmitBuffer(g_engineVoice, g_engineSound);
                     ae::platform::voicePlayBuffer(g_engineVoice);
                 }
@@ -2164,7 +2298,7 @@ int CALLBACK WinMain(HINSTANCE instance,
 
                 if (!bRenderFallbackFirstTime) {
                     // draw the logo in the middle and scale over time.
-                    uint32_t scaleFactor     = (1.0f) + 4.f * ae::math::sqrt(introElapsed);
+                    uint32_t scaleFactor     = (1.0f) + 4.f * sqrtf(introElapsed);
                     float    scaledImgWidth  = g_engineLogo.width * scaleFactor;
                     float    scaledImgHeight = g_engineLogo.height * scaleFactor;
 
@@ -2211,20 +2345,24 @@ int CALLBACK WinMain(HINSTANCE instance,
 
 #endif
 
+            ae::engine_memory_t *EM = &g_engineMemory;
+
             if (bGameShouldUpdate)
             {
                 LARGE_INTEGER WorkCounter   = Win32GetWallClock();
-                ae::timing::lastFrameUpdateEndTime = WorkCounter.QuadPart;
+                EM->timing.lastFrameUpdateEndTime = WorkCounter.QuadPart;
             }
 
-            bool bUsingAtomicUpdate = (ae::platform::GLOBAL_UPDATE_MODEL == ae::AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC);
+            assert(EM->globalUpdateModel == ae::AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC);
+            bool bUsingAtomicUpdate = true;
 
 // TODO: this needs fixing now that we have the bGameShouldUpdate boolean.
 #if defined(AUTOMATA_ENGINE_GL_BACKEND)
-            if (!bRenderFallback) {
+            if (!bRenderFallback && bGameShouldUpdate) {
                 if (bUsingAtomicUpdate) {
                     glFlush();   // push all buffered commands to GPU
                     glFinish();  // block until GPU is complete
+                    EM->timing.lastFrameGpuEndTime = Win32GetWallClock().QuadPart;
                 }
                 // TODO: we might want to rethink how we do vsync on the GL side. there is some major oddness with
                 // the double wait idea that we are doing here.
@@ -2245,8 +2383,8 @@ int CALLBACK WinMain(HINSTANCE instance,
 
             // TODO: consider other update models.
             if (bUsingAtomicUpdate)
-            {
-                ae::timing::lastFrameVisibleTime = TargetSecondsElapsedPerFrame;
+            { 
+                EM->timing.lastFrameVisibleTime = TargetSecondsElapsedPerFrame;
             }
 
 #if defined(AUTOMATA_ENGINE_VK_BACKEND)
@@ -2255,7 +2393,7 @@ int CALLBACK WinMain(HINSTANCE instance,
 
                 if (bUsingAtomicUpdate) {
                     gpuEnd                          = vk_WaitForAndResetFence(g_vkDevice, &g_vkPresentFence);
-                    ae::timing::lastFrameGpuEndTime = gpuEnd.QuadPart;
+                    ae::EM->timing.lastFrameGpuEndTime = gpuEnd.QuadPart;
                 }
 
                 {
@@ -2271,11 +2409,14 @@ int CALLBACK WinMain(HINSTANCE instance,
                 }
 
                 vk_getNextBackbuffer();
+            }
+#endif
 
+            if (!bRenderFallback && bGameShouldUpdate) {
                 gameMonitor->WaitForVBlank();
 
-                LARGE_INTEGER after = Win32GetWallClock();
-                LARGE_INTEGER before = {.QuadPart = LONGLONG(ae::timing::lastFrameMaybeVblankTime)};
+                LARGE_INTEGER after  = Win32GetWallClock();
+                LARGE_INTEGER before = {.QuadPart = LONGLONG(EM->timing.lastFrameMaybeVblankTime)};
 
                 // is this measured vblank greater than forecasted time based on last blank?
                 if ((TargetSecondsElapsedPerFrame * 1.5f) <
@@ -2283,31 +2424,29 @@ int CALLBACK WinMain(HINSTANCE instance,
                     AELoggerWarn("missed the vblank!!!");
                 }
 
-                ae::timing::lastFrameMaybeVblankTime = after.QuadPart;
+                EM->timing.lastFrameMaybeVblankTime = after.QuadPart;
 
                 // do the frame pacing stuff.
                 doEndFrameWaitToTarget = false;
             }
             // TODO: other backends are probably very much broken.
-            else if (!bGameShouldUpdate)
-            {
+            else if (!bGameShouldUpdate) {
                 // wait until the next input poll.
-                LastCounter = Win32GetWallClock(); // begin wait from this point.
+                LastCounter    = Win32GetWallClock();  // begin wait from this point.
                 endFrameTarget = 0.008f;
             }
-#endif
 
             // NOTE: the end frame wait utility for the above code (above code gets to set the wait time).
             if (doEndFrameWaitToTarget) {
                 float SecondsElapsedForFrame =
                     Win32GetSecondsElapsed(LastCounter, Win32GetWallClock(), g_PerfCountFrequency64);
                 if (SecondsElapsedForFrame < endFrameTarget) {
-                    if (SleepGranular && ae::platform::_globalVsync) {
+                    if (SleepGranular) {
                         DWORD SleepMS = (DWORD)ae::math::max(
                             int32_t(0), int32_t(1000.0f * (endFrameTarget - SecondsElapsedForFrame)) - 1);
                         if (SleepMS > 0) { Sleep(SleepMS); }
                     }
-                    while ((SecondsElapsedForFrame < endFrameTarget) && ae::platform::_globalVsync) {
+                    while ((SecondsElapsedForFrame < endFrameTarget)) {
                         SecondsElapsedForFrame =
                             Win32GetSecondsElapsed(LastCounter, Win32GetWallClock(), g_PerfCountFrequency64);
                     }
@@ -2317,8 +2456,8 @@ int CALLBACK WinMain(HINSTANCE instance,
             }
 
             if (bGameShouldUpdate)
-            {
-                ae::timing::lastFrameBeginTime = LastCounter.QuadPart;
+            { 
+                EM->timing.lastFrameBeginTime = LastCounter.QuadPart;
             }
 
             LARGE_INTEGER EndCounter = Win32GetWallClock();
@@ -2333,7 +2472,7 @@ int CALLBACK WinMain(HINSTANCE instance,
                 // NOTE(Noah): Here we are going to call our custom windows platform layer function that
                 // will write our custom buffer to the screen.
                 HDC                    deviceContext = GetDC(windowHandle);
-                ae::game_window_info_t winInfo       = automata_engine::platform::getWindowInfo();
+                ae::game_window_info_t winInfo       = Platform_getWindowInfo();
                 Win32DisplayBufferWindow(deviceContext, winInfo);
                 ReleaseDC(windowHandle, deviceContext);
             }
@@ -2374,19 +2513,16 @@ int CALLBACK WinMain(HINSTANCE instance,
         if (GameCleanup != nullptr) {
             GameCleanup(&g_gameMemory);
         } else {
-            AELoggerLog("WARN: GameCleanup == nullptr");
+            AELoggerWarn("GameCleanup == nullptr");
         }
 
         if (g_gameMemory.data != nullptr) {
-            automata_engine::platform::free(g_gameMemory.data);
+            Platform_free(g_gameMemory.data);
             g_gameMemory.data = nullptr;
         }
 
         if (windowHandle != NULL) { DestroyWindow(windowHandle); }
         if (classAtom != 0) { UnregisterClassA(windowClass.lpszClassName, instance); }
-
-        // finally, dealloc automata_engine state
-        automata_engine::super::_close();
 
         // stall program to allow user to see err.
         
@@ -2407,5 +2543,5 @@ int CALLBACK WinMain(HINSTANCE instance,
         ReadConsoleInput(inputHandle, &record, 1, &inputsRead);
     }
 
-    return automata_engine::platform::_globalProgramResult;
+    return globalProgramResult;
 }
