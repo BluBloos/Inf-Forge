@@ -2272,6 +2272,7 @@ int CALLBACK WinMain(HINSTANCE instance,
                 gameCodeLastWriteTime = Win32GetLastWriteTime(SourceDLLName);
                 Win32LoadGameCode(SourceDLLName, TempDLLName);
                 if (GameOnHotload) GameOnHotload(&g_gameMemory);
+                AELoggerLog("did the hotload.");
             }
 
             ae::user_input_t &userInput = g_engineMemory.userInput;

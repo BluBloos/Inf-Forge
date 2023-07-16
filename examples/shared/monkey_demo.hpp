@@ -26,6 +26,12 @@ DllExport void GameOnHotload(ae::game_memory_t *gameMemory)
     EM->pfn.imguiGetAllocatorFunctions(&allocFunc, &freeFunc, &userData);
     ImGui::SetAllocatorFunctions(allocFunc, freeFunc, userData);
 
+    // NOTE: we write the app table on each hotload since any pointers to the functions
+    // within the DLL from before are no longer valid.
+    // write the app table.
+    ae::bifrost::clearAppTable(gameMemory);
+    ae::bifrost::registerApp(gameMemory, AUTOMATA_ENGINE_PROJECT_NAME, MonkeyDemoUpdate);
+
     // load the function pointers for the gfx API.
     MonkeyDemoHotload(gameMemory);
 }
@@ -75,8 +81,6 @@ static void MonkeyDemoInit(ae::game_memory_t *gameMemory)
     gd->cameraSensitivity   = 3.0f;
     gd->optInFirstPersonCam = false;
     gd->bFocusedLastFrame   = true;  // assume for first frame.
-
-    ae::bifrost::registerApp(gameMemory, AUTOMATA_ENGINE_PROJECT_NAME, MonkeyDemoUpdate);
 }
 
 static void MonkeyDemoUpdate(ae::game_memory_t *gameMemory)
@@ -284,7 +288,7 @@ static void MonkeyDemoUpdate(ae::game_memory_t *gameMemory)
     ae::math::vec3_t s2_eulerAngles;
     simulateWorldStep(1, timeStep, s1_posVector, s1_eulerAngles, &s2_posVector, &s2_eulerAngles);
 
-    if (bSpin) gd->suzanneTransform.eulerAngles += ae::math::vec3_t(0.0f, 0.5f * EM->timing.lastFrameVisibleTime, 0.0f);
+    if (bSpin) gd->suzanneTransform.eulerAngles += ae::math::vec3_t(0.0f, 2.0f * EM->timing.lastFrameVisibleTime, 0.0f);
 
     // TODO: look into the depth testing stuff more deeply on the hardware side of things.
     // what is something that we can only do because we really get it?

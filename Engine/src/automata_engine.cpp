@@ -88,6 +88,16 @@ namespace automata_engine {
     }
 
     namespace bifrost {
+
+        void clearAppTable(game_memory_t *gameMemory)
+        {
+            // TODO: the stretchy buffer free call really ought to set these to null. 
+            StretchyBufferFree(gameMemory->bifrost.appTable_funcs);
+            gameMemory->bifrost.appTable_funcs = nullptr;
+            StretchyBufferFree(gameMemory->bifrost.appTable_names);
+            gameMemory->bifrost.appTable_names = nullptr;
+        }
+
         void registerApp(
             game_memory_t *gameMemory,
             const char *appName,

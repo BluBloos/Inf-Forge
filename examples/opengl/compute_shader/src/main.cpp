@@ -25,6 +25,9 @@ DllExport void GameOnHotload(ae::game_memory_t *gameMemory)
     EM->pfn.imguiGetAllocatorFunctions(&allocFunc, &freeFunc, &userData);
     ImGui::SetAllocatorFunctions(allocFunc, freeFunc, userData);
 
+    ae::bifrost::clearAppTable(gameMemory);
+    ae::bifrost::registerApp(gameMemory, "app", GameUpdateAndRender);
+
     // load the open GL funcs into this DLL.
     // NOTE: this fails the first time since this DLL is hot-loaded before OpenGL is initialized.
     if (EM->bOpenGLInitialized) glewInit();
@@ -97,8 +100,6 @@ DllExport void GameInit(ae::game_memory_t *gameMemory)
         // Unbind the framebuffer
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
     }
-
-    ae::bifrost::registerApp(gameMemory, "app", GameUpdateAndRender);
 
     // TODO: maybe in the future we have other modes like gsync or freesync
     // or whatever. but for right now we're kicking it old school with a fixed

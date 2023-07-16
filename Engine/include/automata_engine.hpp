@@ -746,6 +746,11 @@ namespace automata_engine {
         void updateApp(game_memory_t * gameMemory, const char *appName);
 
         PFN_GameFunctionKind getCurrentApp(game_memory_t *gameMemory);
+
+        /// @brief clear all registered apps. this is useful when hotloading the DLL to reset the table before writing it
+        /// from scratch.
+        /// @param gameMemory 
+        void clearAppTable(game_memory_t *gameMemory);
     }
 
     // AE input/output engine.
