@@ -2285,8 +2285,10 @@ int CALLBACK WinMain(HINSTANCE instance,
                 if (bRenderFallbackFirstTime) {
                     IntroCounter = Win32GetWallClock();
                     srand(Platform_wallClock());
-                    ae::platform::voiceSubmitBuffer(g_engineVoice, g_engineSound);
-                    ae::platform::voicePlayBuffer(g_engineVoice);
+                    
+                    // TODO: re-enable the engine voice stuff.
+                    //ae::platform::voiceSubmitBuffer(g_engineVoice, g_engineSound);
+                    //ae::platform::voicePlayBuffer(g_engineVoice);
                 }
 
                 // TODO: for now gonna render a solid white color to the entire backbuffer.
@@ -2353,7 +2355,7 @@ int CALLBACK WinMain(HINSTANCE instance,
                 EM->timing.lastFrameUpdateEndTime = WorkCounter.QuadPart;
             }
 
-            assert(EM->globalUpdateModel == ae::AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC);
+            assert(EM->g_updateModel == ae::AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC);
             bool bUsingAtomicUpdate = true;
 
 // TODO: this needs fixing now that we have the bGameShouldUpdate boolean.

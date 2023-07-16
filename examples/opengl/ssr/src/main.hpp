@@ -3,6 +3,21 @@ typedef struct game_state {
   ae::GL::vbo_t cubeVbo;
   GLuint cubeVao;
 
+  bool             bSpin;
+    bool             lockCamYaw;
+    bool             lockCamPitch;
+    float            ambientStrength;
+    float            specularStrength;
+    ae::math::vec4_t lightColor;
+    ae::math::vec3_t lightPos;
+    float            cameraSensitivity;
+    bool             optInFirstPersonCam;
+
+    bool bFocusedLastFrame;
+    float lastDeltaX[2];
+    float lastDeltaY[2];
+
+
   GLuint gBuffer;
   GLuint gNormal;
   GLuint gColor;

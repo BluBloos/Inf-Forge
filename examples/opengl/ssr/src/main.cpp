@@ -1,7 +1,8 @@
 #include <automata_engine.hpp>
 
-#include <main.hpp>
+#define DllExport extern "C" __declspec(dllexport)
 
+#include <main.hpp>
 #include "../../shared/monkey_demo.hpp"
 
 // clang-format off
@@ -68,15 +69,18 @@ static float cubeVertices[] = {
   // clang-format on
   // clang-format on
 
-void ae::Init(game_memory_t *gameMemory) {
-
+DllExport void GameInit(ae::game_memory_t *gameMemory)
+{
+    ae::engine_memory_t *EM = gameMemory->pEngineMemory;
   MonkeyDemoInit(gameMemory);
 
-  ae::GL::initGlew();
+  if (EM->bOpenGLInitialized)
+      glewInit();
+
   glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
   glEnable(GL_DEPTH_TEST);
 
-  auto winInfo = ae::platform::getWindowInfo();
+  auto winInfo = EM->pfn.getWindowInfo();
 
   game_state_t *gameState = getGameState(gameMemory);
 
@@ -91,7 +95,7 @@ void ae::Init(game_memory_t *gameMemory) {
 
   if (((int)gameState->lightingPass == -1) || ((int)gameState->SSR_shader == -1) ||
       ((int)gameState->gameShader == -1) || ((int)gameState->debugRenderDepth == -1)) {
-      ae::setFatalExit();
+      EM->setFatalExit();
       return;
   }
 
@@ -100,7 +104,7 @@ void ae::Init(game_memory_t *gameMemory) {
   // load the OBJ into VAO.
   gameState->suzanne = ae::io::loadObj("res\\monke.obj");
   if (gameState->suzanne.vertexData == nullptr) {
-      ae::setFatalExit();
+      EM->setFatalExit();
       return;
   }
   ae::GL::objToVao(gameState->suzanne, &gameState->suzanneIbo, &gameState->suzanneVbo, &gameState->suzanneVao);
@@ -219,7 +223,7 @@ void ae::Init(game_memory_t *gameMemory) {
   {
       ae::loaded_image_t bitmap = ae::io::loadBMP("res\\highres_checker.bmp");
       if (bitmap.pixelPointer == nullptr) {
-          ae::setFatalExit();
+          EM->setFatalExit();
           return;
       }
       gameState->checkerTexture = ae::GL::createTexture(bitmap.pixelPointer, bitmap.width, bitmap.height);
@@ -231,11 +235,12 @@ void ae::Init(game_memory_t *gameMemory) {
   }
 }
 
-void ae::InitAsync(game_memory_t *gameMemory) { gameMemory->setInitialized(true); }
+DllExport void GameInitAsync(ae::game_memory_t *gameMemory) { gameMemory->setInitialized(true); }
 
 void MonkeyDemoRender(ae::game_memory_t *gameMemory)
 {
-  auto winInfo = ae::platform::getWindowInfo();
+  ae::engine_memory_t *EM        = gameMemory->pEngineMemory;
+  auto          winInfo   = EM->pfn.getWindowInfo();
   game_state_t *gameState = getGameState(gameMemory);
 
   const float iResolution[3] = {winInfo.width, winInfo.height, 1};
@@ -387,7 +392,8 @@ void MonkeyDemoRender(ae::game_memory_t *gameMemory)
 
 }
 
-void ae::Close(game_memory_t *gameMemory) {
+DllExport void GameClose(ae::game_memory_t *gameMemory)
+{
   game_state_t *gameState = getGameState(gameMemory);
   ae::io::freeObj(gameState->suzanne);
   glDeleteProgram(gameState->gameShader);

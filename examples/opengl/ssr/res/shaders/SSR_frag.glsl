@@ -13,12 +13,12 @@ uniform sampler2D iNormals;
 uniform sampler2D iDepth;   // ndc.
 uniform sampler2D iPos;     // in view space.
 
-// NOTE: this is in units of fragment.
-const float coarseRayStep = 0.1; // in view space.
-const uint maxRaySteps = 64;
-
 void main()
 {
+    // NOTE: this is in units of fragment.
+    float coarseRayStep = 0.1; // in view space.
+    int maxRaySteps = 64;
+
     vec2 uv = gl_FragCoord.xy / iResolution.xy;
 
     // sample normal.
@@ -40,8 +40,8 @@ void main()
     // coarse raymarch pass.
     vec2 currUV = uv;
     vec3 rayPos = vPos; // in view.
-    uint didHit = 0;
-    for (uint i = 0; (i < maxRaySteps) && (dot(viewDir, N) < 0); i += 1)
+    int didHit = 0;
+    for (int i = 0; (i < maxRaySteps) && (dot(viewDir, N) < 0); i += 1)
     {
         // iter the ray.
         rayPos += rayDir * coarseRayStep;
@@ -50,7 +50,7 @@ void main()
         // x_ndc = x / tanf(cam.fov * DEGREES_TO_RADIANS / 2.0f) * (1 / -z.
         // x_uv = x_ndc /2 + 0.5        
         currUV = rayPos.xy / (-rayPos.z * vec2(iCamTanHalfFov, iCamTanHalfFovTimesAspect) );
-        currUV = currUV / 2 + 0.5;
+        currUV = currUV / 2.0 + 0.5;
 
         if (currUV.x < 0.0 || currUV.x > 1.0 || currUV.y < 0.0 || currUV.y > 1.0 ||
             rayPos.z > -n || rayPos.z < -f
@@ -67,7 +67,7 @@ void main()
         // but the idea of projection in opengl is that we map the z value to [-1, 1].
         // thus, before we do the inverse projection transform, we need to get back to
         // -1,-1.
-        depthNDC = depthNDC * 2 - 1;
+        depthNDC = depthNDC * 2.0 - 1.0;
         
         // z_ndc = (f + n) / (f -n) + 2 * f * n / (f - n) / z
         // rearrange the above and we get:
@@ -76,7 +76,7 @@ void main()
 
         // NOTE: depth in the view space from the camera goes more negative when we get farther away from the camera.
         // therefore we want to find that the ray is less, which makes it a larger negative.
-        if ( (rayPos.z < depthView) && ((depthView - rayPos.z) < coarseRayStep*0.5 ) )
+        if ( (rayPos.z < depthView) && ((depthView - rayPos.z) < coarseRayStep * 0.5 ) )
         {
             // hit something.
             didHit = 1;
@@ -84,17 +84,17 @@ void main()
         }
     } // @ loop end, rayPos is as far as the ray went before we maybe found a hit.
 
-    if (didHit)
+    if (didHit == 1)
     {
         ssr_uv = currUV;
 
         // TODO.
-        ssr_depth = vec2((-rayPos.z-n)/(f), 0);
+        ssr_depth = vec2((-rayPos.z-n)/(f), 0.0);
     }
     else
     {
         ssr_uv = uv;
-        ssr_depth = vec2(0, (-rayPos.z-n)/(f) );
+        ssr_depth = vec2(0.0, (-rayPos.z-n)/(f) );
     }
 
     /*float depthNDC = texture(iDepth, uv).r;
