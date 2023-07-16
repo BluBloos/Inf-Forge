@@ -111,8 +111,10 @@ ID3D12Resource *AllocUploadBuffer(ID3D12Device *device, UINT64 size,
   return res;
 }
 
-#undef COM_RELEASE
+
 } // namespace DX
 }; // namespace automata_engine
 
-#endif
+#undef COM_RELEASE
+
+#endif  // defined(AUTOMATA_ENGINE_DX12_BACKEND)

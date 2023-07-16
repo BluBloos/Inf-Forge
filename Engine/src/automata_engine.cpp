@@ -1,14 +1,7 @@
 
-#define NC_STR_IMPL
 #include <automata_engine.hpp>
-
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h" 
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "stb_image_write.h" 
-
-#include <windows.h>
-#include <win32_engine.h>
+#include "stb_image.h"
+#include "stb_image_write.h"
 
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
 #include "imgui.h"

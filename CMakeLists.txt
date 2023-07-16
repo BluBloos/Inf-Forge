@@ -46,9 +46,10 @@ if (NOT ${ProjectExplicitSources})
     file(GLOB_RECURSE PROJ_SOURCES
         "${ProjectRoot}/src/*.cpp")
 endif()
-file(GLOB_RECURSE ENGINE_SOURCES
-    "${ENGINE_ROOT}/src/*.cpp"
-    "${ENGINE_ROOT}/src/*.manifest")
+
+set(ENGINE_SOURCES
+    "${ENGINE_ROOT}/src/automata_engine_amalgamated.cpp"
+    "${ENGINE_ROOT}/src/app.manifest")
 
 set(SOURCES ${PROJ_SOURCES} ${ENGINE_SOURCES})
 # =========== FIND SOURCES ===========
