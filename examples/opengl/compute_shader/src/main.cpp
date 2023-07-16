@@ -1,8 +1,9 @@
 #include <automata_engine.hpp>
 
 typedef uint32_t u32;
-
 #define DllExport  extern "C" __declspec( dllexport )
+
+#include "main.hpp"
 
 // NOTE: this is called every time that the game DLL is hot-loaded.
 DllExport void GameOnHotload(ae::game_memory_t *gameMemory)
@@ -41,15 +42,6 @@ DllExport ae::PFN_GameFunctionKind GameGetUpdateAndRender(ae::game_memory_t *gam
 {
   return ae::bifrost::getCurrentApp(gameMemory);
 }
-
-void GameUpdateAndRender(ae::game_memory_t *gameMemory);
-
-typedef struct game_state {
-  GLuint computeShader;
-  GLuint outputImage;
-  GLenum outputFormat;
-  GLuint outputImageFramebuffer;
-} game_state_t;
 
 game_state_t *getGameState(ae::game_memory_t *gameMemory) {
   return (game_state_t *)gameMemory->data;
