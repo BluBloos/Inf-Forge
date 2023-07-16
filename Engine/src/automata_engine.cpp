@@ -9,22 +9,24 @@
 
 namespace automata_engine {
 
-    namespace platform {
-        void (*_redirectedFprintf)(const char *) = nullptr;
-        void setAdditionalLogger(void (*fn)(const char *)) {
-            _redirectedFprintf = fn;
+    namespace timing {
+        float getTimeElapsed(uint64_t begin, uint64_t end)
+        {
+            return float(end - begin) / EM->pfn.getTimerFrequency();
         }
     }
 
-    bool super::g_renderImGui = true;
+    void setEngineContext(engine_memory_t *pEM) { EM = pEM; }
 
-    // if both are UINT32_MAX, window maximizes. else it uses the OS defined default
-    // dim if UINT32_MAX.
-    int32_t defaultWidth = UINT32_MAX;
-    int32_t defaultHeight = UINT32_MAX;
+    engine_memory_t *EM;
 
-    game_window_profile_t defaultWinProfile = AUTOMATA_ENGINE_WINPROFILE_RESIZE;
-    const char *defaultWindowName = "Automata Engine";
+    void initModuleGlobals()
+    {
+        // NOTE: this is a setting that needs to be set again each time that we hot-load the game
+        // DLL. we can't just rely on the memory stored in game_memory.
+        stbi_set_flip_vertically_on_load(true);
+        stbi_flip_vertically_on_write(true);
+    }
 
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
     void ImGuiRenderVec3(const char *vecName, math::vec3_t vec) {
@@ -55,15 +57,11 @@ namespace automata_engine {
     }
 #endif
 
-    void setUpdateModel(update_model_t newModel) {
-        platform::GLOBAL_UPDATE_MODEL = newModel;
-    }
-
     loaded_image_t platform::stbImageLoad(const char *fileName) {
         int x, y, n;
         int desired_channels=4;
         loaded_image_t myImage = {};
-        loaded_file_t myFile = platform::readEntireFile(fileName);
+        loaded_file_t myFile = EM->pfn.readEntireFile(fileName);
         if (myFile.contents) {
             myImage.parentFile = myFile;
             // NOTE(Noah): For now, let's avoid .jpg.
@@ -82,110 +80,99 @@ namespace automata_engine {
             } else {
               // TODO(Noah): Do something intelligent in the case of failure
               // here.
-              AELoggerError("ae::platform::stbImageLoad failed");
+              //               AELoggerError(EM, "ae::platform::stbImageLoad failed");
               assert(false);
             }
         }
         return myImage;
     }
-    void setGlobalRunning(bool newVal) {
-        platform::_globalRunning = newVal;
-    }
-    void setFatalExit() {
-        platform::_globalProgramResult = -1;
-        platform::_globalRunning = false;
-    }
-    // TODO(Noah): Swap this appTable out for something more performant
-    // like a hash table. OR, could do the other design pattern where we map
-    // some index to names. We just O(1) lookup...
-    //
-    // it's also probably the case that strcmp will return true if we have a
-    // substring match? Please ... fix this code.
-    typedef void (*f_ptr_t)(game_memory_t *); 
-    static uint32_t _currentApp = 0;
-    typedef struct {
-        f_ptr_t updateFunc;
-        f_ptr_t transitionInto;
-        f_ptr_t transitionOut;
-    } bifrost_app_t;
-    static bifrost_app_t *appTable_func = nullptr;
-    static const char **appTable_name = nullptr;
-    void bifrost::registerApp(
-        const char *appName, f_ptr_t callback,
-        f_ptr_t transitionInto, f_ptr_t transitionOut
-    ) {
-        bifrost_app_t app = {callback, transitionInto, transitionOut};
-        StretchyBufferPush(appTable_func, app);
-        StretchyBufferPush(appTable_name, appName);
-    }
-    void bifrost::updateApp(game_memory_t * gameMemory, const char *appname) {
-        for (uint32_t i = 0; i < StretchyBufferCount(appTable_name); i++) {
-            if (strcmp(appTable_name[i], appname) == 0) {
-                if (appTable_func[_currentApp].transitionOut != nullptr)
-                    appTable_func[_currentApp].transitionOut(gameMemory);
-                if (appTable_func[i].transitionInto != nullptr)
-                    appTable_func[i].transitionInto(gameMemory);
-                _currentApp = i;
+
+    namespace bifrost {
+        void registerApp(
+            game_memory_t *gameMemory,
+            const char *appName,
+            PFN_GameFunctionKind callback,
+            PFN_GameFunctionKind        transitionInto,
+            PFN_GameFunctionKind        transitionOut
+        ) {
+            auto &bifrost = gameMemory->bifrost;
+            bifrost_app_t app = {.updateFunc = callback, .transitionInto = transitionInto, .transitionOut = transitionOut};
+            StretchyBufferPush(bifrost.appTable_funcs, app);
+            StretchyBufferPush(bifrost.appTable_names, appName);
+        }
+
+        void updateApp(game_memory_t * gameMemory, const char *appname) {
+            auto &bifrost = gameMemory->bifrost;
+            for (uint32_t i = 0; i < StretchyBufferCount(bifrost.appTable_names); i++) {
+                if (strcmp(bifrost.appTable_names[i], appname) == 0) {
+                    auto transitionOut = bifrost.appTable_funcs[bifrost.currentAppIndex].transitionOut; 
+                    if ( transitionOut != nullptr )
+                        transitionOut(gameMemory);
+                    auto transitionInto = bifrost.appTable_funcs[i].transitionInto; 
+                    if ( transitionInto != nullptr)
+                        transitionInto(gameMemory);
+                    bifrost.currentAppIndex = i;
+                }
             }
         }
+
+        PFN_GameFunctionKind getCurrentApp(game_memory_t *gameMemory) {
+            auto &bifrost = gameMemory->bifrost;
+            // TODO(Noah): This can crash if _currentApp gets corrupted or something silly.
+            return (bifrost.appTable_funcs == nullptr) ? nullptr : 
+                bifrost.appTable_funcs[bifrost.currentAppIndex].updateFunc;
+        }
+
     }
-    std::function<void(game_memory_t *)> bifrost::getCurrentApp() {
-        // TODO(Noah): This can crash if _currentApp gets corrupted or something silly.
-        return (appTable_func == nullptr) ? nullptr : 
-            appTable_func[_currentApp].updateFunc;
-    }
+
     void super::updateAndRender(game_memory_t * gameMemory) {
+        engine_memory_t *EM = gameMemory->pEngineMemory;
+        auto &bifrost = gameMemory->bifrost;
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
         // Present the ImGui stuff to allow user to switch apps.
-        if (super::g_renderImGui) {
-            static bool bShowDemoWindow=false;
+        if (EM->g_renderImGui) {
             ImGui::Begin("AutomataEngine");
-            int item_current = _currentApp;
-            ImGui::Combo("App", &item_current, appTable_name, StretchyBufferCount(appTable_name));
-            if (item_current != _currentApp) { bifrost::updateApp(gameMemory, appTable_name[item_current]); }
+            int item_current = bifrost.currentAppIndex;
+            ImGui::Combo("App", &item_current, bifrost.appTable_names, StretchyBufferCount(bifrost.appTable_names));
+            if (item_current != bifrost.currentAppIndex) { 
+                bifrost::updateApp(gameMemory, bifrost.appTable_names[item_current]);
+            }
             ImGui::Text("lastFrameTimeUpdate: %.3f ms",
-                1000.0f * timing::getTimeElapsed(timing::lastFrameBeginTime, timing::lastFrameUpdateEndTime));
+                1000.0f * timing::getTimeElapsed(EM->timing.lastFrameBeginTime, EM->timing.lastFrameUpdateEndTime));
             ImGui::Text("lastFrameTimeUpdate_&_Render: %.3f ms",
-                1000.0f * timing::getTimeElapsed(timing::lastFrameBeginTime, timing::lastFrameGpuEndTime));
+                1000.0f * timing::getTimeElapsed(EM->timing.lastFrameBeginTime, EM->timing.lastFrameGpuEndTime));
 
-            float collectPeriod = timing::lastFrameVisibleTime / 2.0f;
+            float collectPeriod = EM->timing.lastFrameVisibleTime / 2.0f;
             ImGui::Text("input latency: %.3f s", collectPeriod);
             if (ImGui::IsItemHovered()) ImGui::SetTooltip("the phase shift of the input signal to the game signal.");
 
             float gameSimulateFrameTime;  // time of second poll + 1/2 poll period.
             ImGui::Text("present latency: %.3f s",
-                timing::getTimeElapsed(timing::lastFrameBeginTime, timing::lastFrameMaybeVblankTime) -
+                timing::getTimeElapsed(EM->timing.lastFrameBeginTime, EM->timing.lastFrameMaybeVblankTime) -
                     collectPeriod / 2.f);
             if (ImGui::IsItemHovered())
                 ImGui::SetTooltip(
                     "the phase shift of the game signal to the vblank signal.\n"
                     "if this is negative, that implies the vblank leads the game signal.");
 
-            ImGui::Text("frames per second: %.3f FPS", 1.f / timing::lastFrameVisibleTime);
-            ImGui::Text("updateModel: %s", updateModelToString(platform::GLOBAL_UPDATE_MODEL));
-            bool vsync = platform::_globalVsync;
-            ImGui::Checkbox("vsync", &vsync);
-            if (platform::_globalVsync != vsync) {
-                platform::setVsync(vsync);
-            }
-            ImGui::Checkbox("showDemoWindow", &bShowDemoWindow);
+            ImGui::Text("frames per second: %.3f FPS", 1.f / EM->timing.lastFrameVisibleTime);
+            ImGui::Text("updateModel: %s", updateModelToString(EM->g_updateModel));
+
+            // TODO: for now VSYNC is always on.
+
+            ImGui::Checkbox("showDemoWindow", &bifrost.bShowDemoWindow);
             ImGui::End();
 
-            if (bShowDemoWindow) ImGui::ShowDemoWindow();
+            if (bifrost.bShowDemoWindow) ImGui::ShowDemoWindow();
         }
 #endif
     }
-    void super::_close() {
-        StretchyBufferFree(appTable_func);
-        StretchyBufferFree(appTable_name);
+    void shutdownModuleGlobals() {
 #if defined(AUTOMATA_ENGINE_DX12_BACKEND) || defined(AUTOMATA_ENGINE_VK_BACKEND)
         ae::HLSL::_close();
 #endif
     }
-    void super::_init() {
-        stbi_set_flip_vertically_on_load(true);
-        stbi_flip_vertically_on_write(true);
-    }
+
     const char *updateModelToString(update_model_t updateModel) {
         const char *names[] = {
             "AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC",

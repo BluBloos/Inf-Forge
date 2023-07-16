@@ -1,10 +1,45 @@
 #include <automata_engine.hpp>
 
-#define APP_NAME "ComputeShader"
-
-namespace ae = automata_engine;
-
 typedef uint32_t u32;
+
+#define DllExport  extern "C" __declspec( dllexport )
+
+// NOTE: this is called every time that the game DLL is hot-loaded.
+DllExport void GameOnHotload(ae::game_memory_t *gameMemory)
+{
+  ae::engine_memory_t *EM = gameMemory->pEngineMemory;
+
+  // NOTE: this inits the automata engine module globals.
+  ae::initModuleGlobals();
+  // TODO: we might be able to merge these two calls?
+  ae::setEngineContext(EM);
+
+  // NOTE: ImGui has global state. therefore, we need to make sure
+  // that we use the same state that the engine is using.
+  // there are different global states since both the engine and the game DLL statically link to ImGui.
+  ImGui::SetCurrentContext(EM->pfn.imguiGetCurrentContext());
+  ImGuiMemAllocFunc allocFunc;
+  ImGuiMemFreeFunc freeFunc;
+  void *userData;
+  EM->pfn.imguiGetAllocatorFunctions(&allocFunc, &freeFunc, &userData);
+  ImGui::SetAllocatorFunctions(allocFunc, freeFunc, userData);
+  
+  // load the open GL funcs into this DLL.
+  // NOTE: this fails the first time since this DLL is hot-loaded before OpenGL is initialized.
+  glewInit();
+}
+
+// TODO: can we get rid of this shutdown thing?
+// NOTE: this is called every time that the game DLL is unloaded.
+DllExport void GameOnUnload() { 
+  ae::shutdownModuleGlobals();
+}
+
+// NOTE: this is called by the engine to get the "current app" as defined by the game.
+DllExport ae::PFN_GameFunctionKind GameGetUpdateAndRender(ae::game_memory_t *gameMemory)
+{
+  return ae::bifrost::getCurrentApp(gameMemory);
+}
 
 void GameUpdateAndRender(ae::game_memory_t *gameMemory);
 
@@ -19,21 +54,25 @@ game_state_t *getGameState(ae::game_memory_t *gameMemory) {
   return (game_state_t *)gameMemory->data;
 }
 
-void ae::HandleWindowResize(game_memory_t *gameMemory, int newWidth,
-                            int newHeight) {}
+DllExport void GamePreInit(ae::game_memory_t *gameMemory) {
+  ae::engine_memory_t *EM = gameMemory->pEngineMemory;
+  
 
-void ae::PreInit(game_memory_t *gameMemory) {
-  ae::defaultWinProfile = AUTOMATA_ENGINE_WINPROFILE_NORESIZE;
-  ae::defaultWindowName = APP_NAME;
-  ae::defaultWidth = 1280;
-  ae::defaultHeight = 720;
+  EM->defaultWinProfile = ae::AUTOMATA_ENGINE_WINPROFILE_NORESIZE;
+  EM->defaultWidth  = 1280;
+  EM->defaultHeight = 720;
 }
 
-void ae::Init(game_memory_t *gameMemory) {
-  ae::GL::initGlew();
+DllExport void GameInit(ae::game_memory_t *gameMemory) {
+  
+  // NOTE: need to init glew here since the first call from *OnHotload fails due to DLL being loaded before OpenGL is init.
+  glewInit();
+    
+  ae::engine_memory_t *EM = gameMemory->pEngineMemory;
+    
   glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
 
-  auto winInfo = ae::platform::getWindowInfo();
+  auto winInfo = EM->pfn.getWindowInfo();
 
   glViewport(0, 0, winInfo.width, winInfo.height);
 
@@ -41,7 +80,7 @@ void ae::Init(game_memory_t *gameMemory) {
 
   gameState->computeShader = ae::GL::createComputeShader("res\\compute.glsl");
   if ((int)gameState->computeShader == -1) {
-    ae::setFatalExit();
+    EM->setFatalExit();
     return;
   }
 
@@ -66,36 +105,32 @@ void ae::Init(game_memory_t *gameMemory) {
       // Handle framebuffer creation error
       // ...
       AELoggerError("cowabunga!");
-      ae::setFatalExit();
+      EM->setFatalExit();
       return;
     }
     // Unbind the framebuffer
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
   }
 
-  ae::bifrost::registerApp("app", GameUpdateAndRender);
-  ae::setUpdateModel(AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC);
-  ae::platform::setVsync(true);
+  ae::bifrost::registerApp(gameMemory, "app", GameUpdateAndRender);
+
+  // TODO: maybe in the future we have other modes like gsync or freesync
+  // or whatever. but for right now we're kicking it old school with a fixed
+  // framerate + vsync.
 }
 
-void ae::InitAsync(game_memory_t *gameMemory) {
+DllExport void GameInitAsync(ae::game_memory_t *gameMemory) {
   gameMemory->setInitialized(true);
 }
 
-// TODO: would be nice if it wasn't a requirement to do this thing. and instead
-// we could just be like, "we aren't using sound stuff."
-void ae::OnVoiceBufferEnd(game_memory_t *gameMemory, intptr_t voiceHandle) {}
-void ae::OnVoiceBufferProcess(game_memory_t *gameMemory, intptr_t voiceHandle,
-                              float *dst, float *src, uint32_t samplesToWrite,
-                              int channels, int bytesPerSample) {}
-
 void GameUpdateAndRender(ae::game_memory_t *gameMemory) {
+    ae::engine_memory_t *EM        = gameMemory->pEngineMemory;
   game_state_t *gameState = getGameState(gameMemory);
 
   glClearColor(1.0f, 1.0f, 0.1f, 1.0f);
   glClear(GL_COLOR_BUFFER_BIT);
 
-  auto winInfo = ae::platform::getWindowInfo();
+  auto winInfo = EM->pfn.getWindowInfo();
 
   // Do the compute draw.
   {
@@ -147,7 +182,7 @@ void GameUpdateAndRender(ae::game_memory_t *gameMemory) {
   ae::super::updateAndRender(gameMemory);
 }
 
-void ae::Close(game_memory_t *gameMemory) {
+DllExport void GameClose(ae::game_memory_t *gameMemory) {
   game_state_t *gameState = getGameState(gameMemory);
   glDeleteProgram(gameState->computeShader);
   glDeleteTextures(1, &gameState->outputImage);

@@ -47,11 +47,11 @@ if (NOT ${ProjectExplicitSources})
         "${ProjectRoot}/src/*.cpp")
 endif()
 
-set(ENGINE_SOURCES
-    "${ENGINE_ROOT}/src/automata_engine_amalgamated.cpp"
-    "${ENGINE_ROOT}/src/app.manifest")
+set(PROJ_SOURCES ${PROJ_SOURCES})
 
-set(SOURCES ${PROJ_SOURCES} ${ENGINE_SOURCES})
+set(ENGINE_SOURCES
+    "${ENGINE_ROOT}/src/win32_engine.cpp"
+    "${ENGINE_ROOT}/src/app.manifest")
 # =========== FIND SOURCES ===========
 
 # george w3as here
@@ -61,53 +61,27 @@ string(FIND ${ProjectBackend} "DX12_BACKEND" DX12_STRING_MATCH)
 string(FIND ${ProjectBackend} "VK_BACKEND"   VK_STRING_MATCH)
 string(FIND ${ProjectBackend} "CPU_BACKEND"  CPU_STRING_MATCH)
 
-# check for vulkan if needed.
+# check VK.
 if ( NOT ${VK_STRING_MATCH} EQUAL -1 )
     find_package( Vulkan 1.2 )
+    if ( NOT Vulkan_FOUND )
+        message( WARNING "VK backend request made but unable to find Vulkan SDK on this machine." )
+    endif()
 endif()
 
-# Add game EXE.
-add_executable(${ProjectName} WIN32 ${SOURCES})
+# add engine EXE.
+add_executable(${ProjectName}_engine WIN32 ${ENGINE_SOURCES})
+target_include_directories( ${ProjectName}_engine PUBLIC ${ENGINE_INCLUDES})
+set_target_properties(${ProjectName}_engine 
+    PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY $<TARGET_FILE_DIR:${ProjectName}>)
 
-# ====== COMPILE DEFINITIONS ======
-target_compile_features(${ProjectName} PRIVATE ${PROJECT_CXX_VERSION})
-target_compile_definitions(${ProjectName} PUBLIC -DAUTOMATA_ENGINE_PROJECT_NAME="${ProjectName}")
-
-if (${ProjectDisableEngineIntro})
-    # TODO: hook the definition of this to actually do something.
-    # we already have a commit somewhere that does this. just need to cherry-pick that.
-    target_compile_definitions(${ProjectName} PUBLIC -DAUTOMATA_ENGINE_DISABLE_ENGINE_INTRO)
-endif()
-
-if (${ProjectDisableLogging})
-    target_compile_definitions(${ProjectName} PUBLIC -DAUTOMATA_ENGINE_DISABLE_PLATFORM_LOGGING)
-endif()
-
-if (NOT ${ProjectDisableImGui})
-    target_compile_definitions(${ProjectName} PUBLIC ${IMGUI_COMMON_DEFINES})
-else()
-    target_compile_definitions(${ProjectName} PUBLIC -DAUTOMATA_ENGINE_DISABLE_IMGUI)
-endif()
-# ====== COMPILE DEFINITIONS ======
-
-source_group(TREE "${ENGINE_ROOT}/src/" PREFIX "engine/" FILES ${ENGINE_SOURCES})
-source_group(TREE "${ProjectRoot}/src/" PREFIX "app/" FILES ${PROJ_SOURCES})
+# add the game DLL.
+add_library(${ProjectName} SHARED ${PROJ_SOURCES} 
+    "${ENGINE_ROOT}/src/automata_engine_amalgamated.cpp"  )
 
 target_include_directories( ${ProjectName} PUBLIC ${ENGINE_INCLUDES} ${PROJECT_INCLUDES})
 
-set_target_properties(${ProjectName}
-    PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY $<TARGET_FILE_DIR:${ProjectName}>)
-
-# setup the automata tests target.
-if (NOT TARGET AutomataTests)
-    add_executable(AutomataTests ${ENGINE_SOURCES} "${ENGINE_ROOT}/tests/test_main.cpp")
-    target_link_libraries(AutomataTests ${COMMON_LIB})
-    target_compile_definitions( AutomataTests PUBLIC -DAUTOMATA_ENGINE_DISABLE_IMGUI)
-    target_include_directories( AutomataTests PUBLIC ${ENGINE_INCLUDES} )
-    target_compile_features( AutomataTests PRIVATE ${PROJECT_CXX_VERSION} )
-    set_target_properties( AutomataTests PROPERTIES FOLDER "tests")
-endif()
-
+# do some IMGUI things.
 if (NOT ${ProjectDisableImGui})
 
     # freetype target setup.
@@ -153,52 +127,86 @@ if (NOT ${ProjectDisableImGui})
 
 endif()
 
+function(SetupTarget TargetName)
+    
+    # ====== COMPILE DEFINITIONS ======
+    target_compile_features(${TargetName} PRIVATE ${PROJECT_CXX_VERSION})
+    target_compile_definitions(${TargetName} PUBLIC -DAUTOMATA_ENGINE_PROJECT_NAME="${ProjectName}")
 
-if ( NOT ${GL_STRING_MATCH} EQUAL -1 )
-    message(STATUS "gl backend enabled")
+    if (${ProjectDisableEngineIntro})
+        # TODO: hook the definition of this to actually do something.
+        # we already have a commit somewhere that does this. just need to cherry-pick that.
+        target_compile_definitions(${TargetName} PUBLIC -DAUTOMATA_ENGINE_DISABLE_ENGINE_INTRO)
+    endif()
 
-    set(Dependencies ${COMMON_LIB}
-        opengl32 Glu32
-        "${ENGINE_EXTERNAL}/glew-2.2.0/lib/Release/x64/glew32s.lib")
+    if (${ProjectDisableLogging})
+        target_compile_definitions(${TargetName} PUBLIC -DAUTOMATA_ENGINE_DISABLE_PLATFORM_LOGGING)
+    endif()
 
     if (NOT ${ProjectDisableImGui})
-        set(Dependencies ${Dependencies} ae_imgui ae_imgui_gl freetype)
+        target_compile_definitions(${TargetName} PUBLIC ${IMGUI_COMMON_DEFINES})
+    else()
+        target_compile_definitions(${TargetName} PUBLIC -DAUTOMATA_ENGINE_DISABLE_IMGUI)
+    endif()
+    # ====== COMPILE DEFINITIONS ======
+
+    # ====== SETUP AS PER BACKEND(s) ENABLED ======
+    if ( NOT ${GL_STRING_MATCH} EQUAL -1 )
+        set(Dependencies ${COMMON_LIB}
+            opengl32 Glu32
+            "${ENGINE_EXTERNAL}/glew-2.2.0/lib/Release/x64/glew32s.lib")
+
+        if (NOT ${ProjectDisableImGui})
+            set(Dependencies ${Dependencies} ae_imgui ae_imgui_gl freetype)
+        endif()
+
+        target_link_libraries(${TargetName} ${Dependencies})
+
+        target_compile_definitions(${TargetName}
+            PRIVATE -DAUTOMATA_ENGINE_GL_BACKEND -DGLEW_STATIC)
+
+        # TODO: technically this is only needed for *_engine?
+        target_include_directories(${TargetName}
+            PRIVATE "${ENGINE_EXTERNAL}/glew-2.2.0/include/GL")
     endif()
 
-    target_link_libraries(${ProjectName} ${Dependencies})
-
-    target_compile_definitions(${ProjectName}
-        PRIVATE -DAUTOMATA_ENGINE_GL_BACKEND -DGLEW_STATIC)
-    target_include_directories(${ProjectName}
-        PRIVATE "${ENGINE_EXTERNAL}/glew-2.2.0/include/GL")
-endif()
-
-if ( NOT ${DX12_STRING_MATCH} EQUAL -1 )
-    message(STATUS "dx12 backend enabled")
-    target_link_libraries(${ProjectName} ${COMMON_LIB} D3D12 DXGI D3DCompiler)
-    target_compile_definitions(${ProjectName} PRIVATE -DAUTOMATA_ENGINE_DX12_BACKEND)
-endif()
-
-if ( NOT ${CPU_STRING_MATCH} EQUAL -1 )
-    message(STATUS "cpu backend enabled")
-    target_link_libraries(${ProjectName} ${COMMON_LIB})
-    target_compile_definitions(${ProjectName} PRIVATE -DAUTOMATA_ENGINE_CPU_BACKEND)
-endif()
-
-if ( NOT ${VK_STRING_MATCH} EQUAL -1 )
-    message(STATUS "vk backend enabled")
-
-    if ( NOT Vulkan_FOUND )
-        message( FATAL_ERROR "VK backend request made but unable to find Vulkan SDK on this machine." )
+    if ( NOT ${DX12_STRING_MATCH} EQUAL -1 )
+        target_link_libraries(${TargetName} ${COMMON_LIB} D3D12 DXGI D3DCompiler)
+        target_compile_definitions(${TargetName} PRIVATE -DAUTOMATA_ENGINE_DX12_BACKEND)
     endif()
 
-    target_include_directories(${ProjectName} PRIVATE ${Vulkan_INCLUDE_DIRS} )
-    target_link_libraries( ${ProjectName} ${COMMON_LIB} )
-    target_compile_definitions(${ProjectName} PRIVATE -DAUTOMATA_ENGINE_VK_BACKEND )
-
-    if (NOT ${ProjectDisableImGui})
-        target_link_libraries(${ProjectName} ae_imgui ae_imgui_vk freetype)
+    if ( NOT ${CPU_STRING_MATCH} EQUAL -1 )
+        target_link_libraries(${TargetName} ${COMMON_LIB})
+        target_compile_definitions(${TargetName} PRIVATE -DAUTOMATA_ENGINE_CPU_BACKEND)
     endif()
+
+    if ( NOT ${VK_STRING_MATCH} EQUAL -1 )
+        target_include_directories(${TargetName} PRIVATE ${Vulkan_INCLUDE_DIRS} )
+        target_link_libraries( ${TargetName} ${COMMON_LIB} )
+        target_compile_definitions(${TargetName} PRIVATE -DAUTOMATA_ENGINE_VK_BACKEND )
+
+        if (NOT ${ProjectDisableImGui})
+            target_link_libraries(${TargetName} ae_imgui ae_imgui_vk freetype)
+        endif()
+    endif()
+    # ====== SETUP AS PER BACKEND(s) ENABLED ======
+
+endfunction()
+
+SetupTarget(${ProjectName})
+SetupTarget(${ProjectName}_engine)
+
+source_group(TREE "${ENGINE_ROOT}/src/" PREFIX "engine/" FILES ${ENGINE_SOURCES})
+source_group(TREE "${ProjectRoot}/src/" PREFIX "app/" FILES ${PROJ_SOURCES})
+
+# setup the automata tests target.
+if (NOT TARGET AutomataTests)
+    add_executable(AutomataTests ${ENGINE_SOURCES} "${ENGINE_ROOT}/tests/test_main.cpp")
+    target_link_libraries(AutomataTests ${COMMON_LIB})
+    target_compile_definitions( AutomataTests PUBLIC -DAUTOMATA_ENGINE_DISABLE_IMGUI)
+    target_include_directories( AutomataTests PUBLIC ${ENGINE_INCLUDES} )
+    target_compile_features( AutomataTests PRIVATE ${PROJECT_CXX_VERSION} )
+    set_target_properties( AutomataTests PROPERTIES FOLDER "tests")
 endif()
 
 # =============== ASSET COPY CODE ===============

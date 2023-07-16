@@ -2,22 +2,10 @@
 #include <catch.hpp>
 
 #include <automata_engine.hpp>
-// ------------ stubs required to mock a game ----------------
-void ae::PreInit(ae::game_memory_t *gameMemory) {}
-void ae::InitAsync(ae::game_memory_t *gameMemory) {}
-void ae::Init(ae::game_memory_t *gameMemory) {}
-void ae::Close(ae::game_memory_t *gameMemory) {}
-void ae::HandleWindowResize(ae::game_memory_t *gameMemory, int newWdith, int newHeight) {}
-void ae::OnVoiceBufferProcess(
-    ae::game_memory_t *gameMemory, intptr_t voiceHandle, float *dst, float *src,
-    uint32_t samplesToWrite, int channels, int bytesPerSample) {}
-void ae::OnVoiceBufferEnd(ae::game_memory_t *gameMemory, intptr_t voiceHandle) {}
-// ---------------------------------------------------
 
 unsigned int Factorial( unsigned int number ) {
     return number <= 1 ? number : Factorial(number-1)*number;
 }
-
 
 namespace utils {
     #include <stdlib.h>

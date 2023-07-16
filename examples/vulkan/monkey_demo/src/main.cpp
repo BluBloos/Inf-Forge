@@ -19,8 +19,9 @@ static struct {
     };
 } g_uploadResources[3] = {};
 
-void ae::Init(game_memory_t *gameMemory)
+void GameInit(ae::game_memory_t *gameMemory)
 {
+    ae::engine_memory_t *EM      = gameMemory->pEngineMemory;
     auto          winInfo = ae::platform::getWindowInfo();
     game_state_t *gd      = getGameState(gameMemory);
 
@@ -99,7 +100,7 @@ void ae::Init(game_memory_t *gameMemory)
                 .pDepthStencilAttachment                       = &depth_ref};
 
             auto rpInfo = ae::VK::createRenderPass(_countof(attachments), attachments, 1, &subpass);
-            VK_CHECK(vkCreateRenderPass(gd->vkDevice, &rpInfo, nullptr, &gd->vkRenderPass));
+            ae::VK_CHECK(vkCreateRenderPass(gd->vkDevice, &rpInfo, nullptr, &gd->vkRenderPass));
         }
 
         auto vertModule = ae::VK::loadShaderModule(gd->vkDevice, "res\\vert.hlsl", L"main", L"vs_6_0");
@@ -193,7 +194,7 @@ void ae::Init(game_memory_t *gameMemory)
             ae::VK::flushAndUnmapUploadBuffer(gd->vkDevice, resSize, res.uploadBufferBacking);
         } else {
             AELoggerError("unable to map upload buffer.");
-            ae::setFatalExit();
+            EM->setFatalExit();
             return;
         }
 
@@ -234,7 +235,7 @@ void ae::Init(game_memory_t *gameMemory)
             ae::VK::flushAndUnmapUploadBuffer(gd->vkDevice, resSize, res.uploadBufferBacking);
         } else {
             AELoggerError("unable to map upload buffer.");
-            ae::setFatalExit();
+            EM->setFatalExit();
             return;
         }
 
@@ -248,10 +249,10 @@ void ae::Init(game_memory_t *gameMemory)
 
     // load the checker data and upload to GPU.
     {
-        loaded_image_t bitmap = ae::io::loadBMP("res\\highres_checker.bmp");
+        ae::loaded_image_t bitmap = ae::io::loadBMP("res\\highres_checker.bmp");
 
         if (bitmap.pixelPointer == nullptr) {
-            ae::setFatalExit();
+            EM->setFatalExit();
             return;
         }
 
@@ -282,7 +283,7 @@ void ae::Init(game_memory_t *gameMemory)
         ci.maxSets                    = 1;
         ci.poolSizeCount              = _countof(pools);
         ci.pPoolSizes                 = pools;
-        VK_CHECK(vkCreateDescriptorPool(gd->vkDevice, &ci, nullptr, &gd->descPool));
+        ae::VK_CHECK(vkCreateDescriptorPool(gd->vkDevice, &ci, nullptr, &gd->descPool));
 
         VkDescriptorSetAllocateInfo allocInfo = {};
         allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
@@ -290,7 +291,7 @@ void ae::Init(game_memory_t *gameMemory)
         allocInfo.descriptorSetCount          = 1;
         allocInfo.pSetLayouts                 = &gd->setLayout;
 
-        VK_CHECK(vkAllocateDescriptorSets(gd->vkDevice, &allocInfo, &gd->theDescSet));
+        ae::VK_CHECK(vkAllocateDescriptorSets(gd->vkDevice, &allocInfo, &gd->theDescSet));
 
         VkDescriptorImageInfo imageInfo = {
             VK_NULL_HANDLE,  // sampler.
@@ -324,7 +325,7 @@ void ae::Init(game_memory_t *gameMemory)
     {
         gd->suzanne = ae::io::loadObj("res\\monke.obj");
         if (gd->suzanne.vertexData == nullptr) {
-            ae::setFatalExit();
+            EM->setFatalExit();
             return;
         }
 
@@ -427,7 +428,7 @@ void ae::Init(game_memory_t *gameMemory)
     (vkQueueSubmit(gd->vkQueue, 1, &si, fence));
 }
 
-void ae::InitAsync(game_memory_t *gameMemory)
+void GameInitAsync(ae::game_memory_t *gameMemory)
 {
     game_state_t *gd = getGameState(gameMemory);
 
@@ -651,7 +652,7 @@ void WaitForAndResetFence(VkDevice device, VkFence *pFence, uint64_t waitTime)
     }
 }
 
-void ae::Close(game_memory_t *gameMemory)
+void GameClose(ae::game_memory_t *gameMemory)
 {
     // TODO: destroy VK resources.
 }

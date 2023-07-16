@@ -3,16 +3,17 @@ void MonkeyDemoUpdate(ae::game_memory_t *gameMemory);
 
 static game_state_t *getGameState(ae::game_memory_t *gameMemory) { return (game_state_t *)gameMemory->data; }
 
-void ae::PreInit(game_memory_t *gameMemory)
+void GamePreInit(ae::game_memory_t *gameMemory)
 {
-    ae::defaultWinProfile = AUTOMATA_ENGINE_WINPROFILE_NORESIZE;
-    ae::defaultWindowName = AUTOMATA_ENGINE_PROJECT_NAME;
+    ae::engine_memory_t *EM   = gameMemory->pEngineMemory;
+    EM->defaultWinProfile = ae::AUTOMATA_ENGINE_WINPROFILE_NORESIZE;
 }
 
 static void MonkeyDemoInit(ae::game_memory_t *gameMemory)
 {
+    ae::engine_memory_t *EM      = gameMemory->pEngineMemory;
     game_state_t *gd      = getGameState(gameMemory);
-    auto          winInfo = ae::platform::getWindowInfo();
+    auto          winInfo = EM->pfn.getWindowInfo();
 
     *gd = {}; // zero it out.
 
@@ -27,16 +28,16 @@ static void MonkeyDemoInit(ae::game_memory_t *gameMemory)
     gd->suzanneTransform.eulerAngles = {};
 
     ae::bifrost::registerApp(AUTOMATA_ENGINE_PROJECT_NAME, MonkeyDemoUpdate);
-    ae::setUpdateModel(ae::AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC);
 }
 
 static void MonkeyDemoUpdate(ae::game_memory_t *gameMemory)
 {
-    auto             winInfo   = ae::platform::getWindowInfo();
+    ae::engine_memory_t        *EM        = gameMemory->pEngineMemory;
+    auto                    winInfo   = EM->pfn.getWindowInfo();
     game_state_t    *gd        = getGameState(gameMemory);
-    const ae::user_input_t &userInput = ae::platform::getUserInput();
+    const ae::user_input_t     &userInput = EM->userInput;
 
-    float speed = 5.f * ae::timing::lastFrameVisibleTime;
+    float speed = 5.f * EM->timing.lastFrameVisibleTime;
 
     static bool             bSpin               = true;
     static bool             lockCamYaw          = false;
@@ -86,29 +87,30 @@ static void MonkeyDemoUpdate(ae::game_memory_t *gameMemory)
     // check if opt in.
     {
         bool static bFocusedLastFrame = true;  // assume for first frame.
-        const bool bExitingFocus      = bFocusedLastFrame && !ae::platform::isWindowFocused();
+        const bool isFocused          = winInfo.isFocused;
+        const bool bExitingFocus      = bFocusedLastFrame && !isFocused;
 
         if (userInput.mouseRBttnDown[0] || userInput.mouseRBttnDown[1]) {
             // exit GUI.
-            if (!optInFirstPersonCam) ae::platform::showMouse(false);
+            if (!optInFirstPersonCam) EM->pfn.showMouse(false);
             optInFirstPersonCam = true;
         }
 
         if ((userInput.keyDown[0][ae::GAME_KEY_ESCAPE] || userInput.keyDown[1][ae::GAME_KEY_ESCAPE]) || bExitingFocus) {
             // enter GUI.
-            if (optInFirstPersonCam) ae::platform::showMouse(true);
+            if (optInFirstPersonCam) EM->pfn.showMouse(true);
             optInFirstPersonCam = false;
         }
 
-        bFocusedLastFrame = ae::platform::isWindowFocused();
+        bFocusedLastFrame = isFocused;
     }
 
     if (optInFirstPersonCam) {
         // clamp mouse cursor.
-        ae::platform::setMousePos((int)(winInfo.width / 2.0f), (int)(winInfo.height / 2.0f));
+        EM->pfn.setMousePos((int)(winInfo.width / 2.0f), (int)(winInfo.height / 2.0f));
     }
 
-    const float fullTimeStep = ae::timing::lastFrameVisibleTime * 0.5f;
+    const float fullTimeStep = EM->timing.lastFrameVisibleTime * 0.5f;
 
     static float lastDeltaX[2] = {0.f, 0.f};
     static float lastDeltaY[2] = {0.f, 0.f};
@@ -237,8 +239,7 @@ static void MonkeyDemoUpdate(ae::game_memory_t *gameMemory)
     ae::math::vec3_t s2_eulerAngles;
     simulateWorldStep(1, timeStep, s1_posVector, s1_eulerAngles, &s2_posVector, &s2_eulerAngles);
 
-    if (bSpin)
-        gd->suzanneTransform.eulerAngles += ae::math::vec3_t(0.0f, 2.0f * ae::timing::lastFrameVisibleTime, 0.0f);
+    if (bSpin) gd->suzanneTransform.eulerAngles += ae::math::vec3_t(0.0f, 2.0f * EM->timing.lastFrameVisibleTime, 0.0f);
 
     // TODO: look into the depth testing stuff more deeply on the hardware side of things.
     // what is something that we can only do because we really get it?
@@ -247,16 +248,3 @@ static void MonkeyDemoUpdate(ae::game_memory_t *gameMemory)
 
     MonkeyDemoRender(gameMemory);
 }
-
-// TODO: for any AE callbacks that the game doesn't care to define, don't make it a requirement
-// to still have the function.
-void ae::OnVoiceBufferEnd(game_memory_t *gameMemory, intptr_t voiceHandle) {}
-void ae::OnVoiceBufferProcess(game_memory_t *gameMemory,
-    intptr_t                                 voiceHandle,
-    float                                   *dst,
-    float                                   *src,
-    uint32_t                                 samplesToWrite,
-    int                                      channels,
-    int                                      bytesPerSample)
-{}
-void ae::HandleWindowResize(game_memory_t *gameMemory, int newWidth, int newHeight) {}

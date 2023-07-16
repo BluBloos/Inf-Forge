@@ -38,9 +38,12 @@ Index of this file:
 
 // ----------------- [SECTION] Definable Macros -----------------
 
-// NOTE: these macros must be defined when including this header as well as
-// for the .cpp files that are part of the engine.
+// NOTE: these macros must be defined project wide.
 // If you are using the CMake build system, it will define these macros for you.
+
+// TODO: need to include in the documentation here the disable
+// engine intro macro. or maybe better yet the game can just request
+// to either have or not have the intro from within the PreInit function.
 
 #if !defined(AUTOMATA_ENGINE_DISABLE_PLATFORM_LOGGING)
 // define AUTOMATA_ENGINE_DISABLE_PLATFORM_LOGGING to disable platform logging.
@@ -143,12 +146,17 @@ namespace automata_engine {
     enum   game_key_t;
     struct user_input_t; // TODO: prob change to game_user_input_t;
 
+    struct engine_memory_t;
+
     // TODO: Types such as loaded_image_t, etc, ought to be scoped in the IO namespace.
     struct loaded_image_t;
     struct loaded_file_t;
     struct loaded_wav_t;
     struct raw_model_t;
     enum   update_model_t;
+
+    /// @brief a type for a generic game function pointer.
+    typedef void (*PFN_GameFunctionKind)(game_memory_t *);
 
     namespace math {
         struct transform_t;
@@ -189,59 +197,37 @@ namespace automata_engine {
     
 // ----------- [END SECTION] Forward declarations and basic types -----------
 
-
-// ----------- [SECTION] PreInit settings -----------
-    // These values are meant to be set by the game during its PreInit() function.
-    // Otherwise, they are initialized to default values by the engine source.
-    // These values are used as the initial values for what they respectively represent.
-    // i.e. defaultWidth is the width used to create the platform window.
-
-    /// @brief the profile used to create the platform window.
-    ///
-    /// this is used for eg. to set if the window can be resized or not.
-    extern game_window_profile_t defaultWinProfile;
-
-    /// @brief the width used to create the platform window.
-    extern int32_t defaultWidth;
-
-    /// @brief the height used to create the platform window.
-    extern int32_t defaultHeight;
-
-    /// @brief the title used to create the platform window.
-    extern const char *defaultWindowName;
-// ----------- [END SECTION] PreInit settings -----------
-
-
 // ----------------- [SECTION] GAME BINDING POINTS -----------------
 
     // These functions are the binding points for the engine to call the game.
-    // The game must implement these functions.
+    // The game must implement these functions within the DLL and export "C" them.
+    // the game shall use the same names as used below. 
+#if 0
 
     /// @brief Called before the platform window is created.
-    void PreInit(game_memory_t *gameMemory);
+    void GamePreInit(game_memory_t *gameMemory);
 
     /// @brief Called after the platform window is created and before the main game loop.
     /// Called on the main thread of execution and for eg. OpenGL calls are permitted here.
     /// This function should do the minimal graphics API work needed so that after it is complete,
     /// if the Update function is called the game is able to draw _at least something_ to the screen
     /// _without delay_.
-    void Init(game_memory_t *gameMemory);
+    void GameInit(game_memory_t *gameMemory);
 
     /// @brief Called after Init and before the first Update call is made to any registered app.
     /// The execution thread is not the main thread and therefore for e.g. OpenGL calls CANNOT be made.
     /// This callback is useful for the game to do any general setup work that may take some time.
     /// It occurs during the engine intro sequence if any. Once complete, this function should set the
     /// gameMemory to initialized, after which the first call to some Update is permitted to occur.
-    void InitAsync(game_memory_t *gameMemory);
+    void GameInitAsync(game_memory_t *gameMemory);
 
     /// @brief Called when the engine has shut down and is requesting the game to release
     /// all resources.
-    void Close(game_memory_t *gameMemory);
+    void GameClose(game_memory_t *gameMemory);
 
     /// @brief Called when the platform window is resized. Games typically use this to resize
     /// the swapchain.
-    void HandleWindowResize(game_memory_t *gameMemory, int newWdith, int newHeight);
-
+    void GameHandleWindowResize(game_memory_t *gameMemory, int newWdith, int newHeight);
 
 // ----------------- [SECTION] AUDIO CALLBACKS -----------------
     /// @brief Main audio callback.
@@ -249,32 +235,26 @@ namespace automata_engine {
     /// This is called by the audio thread. The game must fill
     /// the dst buffer with the requested number of samples using the src buffer. The channels
     /// are interleaved. The implementation may not make state changes to the voice.
-    void OnVoiceBufferProcess(
+    void GameOnVoiceBufferProcess(
         game_memory_t *gameMemory, intptr_t voiceHandle, float *dst, float *src,
         uint32_t samplesToWrite, int channels, int bytesPerSample);
 
     /// @brief Called when a submitted buffer has finished playing. The implementation
     /// may make state changes to the voice.
-    void OnVoiceBufferEnd(game_memory_t *gameMemory, intptr_t voiceHandle);
+    void GameOnVoiceBufferEnd(game_memory_t *gameMemory, intptr_t voiceHandle);
 // ----------------- [END SECTION] AUDIO CALLBACKS -----------------
-
+#endif
 
 // ----------------- [END SECTION] GAME BINDING POINTS -----------------
 
+    extern engine_memory_t *EM;
 
-    /// @brief Sets the global running boolean.
-    ///
-    /// Providing a value of false signals to the engine that the game is ready to exit. The program will
-    /// not exit until the next frame.
-    void setGlobalRunning(bool);
-
-    /// @brief Signals to the engine that the game is ready to exit and sets an error exit code.
-    ///
-    /// The program will not exit until the next frame.
-    void setFatalExit();
-
-    /// @brief Sets the update model used by the engine.
-    void setUpdateModel(update_model_t updateModel);
+    /// @brief this is to be called by the game to enable automata engine library services
+    /// to access engine facilities. if it wasn't for this context, every automata engine library
+    /// call would need to take EM as a parameter, since the automata engine library is NOT part of
+    /// the engine layer but needs to know where to find the engine layer functions. the automata
+    /// engine library is just a set of free-standing helper routines.
+    void setEngineContext(engine_memory_t *pEM);
 
     /// @brief Returns the human-readable string representation of the provided update model.
     const char *updateModelToString(update_model_t updateModel);
@@ -521,8 +501,8 @@ namespace automata_engine {
         /// @returns false if any error has occurred.
         bool GLCheckError(const char *, const char *, int);
 
-        /// @brief if glew is initialized.
-        extern bool glewIsInit;
+        // NOTE: we got rid of glewIsInit since glew now needs to be init everywhere.
+        // it's not like this global thing that is worthwhile to query ... 
 
         /// @brief initialize glew.
         void initGlew();
@@ -580,41 +560,7 @@ namespace automata_engine {
 #endif
 
     namespace timing {
-
-        /// @brief the timestamp measured by the engine for right after the vblank.
-        /// this is based on blocking the thread to wait for the vblank. this is an imprecise
-        /// method. taking the delta of two vblank times gives variable results, when maybe
-        /// we might expect/want it to be consistently 16.66 ms.
-        extern uint64_t lastFrameMaybeVblankTime;
-        
-        /// @brief the timestamp taken right before the input message loop. for the last frame.
-        extern uint64_t lastFrameBeginTime;
-
-        /// @brief the timestamp taken right before the input message loop. for this frame.
-        extern uint64_t thisFrameBeginTime;
-
-        /// @brief the timestamp taken right after the game update function completes.
-        extern uint64_t lastFrameUpdateEndTime;
-
-        /// @brief the timestamp taken right after the GPU work that the update function recorded completes.
-        extern uint64_t lastFrameGpuEndTime;
-
-        /// @brief how long the last frame was visible on the monitor, before being replaced or overwritten.
-        extern float lastFrameVisibleTime;
-
-        // TODO: return double?
-        /// @brief get the time elapsed in seconds between two timestamps returned by wallClock/epoch,
-        /// or between two timestamps from any of the timestamp variables in this namespace.
         float getTimeElapsed(uint64_t begin, uint64_t end);
-
-        /// @brief Get the frequency of the timer in ticks.
-        uint64_t getTimerFrequency();
-        
-        /// @brief Get a high resolution (<1us) time stamp that can be used for time-interval measurements. The units of time returned are in ticks.
-        uint64_t wallClock();
-
-        /// @brief same as wallClock but the time stamp is relative to the beginning of time for this application.
-        uint64_t epoch();
     }
 
 // TODO(Noah): Is there any way to expose member funcs for our math stuff
@@ -795,38 +741,39 @@ namespace automata_engine {
         float cos(float a);
     }
 
-    // this namespace is for the engine service to the engine itself.
-    namespace super {
-        void _init();  // NOT to be called by the user.
-        void _close(); // NOT to be called by the user.
+    /// @brief this is to be called by the game to init globals.
+    /// it should be called at app startup + any time that the game DLL is hot-reloaded.
+    void initModuleGlobals();
 
+    /// @brief this is to be called by the game to shutdown any state.
+    /// it should be called at app end + any time that the game DLL is unloaded.
+    void shutdownModuleGlobals();
+
+    namespace super {
         /// @brief present an ImGui engine overlay.
         void updateAndRender(game_memory_t * gameMemory);
-
-        /// @brief a bool to control ALL ImGui rendering.
-        extern bool g_renderImGui;
     }
 
     // TODO(Noah): Add GPU adapter device name in updateApp ImGui idea :)
-    typedef struct bifrost {
+    namespace bifrost {
         /// @brief register an app with the ae::bifrost_t engine.
         /// @param appName   the name of the app to be registered.
         /// @param callback  the function to be called every frame by the engine.
         /// @param transInto the function to be called when the game is transitioned into this app.
         /// @param transOut  the function to be called when the game is transitioned out of this app.
-        static void registerApp(
+        void registerApp(
+            game_memory_t *gameMemory,
             const char *appName,
-            void (*callback)(game_memory_t *),
-            void (*transInto)(game_memory_t *) = nullptr,
-            void (*transOut)(game_memory_t *) = nullptr);
+            PFN_GameFunctionKind callback,
+            PFN_GameFunctionKind        transitionInto = nullptr,
+            PFN_GameFunctionKind        transitionOut = nullptr);
 
         /// @brief transition into an app.
         /// @param appName the name of the app to transition into.
-        static void updateApp(game_memory_t * gameMemory, const char *appName);
+        void updateApp(game_memory_t * gameMemory, const char *appName);
 
-        /// @brief get the main update function for the currently selected app. 
-        static std::function<void(game_memory_t *)> getCurrentApp();
-    } bifrost_t;
+        PFN_GameFunctionKind getCurrentApp(game_memory_t *gameMemory);
+    }
 
     // AE input/output engine.
     namespace io {
@@ -868,69 +815,14 @@ namespace automata_engine {
         /// @brief a constant representing an info level of logging.
         static constexpr uint32_t AE_STDOUT = 1;
 
-
-        extern bool _globalRunning;                      // NOT to be set by the user.
-        extern bool _globalVsync;                        // NOT to be set by the user.
-        extern int  _globalProgramResult;                // NOT to be set by the user.
-        extern void (*_redirectedFprintf)(const char *); // NOT to be set by the user.
-
-        /// @brief the update model currently in use.
-        extern update_model_t GLOBAL_UPDATE_MODEL;
-
-        /// @brief prints to the console as if it were a printf call.
-        ///
-        /// STDERR, STDOUT, etc are not file handles but rather levels at which to print.
-        /// This may impact for eg. the color of the text in a terminal.
-        /// @param handle is one of AE_STDERR, AE_STDOUT
-        void fprintf_proxy(int handle, const char *fmt, ...);
-
-        /// @brief set the additional logger. fprintf_proxy will also print to fn.
-        void setAdditionalLogger(void (*fn)(const char *));
-
         /// @brief read an image from disk into memory using stb_image.
         ///
         /// Must be freed with freeLoadedImage. The pixel data will be in 0xABGR (32bpp) format.
         loaded_image_t stbImageLoad(const char *fileName);
 
-        /// @brief get the user input poll(s).
-        const user_input_t &getUserInput(); 
-
-        /// @brief get information about the platform window.
-        game_window_info_t getWindowInfo();
-
-        /// Set the mouse position in client pixel coords.
-        /// See https://github.com/BluBloos/Atomation/wiki for client coords definition.
-        /// @param yPos y pos in client pixel coords.
-        /// @param xPos x pos in client pixel coords.
-        void setMousePos(int xPos, int yPos);
-
-        /// @brief show or hide the mouse cursor.
-        void showMouse(bool shouldShow);
-
         /// @brief show a native OS window alert.
         /// @param bAsync if true the calling thread is not blocked.
         void showWindowAlert(const char *windowTitle, const char *windowMessage, bool bAsync=false);
-
-        /// @brief Set Vsync behaviour.
-        /// @param value true to enable Vsync, false to disable.
-        void setVsync(bool value);
-
-        /// @brief free memory allocated by platform::alloc.
-        void free(void *memToFree);
-
-        /// @brief allocate memory.
-        /// @param bytes number of bytes to allocate.
-        void *alloc(uint32_t bytes);
-
-        /// @brief Reads an entire file from disk into memory. The memory must be freed later using freeLoadedFile.
-        loaded_file_t readEntireFile(const char *fileName);
-
-        /// @brief Writes an entire file to disk from memory.
-        /// @returns true on success, false on failure.
-        bool writeEntireFile(const char *fileName, void *memory, uint32_t memorySize);
-
-        /// @brief free memory allocated by readEntireFile.
-        void freeLoadedFile(loaded_file_t file);
 
         /// @brief get the path to the directory the executable resides in.
         /// @param pathOut buffer to write path to.
@@ -961,10 +853,6 @@ namespace automata_engine {
         /// @brief  get the current dedicated video memory usage for a GPU.
         /// @param gpuAdapter the GPU to get the memory for.
         size_t getGpuCurrentMemoryUsage(intptr_t gpuAdapter);
-
-
-        /// @brief  get if the platform window is focused.
-        bool isWindowFocused();
 
 // --------- [SECTION] PLATFORM VK ----------------
 //
@@ -1065,19 +953,19 @@ namespace ae = automata_engine;
 
 /// @brief Log an error message to the console.
 #define AELoggerError(fmt, ...) \
-    (ae::platform::fprintf_proxy(ae::platform::AE_STDERR, "\033[0;31m" "\n[error] on line=%d in file=%s\n" fmt "\n" "\033[0m", __LINE__, _AUTOMATA_ENGINE_FILE_RELATIVE_, __VA_ARGS__))
+    (ae::EM->pfn.fprintf_proxy(ae::platform::AE_STDERR, "\033[0;31m" "\n[error] on line=%d in file=%s\n" fmt "\n" "\033[0m", __LINE__, _AUTOMATA_ENGINE_FILE_RELATIVE_, __VA_ARGS__))
 
 /// @brief Log a message to the console.
 #define AELoggerLog(fmt, ...) \
-    (ae::platform::fprintf_proxy(ae::platform::AE_STDOUT, "\n[log] from line=%d in file:%s\n" fmt "\n", __LINE__, _AUTOMATA_ENGINE_FILE_RELATIVE_, __VA_ARGS__))
+    (ae::EM->pfn.fprintf_proxy(ae::platform::AE_STDOUT, "\n[log] from line=%d in file:%s\n" fmt "\n", __LINE__, _AUTOMATA_ENGINE_FILE_RELATIVE_, __VA_ARGS__))
 
 /// @brief Log a warning message to the console.
 #define AELoggerWarn(fmt, ...) \
-    (ae::platform::fprintf_proxy(ae::platform::AE_STDOUT, "\033[0;93m" "\n[warn] on line=%d in file:%s\n" fmt  "\n" "\033[0m", __LINE__, _AUTOMATA_ENGINE_FILE_RELATIVE_, __VA_ARGS__))
+    (ae::EM->pfn.fprintf_proxy(ae::platform::AE_STDOUT, "\033[0;93m" "\n[warn] on line=%d in file:%s\n" fmt  "\n" "\033[0m", __LINE__, _AUTOMATA_ENGINE_FILE_RELATIVE_, __VA_ARGS__))
 
 /// @brief Log a message to the console without a newline.
-#define AELogger(fmt, ...) (ae::platform::fprintf_proxy(ae::platform::AE_STDOUT, fmt, __VA_ARGS__))
-#else
+#define AELogger(fmt, ...) (ae::EM->pfn.fprintf_proxy(ae::platform::AE_STDOUT, fmt, __VA_ARGS__))
+#else // !defined(AUTOMATA_ENGINE_DISABLE_PLATFORM_LOGGING)
 #define AELoggerError(fmt, ...)
 #define AELoggerLog(fmt, ...)
 #define AELoggerWarn(fmt, ...)
@@ -1102,6 +990,12 @@ namespace automata_engine {
         intptr_t adapter              = (intptr_t)nullptr;
     } gpu_info_t;
 
+    struct bifrost_app_t{
+        PFN_GameFunctionKind updateFunc;
+        PFN_GameFunctionKind transitionInto;
+        PFN_GameFunctionKind transitionOut;
+    };
+
     /// @brief a struct allocated by the engine and passed to the game layer.
     ///
     /// The game layer can use this to store its own data. This struct is persistent across time.
@@ -1114,11 +1008,32 @@ namespace automata_engine {
         // TODO: data may be written to from multiple threads.
         void    *data;
         uint32_t dataBytes;
+        engine_memory_t *pEngineMemory;
+
+        struct {
+            // TODO(Noah): Swap this appTable out for something more performant
+            // like a hash table. OR, could do the other design pattern where we map
+            // some index to names. We just O(1) lookup...
+            //
+            // it's also probably the case that strcmp will return true if we have a
+            // substring match? Please ... fix this code.
+            uint32_t currentAppIndex = 0;
+    
+            // NOTE: these two things are stretchy buffers.
+            bifrost_app_t *appTable_funcs = nullptr;
+            const char **appTable_names = nullptr;
+
+            bool bShowDemoWindow = false;
+        } bifrost;
+
+        // TODO: the variables below could be bundled into some sort of
+        // a struct. they could also prob go in the engine memory.
 
         /// @brief the fields below are for CPU_BACKEND.
         uint32_t  *backbufferPixels;
         uint32_t   backbufferWidth;
         uint32_t   backbufferHeight;
+
         std::mutex m_mutex;
         void       setInitialized(bool newVal)
         {
@@ -1140,9 +1055,14 @@ namespace automata_engine {
     /// @param hInstance    opaque OS handle to the application instance that created the window.
     /// @param width        width of the window client rect in pixels.
     /// @param height       height of the window client rect in pixels.
+    /// @param isFocused    TODO: I don't really know what this actually means, but it's something like
+    ///                     that the window is in the foreground.
     struct game_window_info_t {
         uint32_t width;
         uint32_t height;
+        bool isFocused;
+        // TODO: why would the game ever need the OS handles? there shouldn't be OS specific code
+        // in the game.
         intptr_t hWnd;
         intptr_t hInstance;
     };
@@ -1243,6 +1163,156 @@ namespace automata_engine {
         AUTOMATA_ENGINE_UPDATE_MODEL_FRAME_BUFFERING,
         AUTOMATA_ENGINE_UPDATE_MODEL_ONE_LATENT_FRAME,
         AUTOMATA_ENGINE_UPDATE_MODEL_COUNT
+    };
+
+    /// @brief get information about the platform window.
+    typedef    game_window_info_t (*PFN_getWindowInfo)();
+
+    /// @brief prints to the console as if it were a printf call.
+    ///
+    /// STDERR, STDOUT, etc are not file handles but rather levels at which to print.
+    /// This may impact for eg. the color of the text in a terminal.
+    /// @param handle is one of AE_STDERR, AE_STDOUT
+    typedef void (* PFN_fprintf_proxy)(int handle, const char *fmt, ...);
+
+    /// Set the mouse position in client pixel coords.
+    /// See https://github.com/BluBloos/Atomation/wiki for client coords definition.
+    /// @param yPos y pos in client pixel coords.
+    /// @param xPos x pos in client pixel coords.
+    typedef void (*PFN_setMousePos)(int xPos, int yPos);
+
+    /// @brief show or hide the mouse cursor.
+    typedef void (*PFN_showMouse)(bool shouldShow);
+
+    /// @brief Get the frequency of the timer in ticks.
+    typedef uint64_t (*PFN_getTimerFrequency)();
+        
+    /// @brief Get a high resolution (<1us) time stamp that can be used for time-interval measurements. The units of time returned are in ticks.
+    typedef uint64_t (*PFN_wallClock)();
+
+    /// @brief free memory allocated by platform::alloc.
+    typedef void (*PFN_free)(void *memToFree);
+
+    /// @brief allocate memory.
+    /// @param bytes number of bytes to allocate.
+    typedef void *(*PFN_alloc)(uint32_t bytes);
+
+    /// @brief Reads an entire file from disk into memory. The memory must be freed later using freeLoadedFile.
+    typedef loaded_file_t (*PFN_readEntireFile)(const char *fileName);
+
+    /// @brief Writes an entire file to disk from memory.
+    /// @returns true on success, false on failure.
+    typedef bool (*PFN_writeEntireFile)(const char *fileName, void *memory, uint32_t memorySize);
+
+    /// @brief free memory allocated by readEntireFile.
+    typedef void (*PFN_freeLoadedFile)(loaded_file_t file);
+
+    /// @brief set the additional logger. fprintf_proxy will also print to fn.
+    typedef void (*PFN_setAdditionalLogger)(void (*fn)(const char *));
+
+#if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
+    typedef ImGuiContext* (*PFN_imguiGetCurrentContext)();
+    typedef void (*PFN_imguiGetAllocatorFunctions)(ImGuiMemAllocFunc *, ImGuiMemFreeFunc *, void**);
+#endif
+
+    /// @brief a struct allocated by the engine and accessible through the game
+    /// memory struct passed to the game. this can be set directly by the game
+    /// to control the engine in various ways. make sure to know what you are doing
+    /// when you set state like this!
+    struct engine_memory_t {
+
+        // NOTE: these "pfn"(s) are implicitly platform::
+        struct {
+            PFN_getWindowInfo       getWindowInfo;
+            PFN_fprintf_proxy       fprintf_proxy;
+            PFN_setMousePos         setMousePos;
+            PFN_showMouse           showMouse;
+            PFN_getTimerFrequency   getTimerFrequency;
+            PFN_wallClock           wallClock;
+            PFN_free                free;
+            PFN_alloc               alloc;
+            PFN_readEntireFile      readEntireFile;
+            PFN_writeEntireFile     writeEntireFile;
+            PFN_freeLoadedFile      freeLoadedFile;
+            PFN_setAdditionalLogger setAdditionalLogger;
+#if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
+            PFN_imguiGetCurrentContext imguiGetCurrentContext; 
+            PFN_imguiGetAllocatorFunctions imguiGetAllocatorFunctions;
+#endif            
+        } pfn;
+
+        user_input_t userInput;
+
+        // ----------- [SECTION] PreInit settings -----------
+        // These values are meant to be set by the game during its PreInit() function.
+        // Otherwise, they are initialized to default values by the engine source.
+        // These values are used as the initial values for what they respectively represent.
+        // i.e. defaultWidth is the width used to create the platform window.
+
+        /// @brief the profile used to create the platform window.
+        ///
+        /// this is used for e.g. to set if the window can be resized or not.
+        game_window_profile_t defaultWinProfile = AUTOMATA_ENGINE_WINPROFILE_RESIZE;
+
+        // if both are UINT32_MAX, window maximizes. else it uses the OS defined default
+        // dim if UINT32_MAX.
+
+        /// @brief the width used to create the platform window.
+        int32_t defaultWidth = UINT32_MAX;
+
+        /// @brief the height used to create the platform window.
+        int32_t defaultHeight = UINT32_MAX;
+
+        /// @brief the title used to create the platform window.
+        const char *defaultWindowName = AUTOMATA_ENGINE_PROJECT_NAME;
+        // ----------- [END SECTION] PreInit settings -----------
+
+        struct {
+            /// @brief the timestamp measured by the engine for right after the vblank.
+            /// this is based on blocking the thread to wait for the vblank. this is an imprecise
+            /// method. taking the delta of two vblank times gives variable results, when maybe
+            /// we might expect/want it to be consistently 16.66 ms.
+            uint64_t lastFrameMaybeVblankTime;
+
+            /// @brief the timestamp taken right before the input message loop. for the last frame.
+            uint64_t lastFrameBeginTime;
+
+            /// @brief the timestamp taken right before the input message loop. for this frame.
+            uint64_t thisFrameBeginTime;
+
+            /// @brief the timestamp taken right after the game update function completes.
+            uint64_t lastFrameUpdateEndTime;
+
+            /// @brief the timestamp taken right after the GPU work that the update function recorded completes.
+            uint64_t lastFrameGpuEndTime;
+
+            /// @brief how long the last frame was visible on the monitor, before being replaced or overwritten.
+            float lastFrameVisibleTime;
+
+        } timing;
+
+        /// @brief a bool to control ALL ImGui rendering.
+        bool g_renderImGui = true;
+
+        // TODO: for now, the only supported update model is "ATOMIC".
+        //
+        /// @brief the current update model.
+        update_model_t g_updateModel = AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC;
+
+        /// @brief if the game should continue running.
+        bool globalRunning = true;
+
+        /// @brief the result that the program will exit with.
+        int globalProgramResult = 0;
+
+        /// @brief Signals to the engine that the game is ready to exit and sets an error exit code.
+        ///
+        /// The program will not exit until the next frame.
+        void setFatalExit()
+        {
+            globalRunning       = false;
+            globalProgramResult = -1;
+        }
     };
 
     namespace math {

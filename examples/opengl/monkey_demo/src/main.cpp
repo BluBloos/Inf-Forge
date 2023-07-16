@@ -3,15 +3,25 @@
 #include <main.hpp>
 #include "../../shared/monkey_demo.hpp"
 
-void ae::Init(game_memory_t *gameMemory) {
+void GameInit(ae::game_memory_t *gameMemory) {
+
+    ae::engine_memory_t *EM = gameMemory->pEngineMemory;
+
+    // NOTE: this engine context is used by helper routines in automata_engine.hpp
+    // to e.g. find the fprint_proxy function, which the AELogger* family of macros
+    // is calling under-the-hood.
+    //
+    // this is to be called for every DLL.
+    ae::setEngineContext(EM);
 
   MonkeyDemoInit(gameMemory);
 
-  ae::GL::initGlew();
+  glewInit();
+
   glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
   glEnable(GL_DEPTH_TEST);
 
-  auto winInfo = ae::platform::getWindowInfo();
+  auto winInfo = EM->pfn.getWindowInfo();
 
   glViewport(
     0, 0, winInfo.width, winInfo.height);
@@ -22,7 +32,7 @@ void ae::Init(game_memory_t *gameMemory) {
   gameState->gameShader = ae::GL::createShader("res\\vert.glsl",
                                                "res\\frag.glsl");
   if ((int)gameState->gameShader == -1) {
-    ae::setFatalExit();
+    EM->setFatalExit();
     return;
   }
 
@@ -30,7 +40,10 @@ void ae::Init(game_memory_t *gameMemory) {
 
   // create the texture used for SRV.
   ae::loaded_image_t bitmap = ae::io::loadBMP("res\\highres_checker.bmp");
-  if (bitmap.pixelPointer == nullptr) { ae::setFatalExit(); return; }
+  if (bitmap.pixelPointer == nullptr) {
+      EM->setFatalExit();
+      return;
+  }
   gameState->checkerTexture = ae::GL::createTexture(bitmap.pixelPointer, bitmap.width, bitmap.height);
   ae::io::freeLoadedImage(bitmap);
 
@@ -40,14 +53,19 @@ void ae::Init(game_memory_t *gameMemory) {
 
   // load the OBJ into VAO.
   gameState->suzanne = ae::io::loadObj("res\\monke.obj");
-  if (gameState->suzanne.vertexData == nullptr) { ae::setFatalExit(); return; }
+  if (gameState->suzanne.vertexData == nullptr) {
+      EM->setFatalExit();
+      return;
+  }
   ae::GL::objToVao(gameState->suzanne, &gameState->suzanneIbo, &gameState->suzanneVbo, 
     &gameState->suzanneVao);
   gameState->suzanneIndexCount = gameState->suzanneIbo.count;
   glBindVertexArray(gameState->suzanneVao);
 }
 
-void ae::InitAsync(game_memory_t *gameMemory) { gameMemory->setInitialized(true); }
+void GameInitAsync(ae::game_memory_t *gameMemory) { 
+    gameMemory->setInitialized(true); 
+}
 
 void MonkeyDemoRender(ae::game_memory_t *gameMemory)
 {
@@ -67,7 +85,7 @@ void MonkeyDemoRender(ae::game_memory_t *gameMemory)
   glDrawElements(GL_TRIANGLES, gameState->suzanneIbo.count, GL_UNSIGNED_INT, NULL);
 }
 
-void ae::Close(game_memory_t *gameMemory) {
+void GameClose(ae::game_memory_t *gameMemory) {
   game_state_t *gameState = getGameState(gameMemory);
   ae::io::freeObj(gameState->suzanne);
   glDeleteProgram(gameState->gameShader);

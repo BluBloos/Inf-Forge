@@ -41,12 +41,16 @@ namespace automata_engine {
             if(result == GL_FALSE) {
                 int length;
                 glGetShaderiv(id, GL_INFO_LOG_LENGTH, &length);
-                char *message = (char *)automata_engine::platform::alloc(length * sizeof(char));
+                // TODO: is it possible to get rid of the alloc thing? maybe we have an arena that
+                // stores transient memory and we use a linear allocator.
+                char *message = (char *)ae::EM->pfn.alloc(length * sizeof(char));
                 if (message != NULL) {
+                    // TODO: should the error messages really be baked into these calls?
+                    // that seems like a bad design.
                     glGetShaderInfoLog(id, length, &length, message);
                     AELoggerError("Failed to compile shader!\n");
                     AELoggerError("%s\n", message);
-                    automata_engine::platform::free(message);
+                    ae::EM->pfn.free(message);
                 }
                 glDeleteShader(id);
                 return -1;
@@ -59,8 +63,7 @@ namespace automata_engine {
         GLuint createComputeShader(const char *filePath) {
             uint32_t program;
             // Step 1: Setup our vertex and fragment GLSL shaders!
-            loaded_file_t f1 =
-                automata_engine::platform::readEntireFile(filePath);
+            loaded_file_t f1 = ae::EM->pfn.readEntireFile(filePath);
             GL_CALL(program = glCreateProgram());
             uint32_t cs = compileShader(GL_COMPUTE_SHADER, (char *)f1.contents);
             auto findAndlogError = [=]() {
@@ -72,7 +75,7 @@ namespace automata_engine {
               static_assert(sizeof(GLchar) == sizeof(char), "odd platform");
               glGetProgramInfoLog(program, logLength, &length,
                                   (GLchar *)logMsg);
-              AELoggerError("Program link or validation failure:\n%s", logMsg);
+                AELoggerError("Program link or validation failure:\n%s", logMsg);
             };
             if ((int)cs == -1) {
                 goto createComputeShader_Fail;
@@ -98,7 +101,7 @@ namespace automata_engine {
         createComputeShader_end:
             // Cleanup
             glDeleteShader(cs);
-            automata_engine::platform::freeLoadedFile(f1);
+            EM->pfn.freeLoadedFile(f1);
             return program;
         }
 
@@ -108,9 +111,8 @@ namespace automata_engine {
         ) {
             uint32_t program;
             // Step 1: Setup our vertex and fragment GLSL shaders!
-            loaded_file_t f1 = automata_engine::platform::readEntireFile(vertFilePath);
-            loaded_file_t f2 =
-                automata_engine::platform::readEntireFile(fragFilePath);
+            loaded_file_t f1 = ae::EM->pfn.readEntireFile(vertFilePath);
+            loaded_file_t f2 = ae::EM->pfn.readEntireFile(fragFilePath);
             GL_CALL(program = glCreateProgram());
             uint32_t vs = compileShader(GL_VERTEX_SHADER, (char *)f1.contents);
             uint32_t fs = compileShader(GL_FRAGMENT_SHADER, (char *)f2.contents);
@@ -124,12 +126,11 @@ namespace automata_engine {
               static_assert(sizeof(GLchar) == sizeof(char), "odd platform");
               glGetProgramInfoLog(program, logLength, &length,
                                   (GLchar *)logMsg);
-              AELoggerError("Program link or validation failure:\n%s", logMsg);
+                AELoggerError("Program link or validation failure:\n%s", logMsg);
             };
             if (geoFilePath[0]) {
-              loaded_file_t f3 =
-                  automata_engine::platform::readEntireFile(geoFilePath);
-                defer(automata_engine::platform::freeLoadedFile(f3));
+                loaded_file_t f3 = ae::EM->pfn.readEntireFile(geoFilePath);
+                defer(ae::EM->pfn.freeLoadedFile(f3));
                 gs = compileShader(GL_GEOMETRY_SHADER, (char *)f3.contents);
                 if ((int)gs == -1) {
                     goto createShader_Fail;
@@ -165,8 +166,8 @@ namespace automata_engine {
             if (gs != -1) {
                 glDeleteShader(gs);
             }
-            automata_engine::platform::freeLoadedFile(f1);
-            automata_engine::platform::freeLoadedFile(f2);
+            ae::EM->pfn.freeLoadedFile(f1);
+            ae::EM->pfn.freeLoadedFile(f2);
             return program;
         }
         // TODO: Can we remove this? Maybe make it so that if using glew, the game decides so.
@@ -290,7 +291,7 @@ namespace automata_engine {
         GLuint createAndSetupVao(uint32_t attribCounts, ...) {
             GLuint vao;
             glGenVertexArrays(1, &vao); glBindVertexArray(vao);
-            AELoggerLog("called createAndSetupVao with vao=%d", vao);
+            //AELoggerLog("called createAndSetupVao with vao=%d", vao);
             GLuint boundVbo = 0;            
             va_list vl;
             va_start(vl, attribCounts);
@@ -301,7 +302,8 @@ namespace automata_engine {
                     AELoggerError(
                         "Fatal in createAndSetupVao\n"
                         "VBO is likely not initialized\n");
-                    automata_engine::setFatalExit();
+                    // TODO: why was this here? does comment out affect anything?
+                    // automata_engine::setFatalExit();
                 } else {
                     if (pVbo->glHandle != boundVbo) {
                         glBindBuffer(GL_ARRAY_BUFFER, pVbo->glHandle);
