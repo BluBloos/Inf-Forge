@@ -104,6 +104,7 @@ if (NOT TARGET AutomataTests)
     target_compile_definitions( AutomataTests PUBLIC -DAUTOMATA_ENGINE_DISABLE_IMGUI)
     target_include_directories( AutomataTests PUBLIC ${ENGINE_INCLUDES} )
     target_compile_features( AutomataTests PRIVATE ${PROJECT_CXX_VERSION} )
+    set_target_properties( AutomataTests PROPERTIES FOLDER "tests")
 endif()
 
 if (NOT ${ProjectDisableImGui})
@@ -111,6 +112,7 @@ if (NOT ${ProjectDisableImGui})
     # freetype target setup.
     if (NOT TARGET freetype)
         add_subdirectory(external/freetype-2.12.1)
+        set_target_properties( freetype PROPERTIES FOLDER "external")
     endif()
 
     # imgui target setup.
@@ -124,6 +126,7 @@ if (NOT ${ProjectDisableImGui})
         
         add_library(ae_imgui STATIC ${IMGUI_SOURCES})
         target_include_directories(ae_imgui PUBLIC ${IMGUI_COMMON_INCLUDES})
+        set_target_properties( ae_imgui PROPERTIES FOLDER "external")
 
         source_group(TREE "${ENGINE_EXTERNAL}/" PREFIX "external/" FILES ${IMGUI_SOURCES})
 
@@ -133,6 +136,7 @@ if (NOT ${ProjectDisableImGui})
 
         add_library(ae_imgui_gl STATIC ${IMGUI_GL_SOURCES})
         target_include_directories(ae_imgui_gl PUBLIC ${IMGUI_COMMON_INCLUDES})
+        set_target_properties( ae_imgui_gl PROPERTIES FOLDER "external")
 
         set(IMGUI_VK_SOURCES
             "${ENGINE_EXTERNAL}/imgui-1.87/backends/imgui_impl_vulkan.cpp"
@@ -141,6 +145,7 @@ if (NOT ${ProjectDisableImGui})
         if(${Vulkan_FOUND})
             add_library(ae_imgui_vk STATIC ${IMGUI_VK_SOURCES})
             target_include_directories(ae_imgui_vk PUBLIC ${IMGUI_COMMON_INCLUDES} ${Vulkan_INCLUDE_DIRS})
+            set_target_properties( ae_imgui_vk PROPERTIES FOLDER "external")
         endif()
 
     endif() # end check for if ae_imgui.
