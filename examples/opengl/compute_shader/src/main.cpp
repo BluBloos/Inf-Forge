@@ -26,7 +26,8 @@ DllExport void GameOnHotload(ae::game_memory_t *gameMemory)
   
   // load the open GL funcs into this DLL.
   // NOTE: this fails the first time since this DLL is hot-loaded before OpenGL is initialized.
-  glewInit();
+  if (EM->bOpenGLInitialized)
+    glewInit();
 }
 
 // TODO: can we get rid of this shutdown thing?
@@ -57,18 +58,18 @@ game_state_t *getGameState(ae::game_memory_t *gameMemory) {
 DllExport void GamePreInit(ae::game_memory_t *gameMemory) {
   ae::engine_memory_t *EM = gameMemory->pEngineMemory;
   
-
   EM->defaultWinProfile = ae::AUTOMATA_ENGINE_WINPROFILE_NORESIZE;
   EM->defaultWidth  = 1280;
   EM->defaultHeight = 720;
 }
 
 DllExport void GameInit(ae::game_memory_t *gameMemory) {
+
+  ae::engine_memory_t *EM = gameMemory->pEngineMemory;
   
   // NOTE: need to init glew here since the first call from *OnHotload fails due to DLL being loaded before OpenGL is init.
-  glewInit();
-    
-  ae::engine_memory_t *EM = gameMemory->pEngineMemory;
+  if (EM->bOpenGLInitialized)
+    glewInit();
     
   glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
 

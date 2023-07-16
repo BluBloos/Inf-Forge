@@ -504,12 +504,6 @@ namespace automata_engine {
         // NOTE: we got rid of glewIsInit since glew now needs to be init everywhere.
         // it's not like this global thing that is worthwhile to query ... 
 
-        /// @brief initialize glew.
-        void initGlew();
-
-        /// @brief Returns true if the OpenGL context has been initialized by the engine.
-        bool getGLInitialized();
-
         /// @brief Converts a priorly parsed .OBJ into a VAO (Vertex Array Object).
         void objToVao(raw_model_t rawModel, ibo_t *iboOut, vbo_t *vboOut, GLuint *vaoOut);
 
@@ -1304,6 +1298,10 @@ namespace automata_engine {
 
         /// @brief the result that the program will exit with.
         int globalProgramResult = 0;
+
+#if defined(AUTOMATA_ENGINE_GL_BACKEND)
+        bool bOpenGLInitialized = false;
+#endif
 
         /// @brief Signals to the engine that the game is ready to exit and sets an error exit code.
         ///

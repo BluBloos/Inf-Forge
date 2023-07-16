@@ -626,7 +626,7 @@ static HDC gHdc;
 typedef BOOL WINAPI wgl_swap_interval_ext(int interval);
 static wgl_swap_interval_ext *wglSwapInterval;
 HGLRC glContext;
-static bool win32_glInitialized = false;
+
 static bool CreateOpenGLContext(HWND windowHandle, HDC dc) {
     HGLRC tempContext = wglCreateContext(dc);
     if(wglMakeCurrent(dc, tempContext)) {
@@ -669,8 +669,8 @@ static void InitOpenGL(HWND windowHandle, HDC dc) {
     DescribePixelFormat(dc, suggestedPixelFormatIndex,
         sizeof(suggestedPixelFormat), &suggestedPixelFormat);
     SetPixelFormat(dc, suggestedPixelFormatIndex, &suggestedPixelFormat);
-    win32_glInitialized = CreateOpenGLContext(windowHandle, dc);
-    if(win32_glInitialized) {
+    g_engineMemory.bOpenGLInitialized = CreateOpenGLContext(windowHandle, dc);
+    if(g_engineMemory.bOpenGLInitialized) {
         // TODO: vsync?
         wglSwapInterval = (wgl_swap_interval_ext *)wglGetProcAddress("wglSwapIntervalEXT");
         wglSwapInterval(0);
@@ -690,11 +690,6 @@ static void InitOpenGL(HWND windowHandle, HDC dc) {
             _AUTOMATA_ENGINE_FILE_RELATIVE_));
         assert(false);
     }
-}
-
-// TODO(Noah): thinking this might belong back in platform.
-bool automata_engine::GL::getGLInitialized() {
-    return win32_glInitialized;
 }
 #endif
 
