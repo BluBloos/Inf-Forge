@@ -153,8 +153,10 @@ namespace automata_engine {
                 1000.0f * timing::getTimeElapsed(EM->timing.lastFrameBeginTime, EM->timing.lastFrameGpuEndTime));
 
             float collectPeriod = EM->timing.lastFrameVisibleTime / 2.0f;
-            ImGui::Text("input latency: %.3f s", collectPeriod);
-            if (ImGui::IsItemHovered()) ImGui::SetTooltip("the phase shift of the input signal to the game signal.");
+            
+            // TODO:
+            //ImGui::Text("input latency: %.3f s", collectPeriod);
+            //if (ImGui::IsItemHovered()) ImGui::SetTooltip("the phase shift of the input signal to the game signal.");
 
             float gameSimulateFrameTime;  // time of second poll + 1/2 poll period.
             ImGui::Text("present latency: %.3f s",
@@ -166,9 +168,9 @@ namespace automata_engine {
                     "if this is negative, that implies the vblank leads the game signal.");
 
             ImGui::Text("frames per second: %.3f FPS", 1.f / EM->timing.lastFrameVisibleTime);
-            ImGui::Text("updateModel: %s", updateModelToString(EM->g_updateModel));
-
+            ImGui::Text("updateModel: %s", updateModelToString(EM->g_updateModel));           
             // TODO: for now VSYNC is always on.
+            ImGui::Text("VSYNC = ON");
 
             ImGui::Checkbox("showDemoWindow", &bifrost.bShowDemoWindow);
             ImGui::End();

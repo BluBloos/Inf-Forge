@@ -712,6 +712,7 @@ namespace automata_engine {
         float deg2rad(float deg);
         float sin(float a);
         float cos(float a);
+        float tan(float a);
     }
 
     /// @brief this is to be called by the game to init globals.
@@ -775,8 +776,18 @@ namespace automata_engine {
 
         /// @brief any .WAV file loaded must have this many samples per second.
         constexpr static uint32_t ENGINE_DESIRED_SAMPLES_PER_SECOND = 44100;
-    };
+    };  // namespace io
 
+    // fallback rendering routines (CPU).
+    namespace frender {
+        /// @brief render the engine intro.
+        void engineIntroRender(
+            uint32_t *pixels, uint32_t width, uint32_t height, float introElapsed, loaded_image_t logo);
+        /// @brief load engine assets.
+        /// @param pLogo  the engine logo that is displayed during the intro.
+        /// @param pTheme the sound to play during the intro.
+        void engineIntroLoadAssets(loaded_image_t *pLogo, loaded_wav_t *pTheme);
+    }  // namespace frender
 
 // -------------------- [SECTION] Platform Layer --------------------
 //
@@ -840,22 +851,10 @@ namespace automata_engine {
         /// @brief a constant representing an invalid voice handle.
         static const intptr_t INVALID_VOICE = UINT32_MAX;
 
-        /// @brief create a voice for playing audio.
-        /// @returns INVALID_VOICE on failure, a handle to the voice on success.
-        intptr_t createVoice();
-
-        /// @brief submit a loaded_wav_t of sound data to a voice.
-        /// The voice does not begin playing. Once playing, it will play the buffer to completion, then stop.
-        /// @returns false on failure.
-        bool voiceSubmitBuffer(intptr_t voiceHandle, loaded_wav_t wavFile);
-
         /// @brief submit a 16-bit LPCM buffer of sound data to a voice.
         /// The voice does not begin playing. Once playing, it will play the buffer to completion, then stop.
         /// @returns false on failure.
         bool voiceSubmitBuffer(intptr_t voiceHandle, void *data, uint32_t size, bool shouldLoop = false);
-
-        /// @brief begin playing a voice.
-        void voicePlayBuffer(intptr_t voiceHandle);
 
         /// @brief stop playing a voice.
         void voiceStopBuffer(intptr_t voiceHandle);
@@ -959,6 +958,40 @@ namespace automata_engine {
         PFN_GameFunctionKind transitionOut;
     };
 
+    /// @brief a struct representing a file loaded into memory.
+    /// @param contents    pointer to unparsed binary data of the loaded file
+    /// @param contentSize size of the contents in bytes
+    struct loaded_file_t {
+        const char *fileName;
+        void       *contents;
+        int         contentSize;
+    };
+
+    /// @brief a struct representing image data loaded into memory.
+    /// @param pixelPointer pointer to contiguous chunk of memory corresponding to image pixels. Each pixel is
+    ///                     a 32 bit unsigned integer with the RGBA channels packed each as 8 bit unsigned integers.
+    ///                     This gives each channel 0->255 in possible value. Format is typically in 0xABGR order.
+    /// @param parentFile   internal storage for corresponding loaded_file that contains the unparsed image data.
+    ///                     This is retained so that we can ultimately free the loaded file.
+    struct loaded_image_t {
+        uint32_t            *pixelPointer;
+        uint32_t             width;
+        uint32_t             height;
+        struct loaded_file_t parentFile;
+    };
+
+    /// @brief a struct representing a .WAV file loaded into memory.
+    /// @param sampleData pointer to contiguous chunk of memory corresponding to 16-bit LPCM sound samples. When
+    ///                   there are two channels, the data is interleaved.
+    /// @param parentFile internal storage for corresponding loaded_file that contains the unparsed sound data.
+    ///                   This is retained so that we can ultimately free the loaded file.
+    struct loaded_wav_t {
+        int                  sampleCount;
+        int                  channels;
+        short               *sampleData;
+        struct loaded_file_t parentFile;
+    };
+
     /// @brief a struct allocated by the engine and passed to the game layer.
     ///
     /// The game layer can use this to store its own data. This struct is persistent across time.
@@ -989,13 +1022,22 @@ namespace automata_engine {
             bool bShowDemoWindow = false;
         } bifrost;
 
+        struct {
+            bool           isStarted  = false;
+            bool           isOver     = false;
+            uint64_t       timer      = 0;
+            intptr_t       themeVoice = 0;
+            loaded_wav_t   theme      = {};
+            loaded_image_t logo       = {};
+        } engineIntro;
+
         // TODO: the variables below could be bundled into some sort of
         // a struct. they could also prob go in the engine memory.
 
-        /// @brief the fields below are for CPU_BACKEND.
-        uint32_t  *backbufferPixels;
-        uint32_t   backbufferWidth;
-        uint32_t   backbufferHeight;
+        /// @brief the fields below are used by the game to render when the fallback rendering mode is enabled.
+        uint32_t *backbufferPixels;
+        uint32_t  backbufferWidth;
+        uint32_t  backbufferHeight;
 
         std::mutex m_mutex;
         void       setInitialized(bool newVal)
@@ -1030,40 +1072,6 @@ namespace automata_engine {
         intptr_t hInstance;
     };
 
-    /// @brief a struct representing a file loaded into memory.
-    /// @param contents    pointer to unparsed binary data of the loaded file
-    /// @param contentSize size of the contents in bytes
-    struct loaded_file_t {
-      const char *fileName;
-      void *contents;
-      int contentSize;
-    };
-
-    /// @brief a struct representing image data loaded into memory.
-    /// @param pixelPointer pointer to contiguous chunk of memory corresponding to image pixels. Each pixel is
-    ///                     a 32 bit unsigned integer with the RGBA channels packed each as 8 bit unsigned integers.
-    ///                     This gives each channel 0->255 in possible value. Format is typically in 0xABGR order.
-    /// @param parentFile   internal storage for corresponding loaded_file that contains the unparsed image data.
-    ///                     This is retained so that we can ultimately free the loaded file.
-    struct loaded_image_t {
-        uint32_t *pixelPointer;
-        uint32_t width;
-        uint32_t height;
-        struct loaded_file_t parentFile;
-    };
-
-    /// @brief a struct representing a .WAV file loaded into memory.
-    /// @param sampleData pointer to contiguous chunk of memory corresponding to 16-bit LPCM sound samples. When
-    ///                   there are two channels, the data is interleaved.
-    /// @param parentFile internal storage for corresponding loaded_file that contains the unparsed sound data.
-    ///                   This is retained so that we can ultimately free the loaded file.
-    struct loaded_wav_t {
-        int sampleCount;
-        int channels;
-        short *sampleData;
-        struct loaded_file_t parentFile;
-    };
-
     /// @brief a struct representing a 3D model file loaded into memory.
     /// @param vertexData a stretchy buffer corresponding to 3D model vertices. Each vertex contains
     ///                   (x,y,z, u,v, nx,ny,nz)
@@ -1088,10 +1096,6 @@ namespace automata_engine {
 
     /// @brief a struct representing a snapshot of user input.
     ///
-    /// NOTE: the input is polled at a rate faster than the game renders frames.
-    /// hence, the structure below contains N many data points, where N is the poll
-    /// ratio to game frame ratio.   
-    ///
     /// @param mouseX         x position of the mouse in pixels.
     /// @param mouseY         y position of the mouse in pixels.
     /// @param deltaMouseX    change in x position of the mouse relative to the last snapshot.
@@ -1102,14 +1106,14 @@ namespace automata_engine {
     /// @param mouseRBttnDown state of the right mouse button.
     /// @param keyDown        an array of booleans corresponding to the state of each key.
     struct user_input_t {
-        int mouseX[2] = {0,0};
-        int mouseY[2] = {0,0};
-        int deltaMouseX[2] = {0,0};
-        int deltaMouseY[2] = {0,0};
-        bool mouseLBttnDown[2] = {false, false};
-        bool mouseRBttnDown[2] = {false, false};
+        int mouseX = 0;
+        int mouseY = 0;
+        int deltaMouseX = 0;
+        int deltaMouseY = 0;
+        bool mouseLBttnDown = false;
+        bool mouseRBttnDown = false;
         // TODO(Noah): We will prolly want to change how we represent keys.
-        bool keyDown[2][(uint32_t)GAME_KEY_COUNT];
+        bool keyDown[(uint32_t)GAME_KEY_COUNT];
     };
 
     // TODO: Since everything is already namespaced, we won't need to prefix enum IDs with `AUTOMATA_ENGINE_...`.
@@ -1173,6 +1177,18 @@ namespace automata_engine {
     /// @brief set the additional logger. fprintf_proxy will also print to fn.
     typedef void (*PFN_setAdditionalLogger)(void (*fn)(const char *));
 
+    /// @brief begin playing a voice.
+    typedef void (*PFN_voicePlayBuffer)(intptr_t voiceHandle);
+
+    /// @brief submit a loaded_wav_t of sound data to a voice.
+    /// The voice does not begin playing. Once playing, it will play the buffer to completion, then stop.
+    /// @returns false on failure.
+    typedef bool (*PFN_voiceSubmitBuffer)(intptr_t voiceHandle, loaded_wav_t wavFile);
+
+    /// @brief create a voice for playing audio.
+    /// @returns INVALID_VOICE on failure, a handle to the voice on success.
+    typedef intptr_t (*PFN_createVoice)();
+
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
     typedef ImGuiContext* (*PFN_imguiGetCurrentContext)();
     typedef void (*PFN_imguiGetAllocatorFunctions)(ImGuiMemAllocFunc *, ImGuiMemFreeFunc *, void**);
@@ -1227,6 +1243,9 @@ namespace automata_engine {
             PFN_writeEntireFile     writeEntireFile;
             PFN_freeLoadedFile      freeLoadedFile;
             PFN_setAdditionalLogger setAdditionalLogger;
+            PFN_voicePlayBuffer     voicePlayBuffer;
+            PFN_voiceSubmitBuffer   voiceSubmitBuffer;
+            PFN_createVoice         createVoice;
 
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
             PFN_imguiGetCurrentContext imguiGetCurrentContext; 
@@ -1270,6 +1289,9 @@ namespace automata_engine {
 
         /// @brief the title used to create the platform window.
         const char *defaultWindowName = AUTOMATA_ENGINE_PROJECT_NAME;
+
+        /// @brief set to true to request fallback rendering.
+        bool requestFallbackRendering = false;
         // ----------- [END SECTION] PreInit settings -----------
 
         struct {

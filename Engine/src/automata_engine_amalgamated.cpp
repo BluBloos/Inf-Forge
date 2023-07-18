@@ -11,6 +11,7 @@
 #include "automata_engine_utils.cpp"
 #include "automata_engine.cpp"
 #include "automata_engine_io.cpp"
+#include "automata_engine_frender.cpp"
 
 #if defined(AUTOMATA_ENGINE_DX12_BACKEND)
 #include "automata_engine_dx.cpp"

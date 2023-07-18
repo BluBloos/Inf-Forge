@@ -314,6 +314,9 @@ namespace automata_engine {
         float cos(float a) {
             return std::cos(a);
         }
+        float tan(float a) {
+            return std::tan(a);
+        }
         float signedAngle(vec3_t a, vec3_t b, vec3_t N) {
             return atan2(dot(N, cross(a, b)), dot(a, b));
         }

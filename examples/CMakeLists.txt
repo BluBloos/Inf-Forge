@@ -6,3 +6,4 @@ project("AutomataEngine_examples"
 
 add_subdirectory(opengl)
 add_subdirectory(vulkan)
+add_subdirectory(misc)

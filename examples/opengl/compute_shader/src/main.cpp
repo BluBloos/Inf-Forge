@@ -101,12 +101,8 @@ DllExport void GameInit(ae::game_memory_t *gameMemory)
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
     }
 
-    // TODO: maybe in the future we have other modes like gsync or freesync
-    // or whatever. but for right now we're kicking it old school with a fixed
-    // framerate + vsync.
+    gameMemory->setInitialized(true);
 }
-
-DllExport void GameInitAsync(ae::game_memory_t *gameMemory) { gameMemory->setInitialized(true); }
 
 void GameUpdateAndRender(ae::game_memory_t *gameMemory)
 {

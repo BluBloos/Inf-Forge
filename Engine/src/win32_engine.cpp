@@ -81,7 +81,6 @@ static PFN_GameHandleWindowResize GameHandleWindowResize = nullptr;
 static ae::PFN_GameFunctionKind GameInit = nullptr;
 static ae::PFN_GameFunctionKind GamePreInit = nullptr;
 static ae::PFN_GameFunctionKind GameCleanup = nullptr;
-static ae::PFN_GameFunctionKind GameInitAsync = nullptr;
 static PFN_GameGetUpdateAndRender GameGetUpdateAndRender = nullptr;
 static PFN_GameOnVoiceBufferProcess GameOnVoiceBufferProcess = nullptr;
 static PFN_GameOnVoiceBufferEnd GameOnVoiceBufferEnd = nullptr;
@@ -1029,6 +1028,9 @@ void Win32DisplayBufferWindow(HDC deviceContext,
                               ae::game_window_info_t winInfo) {
     int OffsetX = (int(winInfo.width) - globalBackBuffer.width) / 2;
     int OffsetY = (int(winInfo.height) - globalBackBuffer.height) / 2;
+    
+    // TODO: Not all devices support the PatBlt function. For more information, see the description of the RC_BITBLT capability in the GetDeviceCaps function.
+    
     PatBlt(deviceContext, 0, 0, winInfo.width, OffsetY, BLACKNESS);
     PatBlt(deviceContext, 0, OffsetY + globalBackBuffer.height, winInfo.height, winInfo.height, BLACKNESS);
     PatBlt(deviceContext, 0, 0, OffsetX, winInfo.height, BLACKNESS);
@@ -1055,31 +1057,29 @@ constexpr uint32_t g_inputPollRate = 2;
 
 static void ProccessKeyboardMessage(unsigned int vkCode, bool down)
 {
-    uint32_t idx = g_frameIndex % g_inputPollRate;
-
     ae::user_input_t &userInput = g_engineMemory.userInput;
 
     if (vkCode >= 'A' && vkCode <= 'Z') {
-        userInput.keyDown[idx][(uint32_t)ae::GAME_KEY_A + (vkCode - 'A')] = down;
+        userInput.keyDown[(uint32_t)ae::GAME_KEY_A + (vkCode - 'A')] = down;
     } else if (vkCode >= '0' && vkCode <= '9') {
-        userInput.keyDown[idx][(uint32_t)ae::GAME_KEY_0 + (vkCode - '0')] = down;
+        userInput.keyDown[(uint32_t)ae::GAME_KEY_0 + (vkCode - '0')] = down;
     } else {
         switch (vkCode) {
             // TODO: this looks like copy-pasta. can be this be more expressive ???
             case VK_SPACE:
-                userInput.keyDown[idx][ae::GAME_KEY_SPACE] = down;
+                userInput.keyDown[ae::GAME_KEY_SPACE] = down;
                 break;
             case VK_SHIFT:
-                userInput.keyDown[idx][ae::GAME_KEY_SHIFT] = down;
+                userInput.keyDown[ae::GAME_KEY_SHIFT] = down;
                 break;
             case VK_ESCAPE:
-                userInput.keyDown[idx][ae::GAME_KEY_ESCAPE] = down;
+                userInput.keyDown[ae::GAME_KEY_ESCAPE] = down;
                 break;
             case VK_F5:
-                userInput.keyDown[idx][ae::GAME_KEY_F5] = down;
+                userInput.keyDown[ae::GAME_KEY_F5] = down;
                 break;
             case VK_TAB:
-                userInput.keyDown[idx][ae::GAME_KEY_TAB] = down;
+                userInput.keyDown[ae::GAME_KEY_TAB] = down;
                 break;
         }
     }
@@ -1101,7 +1101,6 @@ LRESULT CALLBACK Win32WindowProc(HWND window,
 
     PAINTSTRUCT ps;
     LRESULT     result = 0;
-    uint32_t    idx    = g_frameIndex % g_inputPollRate;
 
     ae::user_input_t &userInput = g_engineMemory.userInput;
 
@@ -1121,8 +1120,8 @@ LRESULT CALLBACK Win32WindowProc(HWND window,
                 if (!!(mouseData.usFlags & MOUSE_MOVE_ABSOLUTE)) {
                     // TODO: handle this case.
                 } else if ((mouseData.lLastX != 0) || (mouseData.lLastY) != 0) {
-                    userInput.deltaMouseX[idx] += mouseData.lLastX;
-                    userInput.deltaMouseY[idx] += mouseData.lLastY;
+                    userInput.deltaMouseX += mouseData.lLastX;
+                    userInput.deltaMouseY += mouseData.lLastY;
                 }
             }
             if (GET_RAWINPUT_CODE_WPARAM(wParam) == RIM_INPUT) result = DefWindowProc(window, message, wParam, lParam);
@@ -1148,24 +1147,24 @@ LRESULT CALLBACK Win32WindowProc(HWND window,
         case WM_MOUSEMOVE: {
             int x = (int)lParam & 0x0000FFFF;
             int y = ((int)lParam & 0xFFFF0000) >> 16;
-            userInput.mouseX[idx]       = x;
-            userInput.mouseY[idx] = y;
+            userInput.mouseX = x;
+            userInput.mouseY = y;
         } break;
         // left mouse button
 
         // TODO: consider the half transition count. we are loosing granularity here.
         case WM_LBUTTONDOWN: {
-            userInput.mouseLBttnDown[idx] = true;
+            userInput.mouseLBttnDown = true;
         } break;
         case WM_LBUTTONUP:{
-            userInput.mouseLBttnDown[idx] = false;
+            userInput.mouseLBttnDown = false;
         } break;
         // right mouse button
         case WM_RBUTTONDOWN: {
-            userInput.mouseRBttnDown[idx] = true;
+            userInput.mouseRBttnDown = true;
         } break;
         case WM_RBUTTONUP:{
-            userInput.mouseRBttnDown[idx] = false;
+            userInput.mouseRBttnDown = false;
         } break;
         //keyboard messages
         case WM_KEYUP: {
@@ -1205,21 +1204,16 @@ LRESULT CALLBACK Win32WindowProc(HWND window,
             }
             Win32ResizeBackbuffer(&globalBackBuffer, width,height);
         } break;
-
-        case WM_PAINT: {
-#if defined(AUTOMATA_ENGINE_CPU_BACKEND)
-            bool bCpuBackend = true;
-#else
-            bool bCpuBackend = false;
-#endif
-            bool bDuringInit = !(g_gameMemory.getInitialized() && g_bEngineIntroOver);
-            if (bDuringInit || bCpuBackend) {
+        //case WM_PAINT: {
+            // TODO:
+            /*bool bDuringInit = !(g_gameMemory.getInitialized() && g_bEngineIntroOver);
+            if (bDuringInit) {
                 HDC DeviceContext = BeginPaint(window, &ps);
                 ae::game_window_info_t winInfo = Platform_getWindowInfo();
                 Win32DisplayBufferWindow(DeviceContext, winInfo);
                 EndPaint(window, &ps);
-            }
-        } break;
+            }*/
+        //} break;
         case WM_DESTROY: {
             // TODO(Noah): Handle as error
             g_engineMemory.globalRunning = false;
@@ -1270,7 +1264,6 @@ static void Win32LoadGameCode(const char *SourceDLLName, const char *TempDLLName
         // ASAP.
 		GameInit = (ae::PFN_GameFunctionKind)GetProcAddress(g_gameCodeDLL, "GameInit");
         GamePreInit   = (ae::PFN_GameFunctionKind)GetProcAddress(g_gameCodeDLL, "GamePreInit");
-        GameInitAsync = (ae::PFN_GameFunctionKind)GetProcAddress(g_gameCodeDLL, "GameInitAsync");
 
         GameOnVoiceBufferEnd     = (PFN_GameOnVoiceBufferEnd)GetProcAddress(g_gameCodeDLL, "GameOnVoiceBufferEnd");
         GameOnVoiceBufferProcess =
@@ -1298,7 +1291,6 @@ static inline void Win32UnloadGameCode()
 	}
 	GameInit = NULL;
     GamePreInit = NULL;
-    GameInitAsync = NULL;
     GameOnVoiceBufferEnd = NULL;
     GameOnVoiceBufferProcess = NULL;
     GameCleanup = NULL;
@@ -1477,7 +1469,7 @@ __declspec(selectany) XAPO_REGISTRATION_PROPERTIES AutomataXAPO::m_regProps = {
 };
 
 // TODO(Noah): What happens if there is no buffer to play?? -_-
-void automata_engine::platform::voicePlayBuffer(intptr_t voiceHandle) {
+void Platform_voicePlayBuffer(intptr_t voiceHandle) {
     auto pSourceVoice = (IXAudio2SourceVoice *)g_ppSourceVoices[voiceHandle].voice;
     if (pSourceVoice != nullptr) {
         pSourceVoice->Start( 0 );
@@ -1519,7 +1511,7 @@ static IXAudio2* g_pXAudio2 = nullptr;
 
 // TODO(Noah): We should prob figure something intelligent
 // when voice creation fails.
-intptr_t automata_engine::platform::createVoice() {
+intptr_t Platform_createVoice() {
 
     uint32_t newVoiceIdx = StretchyBufferCount(g_ppSourceVoices);
     IXAudio2SourceVoice* newVoice = nullptr;
@@ -1586,7 +1578,7 @@ intptr_t automata_engine::platform::createVoice() {
 // Now, there are also things that WILL fail. Like file reads and shader
 // compilation. i.e. file might not exist and shader could have syntax errs.
 // in these cases, the game has to deal with such errors.
-bool automata_engine::platform::voiceSubmitBuffer(intptr_t voiceHandle, void *data, uint32_t size, bool shouldLoop) {
+static bool Platform_voiceSubmitBuffer2(intptr_t voiceHandle, void *data, uint32_t size, bool shouldLoop) {
     auto pSourceVoice = (IXAudio2SourceVoice *)g_ppSourceVoices[voiceHandle].voice;
     if (pSourceVoice != nullptr) {
         if (FAILED(pSourceVoice->Stop(0))) { return false; }
@@ -1607,10 +1599,14 @@ bool automata_engine::platform::voiceSubmitBuffer(intptr_t voiceHandle, void *da
     return !FAILED(pSourceVoice->SubmitSourceBuffer(&g_xa2Buffer));
 }
 
-bool ae::platform::voiceSubmitBuffer(intptr_t voiceHandle, loaded_wav_t wavFile) {
-    return voiceSubmitBuffer(voiceHandle, 
+bool automata_engine::platform::voiceSubmitBuffer(intptr_t voiceHandle, void *data, uint32_t size, bool shouldLoop) {
+    return Platform_voiceSubmitBuffer2(voiceHandle, data, size, shouldLoop);
+}
+
+static bool Platform_voiceSubmitBuffer(intptr_t voiceHandle, ae::loaded_wav_t wavFile) {
+    return Platform_voiceSubmitBuffer2(voiceHandle, 
         wavFile.sampleData, 
-        wavFile.sampleCount * wavFile.channels * sizeof(short));
+        wavFile.sampleCount * wavFile.channels * sizeof(short), false);
 }
 
 
@@ -1665,123 +1661,6 @@ void Platform_fprintf_proxy(int h, const char *fmt, ...)
     if (g_redirectedFprintf) { g_redirectedFprintf(_buf); }
 }
 
-// TODO: we need to be doing this again.
-static ae::loaded_image_t g_engineLogo = {};
-
-static int FloatToInt(float Value)
-{
-    //TODO: Intrisnic
-    //apparently there is a lot more complexity than just this.
-    int Result = (int)(Value + 0.5f);
-    if (Value < 0.0f) { Result = (int)(Value - 0.5f); }
-    return Result;
-}
-
-static void DrawBitmapScaled(win32_backbuffer_t *buffer,
-    ae::loaded_image_t                           Bitmap,
-    float                                        RealMinX,
-    float                                        RealMaxX,
-    float                                        RealMinY,
-    float                                        RealMaxY,
-    unsigned int                                 Scalar)
-{
-    if (Scalar < 0.f) return;
-    float DrawHeight = (RealMaxY - RealMinY) / (float)Scalar;
-    RealMaxY         = RealMinY + DrawHeight;
-
-    int MinX = FloatToInt(RealMinX);
-    int MaxX = FloatToInt(RealMaxX);
-    int MinY = FloatToInt(RealMinY);
-    int MaxY = FloatToInt(RealMaxY);
-
-    unsigned int PitchShift = 0;
-    unsigned int PixelShift = 0;
-
-    if (MaxX > buffer->width) { MaxX = buffer->width; }
-
-    if ((MinY + (int)Bitmap.height) < MaxY) { MaxY = MinY + Bitmap.height; }
-
-    if ((MinX + (int)Bitmap.width * (int)Scalar) < MaxX) { MaxX = MinX + Bitmap.width * (int)Scalar; }
-
-    int MaxDrawY = (MaxY - MinY) * (int)Scalar + MinY;
-    if (MaxDrawY > buffer->height) { MaxY = (buffer->height - MinY) / (int)Scalar + MinY; }
-
-    if (MinX < 0) {
-        PixelShift = (unsigned int)abs((float)MinX / (float)Scalar);
-        MinX       = 0;
-    }
-
-    if (MinY < 0) {
-        PitchShift = (unsigned int)abs((float)MinY / (float)Scalar);
-        MaxY += FloatToInt(abs((float)MinY / (float)Scalar));
-        MinY = 0;
-    }
-
-    unsigned char *Row = ((unsigned char *)buffer->memory) + MinX * buffer->bytesPerPixel + MinY * buffer->pitch;
-
-    unsigned int *SourceRow = Bitmap.pixelPointer + Bitmap.width * (Bitmap.height - 1 - PitchShift) + PixelShift;
-    int           Counter   = 1;
-
-    for (int Y = MinY; Y < MaxY; ++Y) {
-        unsigned int *Pixel       = (unsigned int *)Row;
-        unsigned int *SourcePixel = SourceRow;
-        for (int X = MinX; X < MaxX; ++X) {
-            if ((*SourcePixel >> 24) & 1) {
-                *Pixel = *SourcePixel;
-                for (unsigned int j = 1; j < (int)Scalar; j++) {
-                    unsigned int *PixelBelow = Pixel + buffer->width * j;
-                    *PixelBelow              = *SourcePixel;
-                }
-            }
-
-            Pixel++;
-
-            if (Counter % (int)Scalar == 0) { SourcePixel += 1; }
-            Counter++;
-        }
-
-        SourceRow -= Bitmap.width;
-        Row     = Row + buffer->pitch * (int)Scalar;
-        Counter = 1;
-    }
-}
-
-// for drawing images loaded from .BMP
-static void DrawBitmap(win32_backbuffer_t *buffer,
-    ae::loaded_image_t                     Bitmap,
-    float                                  RealMinX,
-    float                                  RealMaxX,
-    float                                  RealMinY,
-    float                                  RealMaxY)
-{
-    int MinX = FloatToInt(RealMinX);
-    int MaxX = FloatToInt(RealMaxX);
-    int MinY = FloatToInt(RealMinY);
-    int MaxY = FloatToInt(RealMaxY);
-
-    if (MinX < 0) { MinX = 0; }
-    if (MinY < 0) { MinY = 0; }
-    if (MaxX > buffer->width) { MaxX = buffer->width; }
-    if (MaxY > buffer->height) { MaxY = buffer->height; }
-    if (MinX + (int)Bitmap.width < MaxX) { MaxX = MinX + Bitmap.width; }
-    if (MinY + (int)Bitmap.height < MaxY) { MaxY = MinY + Bitmap.height; }
-
-    unsigned char *Row = ((unsigned char *)buffer->memory) + MinX * buffer->bytesPerPixel + MinY * buffer->pitch;
-
-    unsigned int *SourceRow = (unsigned int *)Bitmap.pixelPointer + Bitmap.width * (Bitmap.height - 1);
-    for (int Y = MinY; Y < MaxY; ++Y) {
-        unsigned int *Pixel       = (unsigned int *)Row;
-        unsigned int *SourcePixel = SourceRow;
-        for (int X = MinX; X < MaxX; ++X) {
-            if ((*SourcePixel >> 24) & 1) { *Pixel = *SourcePixel; }
-            Pixel++;
-            SourcePixel += 1;
-        }
-        SourceRow -= Bitmap.width;
-        Row += buffer->pitch;
-    }
-}
-
 HWINEVENTHOOK g_windowEventHookProc = {};
 void          Wineventproc(HWINEVENTHOOK hWinEventHook,
              DWORD                       event,
@@ -1801,8 +1680,9 @@ void          Wineventproc(HWINEVENTHOOK hWinEventHook,
     }
 }
 
-static ae::loaded_wav_t g_engineSound = {};
-static intptr_t         g_engineVoice = {};
+//static ae::loaded_wav_t g_engineSound = {};
+//static intptr_t         g_engineVoice = {};
+
 
 int CALLBACK WinMain(HINSTANCE instance,
   HINSTANCE prevInstance,
@@ -1825,6 +1705,9 @@ int CALLBACK WinMain(HINSTANCE instance,
     ae::EM->pfn.writeEntireFile     = Platform_writeEntireFile;
     ae::EM->pfn.freeLoadedFile      = Platform_freeLoadedFile;
     ae::EM->pfn.setAdditionalLogger = Platform_setAdditionalLogger;
+    ae::EM->pfn.voicePlayBuffer     = Platform_voicePlayBuffer;
+    ae::EM->pfn.voiceSubmitBuffer   = Platform_voiceSubmitBuffer;
+    ae::EM->pfn.createVoice         = Platform_createVoice;
 
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
     ae::EM->pfn.imguiGetCurrentContext     = Platform_imguiGetCurrentContext;
@@ -1840,25 +1723,6 @@ int CALLBACK WinMain(HINSTANCE instance,
     ae::EM->vk_pfn.getFrameEndFence     = PlatformVK_getFrameEndFence;
     ae::EM->vk_pfn.init                 = PlatformVK_init;
 #endif
-
-    // TODO: AE lib is a utility library for the game. it sits on top of the engine layer,
-    // where it can use the engine layer functions. the engine layer is meant to be lightweight.
-    // and not do too many things, giving maximum control to the game.
-    // of course, there are _some_ decisions that the engine makes on behalf of the game, at least for now.
-    //
-    // so e.g., loading an image using the stb_image library could be considered a higher level
-    // function that only the game knows how to do.
-    //
-    // and therefore, we want to see about giving more control to the game when it comes to this
-    // engine intro sequence.
-    //
-    // like, for now we have to manually do the initModuleGlobals() stuff because the engine
-    // needs to do the STB image stuff.
-    //
-    // stbi_set_flip_vertically_on_load(true);
-    // stbi_flip_vertically_on_write(true);
-    // g_engineLogo = ae::platform::stbImageLoad("res\\logo.png");
-    // defer(ae::io::freeLoadedImage(g_engineLogo));
 
     UINT DesiredSchedularGranularity = 1;
 	bool SleepGranular = (timeBeginPeriod(DesiredSchedularGranularity) == TIMERR_NOERROR);
@@ -2101,12 +1965,6 @@ int CALLBACK WinMain(HINSTANCE instance,
             g_xa2Buffer.pContext = (void *)&g_gameMemory;
         }
 
-        // TODO: get this working again.
-        // load the engine sound.
-        //g_engineSound = ae::io::loadWav("res\\engine.wav");  // TODO: Actually make this asset copy via the CMake.
-        //defer(ae::io::freeWav(g_engineSound));
-        g_engineVoice = ae::platform::createVoice();
-
         IDXGIOutput   *gameMonitor = nullptr;
         IDXGIAdapter1 *gameAdapter = nullptr;
         defer(gameMonitor ? (void)gameMonitor->Release() : (void)0);
@@ -2160,11 +2018,6 @@ int CALLBACK WinMain(HINSTANCE instance,
         // NOTE: this won't block since nothing has been presented yet.
         vk_getNextBackbuffer();
 #endif
-
-        // kick-off async init.
-        std::thread([&]{ 
-            GameInitAsync ? (void)GameInitAsync(&g_gameMemory) : (void)(0);
-        }).detach();
 
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
         // some more ImGUI initialization code :)
@@ -2277,24 +2130,9 @@ int CALLBACK WinMain(HINSTANCE instance,
 
             ae::user_input_t &userInput = g_engineMemory.userInput;
 
-            uint32_t localFrameIndex = g_frameIndex % g_inputPollRate;
-
-            // even for frameIndex == 0, this will init the userInput.keyDown to zero.
-            uint32_t prevLocalFrameIndex = (localFrameIndex - 1) % g_inputPollRate;
-
-            // TODO: just have TWO userInput structs instead? think about that and give is some good thought. this is important API.
-
             // reset accumulation state.
-            userInput.deltaMouseX[localFrameIndex]       = 0;
-            userInput.deltaMouseY[localFrameIndex] = 0;
-
-            // carry over prev signals.
-            userInput.mouseLBttnDown[localFrameIndex] = userInput.mouseLBttnDown[prevLocalFrameIndex];
-            userInput.mouseRBttnDown[localFrameIndex] = userInput.mouseRBttnDown[prevLocalFrameIndex];
-
-            for (uint32_t idx = 0; idx < (uint32_t)ae::GAME_KEY_COUNT; idx++) {
-                userInput.keyDown[localFrameIndex][idx] = userInput.keyDown[prevLocalFrameIndex][idx];
-            }
+            userInput.deltaMouseX = 0;
+            userInput.deltaMouseY = 0;
 
             // Process windows messages
             {
@@ -2312,23 +2150,12 @@ int CALLBACK WinMain(HINSTANCE instance,
                 }
             }
 
-            const bool bGameShouldUpdate = ((localFrameIndex) != 0);
             g_frameIndex++;
 
-            static constexpr float engineIntroDuration = 4.f;
-
-            // is engine intro over?
-            float introElapsed = 0.f;
-            if (!g_bEngineIntroOver) {
-                if (engineIntroDuration < (introElapsed=Win32GetSecondsElapsed(IntroCounter, Win32GetWallClock(), g_PerfCountFrequency64))) {
-                    g_bEngineIntroOver = true;
-                }
-            }
-
-            bool bAppOkNow = g_gameMemory.getInitialized() && g_bEngineIntroOver;
+            bool bRenderFallback = !g_gameMemory.getInitialized();
 
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
-            if (isImGuiInitialized && bAppOkNow && bGameShouldUpdate) {
+            if (isImGuiInitialized && !bRenderFallback) {
 #if defined(AUTOMATA_ENGINE_GL_BACKEND)
                 ImGui_ImplOpenGL3_NewFrame();
 #endif
@@ -2340,80 +2167,21 @@ int CALLBACK WinMain(HINSTANCE instance,
             }
 #endif
 
-            static bool bRenderFallbackFirstTime = true;
-            bool        bRenderFallback          = false;
-            if (bAppOkNow) {
-                if (bGameShouldUpdate) {
-                    bool bFoundUpdate = false;
-                    if (GameGetUpdateAndRender)
-                    {
-                        auto gameUpdateAndRender = GameGetUpdateAndRender(&g_gameMemory);
-                        if ((gameUpdateAndRender != nullptr)) {
-                            bFoundUpdate = true;
-                            gameUpdateAndRender(&g_gameMemory);
-                        }
+            {
+                bool bFoundUpdate = false;
+                if (GameGetUpdateAndRender) {
+                    auto gameUpdateAndRender = GameGetUpdateAndRender(&g_gameMemory);
+                    if ((gameUpdateAndRender != nullptr)) {
+                        bFoundUpdate = true;
+                        gameUpdateAndRender(&g_gameMemory);
                     }
-                    if (!bFoundUpdate)
-                        AELoggerWarn("gameUpdateAndRender == nullptr");
                 }
-            } else {
-                // Fallback (i.e. Automata Engine loading scene).
-                bRenderFallback = true;
-
-                if (bRenderFallbackFirstTime) {
-                    IntroCounter = Win32GetWallClock();
-                    srand(Platform_wallClock());
-                    
-                    // TODO: re-enable the engine voice stuff.
-                    //ae::platform::voiceSubmitBuffer(g_engineVoice, g_engineSound);
-                    //ae::platform::voicePlayBuffer(g_engineVoice);
-                }
-
-                // TODO: for now gonna render a solid white color to the entire backbuffer.
-                uint32_t *pp = (uint32_t *)globalBackBuffer.memory;
-                for (uint32_t y = 0; y < globalBackBuffer.height; y++) {
-                    for (uint32_t x = 0; x < globalBackBuffer.width; x++) { *(pp + x) = 0; }
-                    pp += globalBackBuffer.width;
-                }
-
-                if (!bRenderFallbackFirstTime) {
-                    // draw the logo in the middle and scale over time.
-                    uint32_t scaleFactor     = (1.0f) + 4.f * sqrtf(introElapsed);
-                    float    scaledImgWidth  = g_engineLogo.width * scaleFactor;
-                    float    scaledImgHeight = g_engineLogo.height * scaleFactor;
-
-                    // TODO: factor out.
-                    auto RandomUINT32 = [](uint32_t lower, uint32_t upper) {
-                        assert(upper >= lower);
-                        if (upper == lower) return upper;
-                        uint64_t diff = upper - lower;
-                        assert((uint32_t)RAND_MAX >= diff);
-                        return (uint32_t)((uint64_t)rand() % (diff + 1) + (uint64_t)lower);
-                    };
-
-                    float offsetX = (introElapsed > 0.9f) ? (int)RandomUINT32(0, 100) - 50 : 0;
-                    float offsetY = (introElapsed > 0.9f) ? (int)RandomUINT32(0, 100) - 50 : 0;
-
-                    offsetX /= (0.1f + introElapsed * 2.f);
-                    offsetY /= (0.1f + introElapsed * 2.f);
-
-                    float posX = offsetX + globalBackBuffer.width / 2.f - scaledImgWidth / 2.f;
-                    float posY = offsetY + globalBackBuffer.height / 2.f - scaledImgHeight / 2.f;
-
-                    DrawBitmapScaled(&globalBackBuffer,
-                        g_engineLogo,
-                        posX,
-                        posX + scaledImgWidth,
-                        posY,
-                        posY + scaledImgHeight,
-                        scaleFactor);
-                }
-
-                bRenderFallbackFirstTime = false;
+                if (!bFoundUpdate) AELoggerWarn("gameUpdateAndRender == nullptr");
             }
 
+            // TODO: maybe imgui even works in the fallback mode?
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
-            if (isImGuiInitialized && bAppOkNow && bGameShouldUpdate) {
+            if (isImGuiInitialized && !bRenderFallback) {
 #if defined(AUTOMATA_ENGINE_GL_BACKEND)
                 ImGui::Render();
                 ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
@@ -2427,18 +2195,14 @@ int CALLBACK WinMain(HINSTANCE instance,
 
             ae::engine_memory_t *EM = &g_engineMemory;
 
-            if (bGameShouldUpdate)
-            {
-                LARGE_INTEGER WorkCounter   = Win32GetWallClock();
-                EM->timing.lastFrameUpdateEndTime = WorkCounter.QuadPart;
-            }
+            LARGE_INTEGER WorkCounter         = Win32GetWallClock();
+            EM->timing.lastFrameUpdateEndTime = WorkCounter.QuadPart;
 
             assert(EM->g_updateModel == ae::AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC);
             bool bUsingAtomicUpdate = true;
 
-// TODO: this needs fixing now that we have the bGameShouldUpdate boolean.
 #if defined(AUTOMATA_ENGINE_GL_BACKEND)
-            if (!bRenderFallback && bGameShouldUpdate) {
+            if (!bRenderFallback) {
                 if (bUsingAtomicUpdate) {
                     glFlush();   // push all buffered commands to GPU
                     glFinish();  // block until GPU is complete
@@ -2468,7 +2232,7 @@ int CALLBACK WinMain(HINSTANCE instance,
             }
 
 #if defined(AUTOMATA_ENGINE_VK_BACKEND)
-            if (!bRenderFallback && bGameShouldUpdate) {
+            if (!bRenderFallback) {
                 LARGE_INTEGER gpuEnd;  // TODO: consider other update models.
 
                 if (bUsingAtomicUpdate) {
@@ -2492,7 +2256,16 @@ int CALLBACK WinMain(HINSTANCE instance,
             }
 #endif
 
-            if (!bRenderFallback && bGameShouldUpdate) {
+            if (bRenderFallback) {
+                // NOTE(Noah): Here we are going to call our custom windows platform layer function that
+                // will write our custom buffer to the screen.
+                HDC                    deviceContext = GetDC(windowHandle);
+                ae::game_window_info_t winInfo       = Platform_getWindowInfo();
+                Win32DisplayBufferWindow(deviceContext, winInfo);
+                ReleaseDC(windowHandle, deviceContext);
+            }
+
+            {
                 gameMonitor->WaitForVBlank();
 
                 LARGE_INTEGER after  = Win32GetWallClock();
@@ -2507,12 +2280,12 @@ int CALLBACK WinMain(HINSTANCE instance,
                 EM->timing.lastFrameMaybeVblankTime = after.QuadPart;
 
                 // do the frame pacing stuff.
-                doEndFrameWaitToTarget = false;
-            }
-            // TODO: other backends are probably very much broken.
-            else if (!bGameShouldUpdate) {
+                doEndFrameWaitToTarget = true;
+
                 // wait until the next input poll.
                 LastCounter    = Win32GetWallClock();  // begin wait from this point.
+                
+                // wait 8ms after vblank for the "frame pacing".
                 endFrameTarget = 0.008f;
             }
 
@@ -2535,27 +2308,14 @@ int CALLBACK WinMain(HINSTANCE instance,
                 }
             }
 
-            if (bGameShouldUpdate)
-            { 
-                EM->timing.lastFrameBeginTime = LastCounter.QuadPart;
-            }
+            static uint64_t thisFrameBeginTime = 0; // TODO.
 
             LARGE_INTEGER EndCounter = Win32GetWallClock();
-            LastCounter = EndCounter;
+            LastCounter              = EndCounter;
 
-            // TODO(Noah): this path is likely broken now on non-VK backends.
-            bool bCpuBackendEnabled = false;
-#if defined(AUTOMATA_ENGINE_CPU_BACKEND)
-            bCpuBackendEnabled = true;
-#endif
-            if (bCpuBackendEnabled || bRenderFallback) {
-                // NOTE(Noah): Here we are going to call our custom windows platform layer function that
-                // will write our custom buffer to the screen.
-                HDC                    deviceContext = GetDC(windowHandle);
-                ae::game_window_info_t winInfo       = Platform_getWindowInfo();
-                Win32DisplayBufferWindow(deviceContext, winInfo);
-                ReleaseDC(windowHandle, deviceContext);
-            }
+            EM->timing.lastFrameBeginTime = thisFrameBeginTime;
+            thisFrameBeginTime            = EndCounter.QuadPart;
+
         } // while(globalrunning)
 
     } while(0); // WinMainEnd
