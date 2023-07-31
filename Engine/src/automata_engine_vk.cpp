@@ -487,8 +487,12 @@ namespace automata_engine {
 
 #if VK_VERSION_1_3
 
+                VkPhysicalDeviceSeparateDepthStencilLayoutsFeatures separateDepthStencilLayout = {};
+                separateDepthStencilLayout.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SEPARATE_DEPTH_STENCIL_LAYOUTS_FEATURES;
+
                 VkPhysicalDeviceVulkan13Features physDevVk13Features = {};
                 physDevVk13Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+                physDevVk13Features.pNext = &separateDepthStencilLayout;
 
                 VkPhysicalDeviceFeatures2 physDevFeatures2 = {};
                 physDevFeatures2.sType                     = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
