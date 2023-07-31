@@ -2121,7 +2121,7 @@ int CALLBACK WinMain(HINSTANCE instance,
         // allocate a console for this app
         // https://docs.microsoft.com/en-us/windows/console/allocconsole
         AllocConsole();
-        SetConsoleTitleA("Automata Console");
+        SetConsoleTitleA(AUTOMATA_ENGINE_NAME_STRING " Console");
 
         // set the screen buffer to be big enough to let us scroll text
         // https://docs.microsoft.com/en-us/windows/console/getconsolescreenbufferinfo

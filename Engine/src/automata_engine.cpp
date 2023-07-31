@@ -142,6 +142,9 @@ namespace automata_engine {
         // Present the ImGui stuff to allow user to switch apps.
         if (EM->g_renderImGui) {
             ImGui::Begin("Inf-Forge");
+
+            ImGui::Text("engine version: %s", AUTOMATA_ENGINE_VERSION_STRING);
+
             int item_current = bifrost.currentAppIndex;
             ImGui::Combo("App", &item_current, bifrost.appTable_names, StretchyBufferCount(bifrost.appTable_names));
             if (item_current != bifrost.currentAppIndex) { 

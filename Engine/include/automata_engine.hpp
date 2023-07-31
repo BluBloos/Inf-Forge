@@ -13,6 +13,7 @@
 // S = snapshot version
 #define AUTOMATA_ENGINE_VERSION_STRING        "v0.3.0-alpha WIP"
 #define AUTOMATA_ENGINE_VERSION_NUM           11000000
+#define AUTOMATA_ENGINE_NAME_STRING           "Inf-Forge"
 
 // This file is the primary file for the Automata Engine API.
 // All documentation for Automata Engine is within this file.
