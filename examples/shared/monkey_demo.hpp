@@ -297,3 +297,13 @@ static void MonkeyDemoUpdate(ae::game_memory_t *gameMemory)
 
     MonkeyDemoRender(gameMemory);
 }
+
+// TODO: so for the monkey demo and before ship, what is left?
+
+// want to get rid of the white stuff at the beginning.
+// and maybe we want to fix the bug where things crash on window minimize.
+// also fix the fact that we fix things to 60hz, but someone can have a different refresh rate monitor (e.g. Dan, he can playtest :>)
+//
+
+// this is all that I can think of for now.
+

@@ -1209,16 +1209,24 @@ LRESULT CALLBACK Win32WindowProc(HWND window,
             }
             Win32ResizeBackbuffer(&globalBackBuffer, width,height);
         } break;
-        //case WM_PAINT: {
-            // TODO:
-            /*bool bDuringInit = !(g_gameMemory.getInitialized() && g_bEngineIntroOver);
-            if (bDuringInit) {
-                HDC DeviceContext = BeginPaint(window, &ps);
-                ae::game_window_info_t winInfo = Platform_getWindowInfo();
-                Win32DisplayBufferWindow(DeviceContext, winInfo);
+        case WM_PAINT:
+        {
+            bool bRenderFallback = !g_gameMemory.getInitialized(); 
+            if ( bRenderFallback )
+            {
+                PAINTSTRUCT ps;
+                HDC hdc = BeginPaint(window, &ps);
+                ae::game_window_info_t winInfo = Platform_getWindowInfo(false);
+                // TODO: just use rcPaint.
+                Win32DisplayBufferWindow(hdc, winInfo);
                 EndPaint(window, &ps);
-            }*/
-        //} break;
+            }
+            else
+            {
+                result =  DefWindowProc(window, message, wParam, lParam);
+            }
+
+        } break;
         case WM_DESTROY: {
             // TODO(Noah): Handle as error
             g_engineMemory.globalRunning = false;
