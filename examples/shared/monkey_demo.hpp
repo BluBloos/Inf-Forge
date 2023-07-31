@@ -255,27 +255,29 @@ static void MonkeyDemoUpdate(ae::game_memory_t *gameMemory)
         "SPACE to fly up\n"
         "SHIFT to fly down\n\n");
 
-    ImGui::Text("face count: %d", gd->suzanneIndexCount / 3);
-
-    ImGui::Text("");
-
     // inputs.
+#if !defined(AUTOMATA_ENGINE_VK_BACKEND)
     ImGui::Checkbox("debugRenderDepth", &gd->debugRenderDepthFlag);
-    ImGui::Checkbox("bSpin", &bSpin);
-    ImGui::Checkbox("lockCamYaw", &lockCamYaw);
-    ImGui::Checkbox("lockCamPitch", &lockCamPitch);
-    ImGui::SliderFloat("ambientStrength", &ambientStrength, 0.0f, 1.0f, "%.3f");
-    ImGui::SliderFloat("specularStrength", &specularStrength, 0.0f, 1.0f, "%.3f");
-    ImGui::ColorPicker4("lightColor", &lightColor[0]);
-    ImGui::InputFloat3("lightPos", &lightPos[0]);
-    ImGui::SliderFloat("cameraSensitivity", &cameraSensitivity, 1, 10);
+#endif
 
-    ae::ImGuiRenderMat4("camProjMat", buildProjMatForVk(gd->cam));
-    ae::ImGuiRenderMat4("camViewMat", buildViewMat(gd->cam));
-    ae::ImGuiRenderMat4((char *)(std::string(gd->suzanne.modelName) + "Mat").c_str(),
-        ae::math::buildMat4fFromTransform(gd->suzanneTransform));
-    ae::ImGuiRenderVec3("camPos", gd->cam.trans.pos);
-    ae::ImGuiRenderVec3((char *)(std::string(gd->suzanne.modelName) + "Pos").c_str(), gd->suzanneTransform.pos);
+    ImGui::Text(
+        "---CAMERA---\n");
+    ImGui::Checkbox("lock yaw", &lockCamYaw);
+    ImGui::Checkbox("lock pitch", &lockCamPitch);
+    ImGui::SliderFloat("camera sensitivity", &cameraSensitivity, 1, 10);
+
+    ImGui::Text(
+        "\n---SCENE---\n");
+    ImGui::InputFloat3("sun pos", &lightPos[0]);
+    ImGui::ColorPicker4("sun color", &lightColor[0]);
+    ImGui::SliderFloat("ambient light", &ambientStrength, 0.0f, 1.0f, "%.3f");
+    
+    ImGui::Text(
+        "\n---MONKEY---\n");
+    ImGui::Checkbox("make monke spin", &bSpin);    
+    ImGui::SliderFloat("make monke shiny", &specularStrength, 0.0f, 1.0f, "%.3f");
+    
+
     ImGui::End();
 #endif
 

@@ -141,16 +141,27 @@ namespace automata_engine {
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
         // Present the ImGui stuff to allow user to switch apps.
         if (EM->g_renderImGui) {
-            ImGui::Begin("AutomataEngine");
+            ImGui::Begin("Inf-Forge");
             int item_current = bifrost.currentAppIndex;
             ImGui::Combo("App", &item_current, bifrost.appTable_names, StretchyBufferCount(bifrost.appTable_names));
             if (item_current != bifrost.currentAppIndex) { 
                 bifrost::updateApp(gameMemory, bifrost.appTable_names[item_current]);
             }
-            ImGui::Text("lastFrameTimeUpdate: %.3f ms",
+
+            ImGui::Text("CPU frame time: %.3f ms",
                 1000.0f * timing::getTimeElapsed(EM->timing.lastFrameBeginTime, EM->timing.lastFrameUpdateEndTime));
-            ImGui::Text("lastFrameTimeUpdate_&_Render: %.3f ms",
+
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip(
+                    "the amount of time the CPU portion of the frame took.\n");
+
+            ImGui::Text("CPU + GPU frame time: %.3f ms",
                 1000.0f * timing::getTimeElapsed(EM->timing.lastFrameBeginTime, EM->timing.lastFrameGpuEndTime));
+
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip(
+                    "the total time to render the frame."
+                    "this is the CPU portion plus the GPU render time.");
 
             float collectPeriod = EM->timing.lastFrameVisibleTime / 2.0f;
             
@@ -162,17 +173,18 @@ namespace automata_engine {
             ImGui::Text("present latency: %.3f s",
                 timing::getTimeElapsed(EM->timing.lastFrameBeginTime, EM->timing.lastFrameMaybeVblankTime) -
                     collectPeriod / 2.f);
+            
             if (ImGui::IsItemHovered())
                 ImGui::SetTooltip(
-                    "the phase shift of the game signal to the vblank signal.\n"
+                    "the phase shift of the game signal to the vertical blank signal.\n"
                     "if this is negative, that implies the vblank leads the game signal.");
 
             ImGui::Text("frames per second: %.3f FPS", 1.f / EM->timing.lastFrameVisibleTime);
-            ImGui::Text("updateModel: %s", updateModelToString(EM->g_updateModel));           
+            // ImGui::Text("update model: %s", updateModelToString(EM->g_updateModel));           
             // TODO: for now VSYNC is always on.
-            ImGui::Text("VSYNC = ON");
+            ImGui::Text("VSync: ON");
 
-            ImGui::Checkbox("showDemoWindow", &bifrost.bShowDemoWindow);
+            ImGui::Checkbox("show ImGui demo window", &bifrost.bShowDemoWindow);
             ImGui::End();
 
             if (bifrost.bShowDemoWindow) ImGui::ShowDemoWindow();
