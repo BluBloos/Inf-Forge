@@ -896,7 +896,7 @@ namespace automata_engine {
 namespace ae = automata_engine;
 
 #if defined(_AUTOMATA_ENGINE_FILE_RELATIVE_) || defined(AELoggerError) || defined(AELoggerLog) || defined(AELoggerWarn) || defined(AELogger)
-#error "Automata Engine tries to avoid bloat the global namespace, but these cases are decidedly exceptions."
+#error AUTOMATA_ENGINE_NAME_STRING " tries to avoid bloat the global namespace, but these cases are decidedly exceptions."
 #endif
 
 #define _AUTOMATA_ENGINE_FILE_RELATIVE_ (ae::__details::find_last_in_str("\\" __FILE__, '\\') + 1)

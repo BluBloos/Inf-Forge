@@ -141,7 +141,7 @@ namespace automata_engine {
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
         // Present the ImGui stuff to allow user to switch apps.
         if (EM->g_renderImGui) {
-            ImGui::Begin("Inf-Forge");
+            ImGui::Begin(AUTOMATA_ENGINE_NAME_STRING);
 
             ImGui::Text("engine version: %s", AUTOMATA_ENGINE_VERSION_STRING);
 

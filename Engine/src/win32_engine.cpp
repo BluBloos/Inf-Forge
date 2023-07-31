@@ -2144,7 +2144,7 @@ int CALLBACK WinMain(HINSTANCE instance,
         AELoggerWarn("Please NOTE below error is expected and NOT an error.");
         AELoggerError("testing stderr out");
         // TODO(Noah): Make this print version from a manifest or something...
-        AELoggerLog("\"Hello, World!\" from Automata Engine %s", "Alpha v0.2.0");
+        AELoggerLog("\"Hello, World!\" from " AUTOMATA_ENGINE_NAME_STRING " version: %s", AUTOMATA_ENGINE_VERSION_STRING);
     }
 #endif
 
@@ -2155,12 +2155,11 @@ int CALLBACK WinMain(HINSTANCE instance,
         g_PerfCountFrequency64 = PerfCountFrequency.QuadPart;
     }
 
-
-    windowClass.style = CS_VREDRAW | CS_HREDRAW; // Set window to redraw after being resized
-    windowClass.lpfnWndProc = Win32WindowProc; // Set callback
-    windowClass.hInstance = instance;
-    windowClass.hCursor = LoadCursor(0, IDC_ARROW);
-    windowClass.lpszClassName = "Automata Engine";
+    windowClass.style         = CS_VREDRAW | CS_HREDRAW;  // Set window to redraw after being resized
+    windowClass.lpfnWndProc   = Win32WindowProc;          // Set callback
+    windowClass.hInstance     = instance;
+    windowClass.hCursor       = LoadCursor(0, IDC_ARROW);
+    windowClass.lpszClassName = AUTOMATA_ENGINE_NAME_STRING;
 
     int &globalProgramResult = g_engineMemory.globalProgramResult;
 

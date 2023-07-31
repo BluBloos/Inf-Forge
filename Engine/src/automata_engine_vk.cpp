@@ -373,7 +373,7 @@ namespace automata_engine {
             app.sType             = VK_STRUCTURE_TYPE_APPLICATION_INFO;
             app.pApplicationName  = EM->defaultWindowName;
             // TODO: is there a place from AE that we can get this?
-            app.pEngineName = "Automata Engine";
+            app.pEngineName = AUTOMATA_ENGINE_NAME_STRING;
             app.apiVersion  = VK_MAKE_VERSION(1, 3, 0);  // highest version the app will use.
 
             VkInstanceCreateInfo instance_info = {};
@@ -422,7 +422,7 @@ namespace automata_engine {
                     if (gpu_count < 1)
                         AELoggerError("No physical device found.");
                     else
-                        AELoggerError("Too many GPUs! Automata Engine only supports single adapter systems.");
+                        AELoggerError("Too many GPUs! " AUTOMATA_ENGINE_NAME_STRING " only supports single adapter systems.");
                     return;
                 }
                 StretchyBufferInitWithCount(gpus, gpu_count);
