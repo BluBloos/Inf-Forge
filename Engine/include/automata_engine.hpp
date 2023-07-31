@@ -1105,6 +1105,7 @@ namespace automata_engine {
     /// @param mouseLBttnDown state of the left mouse button.
     /// @param mouseRBttnDown state of the right mouse button.
     /// @param keyDown        an array of booleans corresponding to the state of each key.
+    /// @param packetLiveTime the wallclock time that these inputs are active when consider the game simulation.
     struct user_input_t {
         int mouseX = 0;
         int mouseY = 0;
@@ -1114,6 +1115,8 @@ namespace automata_engine {
         bool mouseRBttnDown = false;
         // TODO(Noah): We will prolly want to change how we represent keys.
         bool keyDown[(uint32_t)GAME_KEY_COUNT];
+
+        float packetLiveTime;
     };
 
     // TODO: Since everything is already namespaced, we won't need to prefix enum IDs with `AUTOMATA_ENGINE_...`.
@@ -1327,7 +1330,13 @@ namespace automata_engine {
         update_model_t g_updateModel = AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC;
 
         /// @brief if the game should continue running.
-        bool globalRunning = true;
+        ///
+        /// the game may set this to request shutdown. it is guaranteed that setting this to false within
+        /// the main update+render loop has that no further update+render will be invoked
+        /// by the engine.
+        ///
+        /// the game should NEVER set globalRunning to true.
+        std::atomic<bool> globalRunning = true;
 
         /// @brief the result that the program will exit with.
         int globalProgramResult = 0;
@@ -1436,6 +1445,8 @@ namespace automata_engine {
             float farPlane;
             int height;
             int width;
+            ae::math::vec3_t angularVelocity;
+            ae::math::vec3_t velocity;
         };
 
         /// @brief A struct to define an AABB (axis aligned bounding box).

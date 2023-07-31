@@ -77,13 +77,14 @@ typedef void (*PFN_GameOnVoiceBufferProcess)(ae::game_memory_t *gameMemory,
 
 /// On the Windows platform, when a WM_SIZE message is recieved, this callback is invoked.
 /// the provided width and height are the client dimensions of the window.
-static PFN_GameHandleWindowResize GameHandleWindowResize = nullptr;
-static ae::PFN_GameFunctionKind GameInit = nullptr;
-static ae::PFN_GameFunctionKind GamePreInit = nullptr;
-static ae::PFN_GameFunctionKind GameCleanup = nullptr;
-static PFN_GameGetUpdateAndRender GameGetUpdateAndRender = nullptr;
+static PFN_GameHandleWindowResize   GameHandleWindowResize   = nullptr;
+static ae::PFN_GameFunctionKind     GameInit                 = nullptr;
+static ae::PFN_GameFunctionKind     GamePreInit              = nullptr;
+static ae::PFN_GameFunctionKind     GameHandleInput          = nullptr;
+static ae::PFN_GameFunctionKind     GameCleanup              = nullptr;
+static PFN_GameGetUpdateAndRender   GameGetUpdateAndRender   = nullptr;
 static PFN_GameOnVoiceBufferProcess GameOnVoiceBufferProcess = nullptr;
-static PFN_GameOnVoiceBufferEnd GameOnVoiceBufferEnd = nullptr;
+static PFN_GameOnVoiceBufferEnd     GameOnVoiceBufferEnd     = nullptr;
 
 static ae::PFN_GameFunctionKind GameOnHotload = nullptr;
 static ae::PFN_GameFunctionKind GameOnUnload = nullptr;
@@ -102,7 +103,14 @@ void Platform_setMousePos(int xPos, int yPos)
 }
 
 void Platform_showMouse(bool show) {
-    ShowCursor(show);
+    if (!show)
+    {
+        while(ShowCursor(FALSE) >= 0);
+    }
+    else
+    {
+        while(ShowCursor(TRUE) < 0);
+    }
 }
 
 void Platform_setAdditionalLogger(void (*fn)(const char *))
@@ -215,7 +223,7 @@ ae::loaded_file_t Platform_readEntireFile(const char *fileName)
 	return fileResult;
 }
 
-static bool isImGuiInitialized = false;
+static bool g_isImGuiInitialized = false;
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
 #include "imgui.h"
 #include "imgui_impl_win32.h" // includes Windows.h for us
@@ -915,7 +923,7 @@ size_t ae::platform::getGpuCurrentMemoryUsage(intptr_t gpuAdapter)
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
 void ScaleImGui_Impl()
 {
-    if (isImGuiInitialized) {
+    if (g_isImGuiInitialized) {
         HMONITOR            hMonitor = MonitorFromWindow(g_hwnd, MONITOR_DEFAULTTONEAREST);
         DEVICE_SCALE_FACTOR scaleFactor;
         if (SUCCEEDED(GetScaleFactorForMonitor(hMonitor, &scaleFactor))) {
@@ -1050,10 +1058,6 @@ void Win32DisplayBufferWindow(HDC deviceContext,
 // the game world simulation to prevent temporal aliasing artifacts.
 uint32_t g_frameIndex = 0;
 
-// TODO: the user_input structure currently stores this hardcoded.
-// maybe in the future we care about dynamic poll rates at runtime.
-// but for right now, don't care bout that shit. 
-constexpr uint32_t g_inputPollRate = 2;
 
 static void ProccessKeyboardMessage(unsigned int vkCode, bool down)
 {
@@ -1168,6 +1172,7 @@ LRESULT CALLBACK Win32WindowProc(HWND window,
         } break;
         //keyboard messages
         case WM_KEYUP: {
+            // TODO: argument conversion warning from WPARAM to unisgned int.
             ProccessKeyboardMessage(wParam, false);
         } break;
         case WM_KEYDOWN: {
@@ -1277,27 +1282,29 @@ static void Win32LoadGameCode(const char *SourceDLLName, const char *TempDLLName
 
         GameGetUpdateAndRender = (PFN_GameGetUpdateAndRender)GetProcAddress(g_gameCodeDLL, "GameGetUpdateAndRender");
 
-        GameOnHotload = (ae::PFN_GameFunctionKind)GetProcAddress(g_gameCodeDLL, "GameOnHotload");
-        GameOnUnload = (ae::PFN_GameFunctionKind)GetProcAddress(g_gameCodeDLL, "GameOnUnload");
-	}
+        GameOnHotload   = (ae::PFN_GameFunctionKind)GetProcAddress(g_gameCodeDLL, "GameOnHotload");
+        GameOnUnload    = (ae::PFN_GameFunctionKind)GetProcAddress(g_gameCodeDLL, "GameOnUnload");
+        GameHandleInput = (ae::PFN_GameFunctionKind)GetProcAddress(g_gameCodeDLL, "GameHandleInput");
+    }
 }
 
 static inline void Win32UnloadGameCode()
 {
-	if (g_gameCodeDLL)
-	{
-		::FreeLibrary(g_gameCodeDLL);
+    if (g_gameCodeDLL) {
+        ::FreeLibrary(g_gameCodeDLL);
         g_gameCodeDLL = NULL;
-	}
-	GameInit = NULL;
-    GamePreInit = NULL;
-    GameOnVoiceBufferEnd = NULL;
+    }
+
+    GameInit                 = NULL;
+    GamePreInit              = NULL;
+    GameOnVoiceBufferEnd     = NULL;
     GameOnVoiceBufferProcess = NULL;
-    GameCleanup = NULL;
-    GameOnHotload = NULL;
-    GameOnUnload = NULL;
-    GameHandleWindowResize = NULL;
-    GameGetUpdateAndRender = NULL;
+    GameCleanup              = NULL;
+    GameOnHotload            = NULL;
+    GameOnUnload             = NULL;
+    GameHandleWindowResize   = NULL;
+    GameGetUpdateAndRender   = NULL;
+    GameHandleInput          = NULL;
 }
 
 static void AssertSanePlatform(void) {
@@ -1680,9 +1687,337 @@ void          Wineventproc(HWINEVENTHOOK hWinEventHook,
     }
 }
 
-//static ae::loaded_wav_t g_engineSound = {};
-//static intptr_t         g_engineVoice = {};
+// wait until this "slice" of time has reached some amount of wallclock time.
+void Win32SliceWait(bool SleepGranular, LARGE_INTEGER SliceBegin, float endFrameTarget, const char *warnMsg)
+{
+    float SecondsElapsedForFrame = Win32GetSecondsElapsed(SliceBegin, Win32GetWallClock(), g_PerfCountFrequency64);
+    if (SecondsElapsedForFrame < endFrameTarget) {
+        if (SleepGranular) { // TODO: revisit this "SleepGranular" stuff.
+            DWORD SleepMS =
+                (DWORD)ae::math::max(int32_t(0), int32_t(1000.0f * (endFrameTarget - SecondsElapsedForFrame)) - 1);
+            if (SleepMS > 0) { Sleep(SleepMS); }
+        }
+        while ((SecondsElapsedForFrame < endFrameTarget)) {
+            SecondsElapsedForFrame = Win32GetSecondsElapsed(SliceBegin, Win32GetWallClock(), g_PerfCountFrequency64);
+        }
+    } else {
+        AELoggerWarn("missed Win32SliceWait by %f ms with warnMsg: %s", (SecondsElapsedForFrame - endFrameTarget) * 1000.f, warnMsg);
+    }
+}
 
+const char  *g_SourceDLLName         = AUTOMATA_ENGINE_PROJECT_NAME ".dll";
+const char  *g_TempDLLName           = AUTOMATA_ENGINE_PROJECT_NAME "_temp.dll";
+FILETIME     g_gameCodeLastWriteTime = {};
+bool         g_SleepGranular         = false;
+
+
+DWORD WINAPI Win32GameUpdateAndRenderHandlingLoop(_In_ LPVOID lpParameter) {
+    IDXGIOutput   *gameMonitor = nullptr;
+    IDXGIAdapter1 *gameAdapter   = nullptr;
+
+    defer(gameMonitor ? (void)gameMonitor->Release() : (void)0);
+    defer(gameAdapter ? (void)gameAdapter->Release() : (void)0);
+
+    // TODO: consider multiple monitor setups.
+    // TODO: consdier multiple GPU(adapter) setups.
+    // get information about the monitor connected.
+    {
+        IDXGIFactory4 *dxgiFactory = nullptr;
+        if (S_OK != CreateDXGIFactory1(IID_PPV_ARGS(&dxgiFactory))) {
+            AELoggerError("could not create factory");
+            ExitThread(-1);
+        }
+        defer(dxgiFactory->Release());
+        dxgiFactory->EnumAdapters1(0, &gameAdapter);
+        HRESULT result = gameAdapter->EnumOutputs(0, &gameMonitor);
+        if (result != S_OK) {
+            AELoggerError("could not enumerate DXGI output 0");
+            ExitThread(-1);
+        }
+    }
+
+    std::atomic<bool> &globalRunning = g_engineMemory.globalRunning;
+
+    LARGE_INTEGER LastCounter = Win32GetWallClock();
+    
+    while (globalRunning.load()) {
+
+        // TODO: could this have better placement in the frame?
+        FILETIME NewDLLWriteTime = Win32GetLastWriteTime(g_SourceDLLName);
+        if (CompareFileTime(&NewDLLWriteTime, &g_gameCodeLastWriteTime)) {
+            if (GameOnUnload) GameOnUnload(&g_gameMemory);
+            Win32UnloadGameCode();
+            g_gameCodeLastWriteTime = Win32GetLastWriteTime(g_SourceDLLName);
+            Win32LoadGameCode(g_SourceDLLName, g_TempDLLName);
+            if (GameOnHotload) GameOnHotload(&g_gameMemory);
+            AELoggerLog("did the hotload.");
+        }
+
+        g_frameIndex++;
+
+        bool bRenderFallback = !g_gameMemory.getInitialized();
+
+#if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
+        if (g_isImGuiInitialized && !bRenderFallback) {
+#if defined(AUTOMATA_ENGINE_GL_BACKEND)
+            ImGui_ImplOpenGL3_NewFrame();
+#endif
+#if defined(AUTOMATA_ENGINE_VK_BACKEND)
+            ImGui_ImplVulkan_NewFrame();
+#endif
+            ImGui_ImplWin32_NewFrame();
+            ImGui::NewFrame();
+        }
+#endif
+
+        {
+            bool bFoundUpdate = false;
+            if (GameGetUpdateAndRender) {
+                auto gameUpdateAndRender = GameGetUpdateAndRender(&g_gameMemory);
+                if ((gameUpdateAndRender != nullptr)) {
+                    bFoundUpdate = true;
+                    gameUpdateAndRender(&g_gameMemory);
+                }
+            }
+            if (!bFoundUpdate) AELoggerWarn("gameUpdateAndRender == nullptr");
+        }
+
+        // TODO: maybe imgui even works in the fallback mode?
+#if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
+        if (g_isImGuiInitialized && !bRenderFallback) {
+#if defined(AUTOMATA_ENGINE_GL_BACKEND)
+            ImGui::Render();
+            ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+#endif
+#if defined(AUTOMATA_ENGINE_VK_BACKEND)
+            // NOTE: app responsible to record imgui into its own command buffers.
+#endif
+        }
+
+#endif
+
+        ae::engine_memory_t *EM = &g_engineMemory;
+
+        LARGE_INTEGER WorkCounter         = Win32GetWallClock();
+        EM->timing.lastFrameUpdateEndTime = WorkCounter.QuadPart;
+
+        assert(EM->g_updateModel == ae::AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC);
+        bool bUsingAtomicUpdate = true;
+
+#if defined(AUTOMATA_ENGINE_GL_BACKEND)
+        if (!bRenderFallback) {
+            if (bUsingAtomicUpdate) {
+                glFlush();   // push all buffered commands to GPU
+                glFinish();  // block until GPU is complete
+                EM->timing.lastFrameGpuEndTime = Win32GetWallClock().QuadPart;
+            }
+            // TODO: we might want to rethink how we do vsync on the GL side. there is some major oddness with
+            // the double wait idea that we are doing here.
+            SwapBuffers(gHdc);
+        }
+#endif
+
+        // NOTE: we know this number through observation. this is an upper bound. this number includes cpu update time, gpu work + present
+        // via mailbox mode (does not include vblank, ends after the call to vkQueuePresentKHR returns).
+        //
+        // TODO: both these constants are adhoc. what if the monitor has a different refresh rate?
+        // what if the round trip frame time is different?
+        static constexpr float GuaranteedFrameTime          = 0.013f;
+        static constexpr float TargetSecondsElapsedPerFrame = 1 / 60.f;
+
+        float endFrameTarget         = TargetSecondsElapsedPerFrame;
+        bool  doEndFrameWaitToTarget = true;
+
+        // TODO: consider other update models.
+        if (bUsingAtomicUpdate) { EM->timing.lastFrameVisibleTime = TargetSecondsElapsedPerFrame; }
+
+#if defined(AUTOMATA_ENGINE_VK_BACKEND)
+        if (!bRenderFallback) {
+            LARGE_INTEGER gpuEnd;  // TODO: consider other update models.
+
+            if (bUsingAtomicUpdate) {
+                gpuEnd                             = vk_WaitForAndResetFence(g_vkDevice, &g_vkPresentFence);
+                ae::EM->timing.lastFrameGpuEndTime = gpuEnd.QuadPart;
+            }
+
+            // TODO: looks like the vkqueue present KHR / vkgetnextbackbuffer are taking extra long some frames
+            // and causing us to miss the vblank?
+
+            {
+                uint32_t swapchainCount = 1;
+
+                VkPresentInfoKHR present = {};
+                present.sType            = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+                present.swapchainCount   = swapchainCount;
+                present.pSwapchains      = &g_vkSwapchain;
+                present.pImageIndices    = &g_vkCurrentImageIndex;
+
+                vkQueuePresentKHR(g_vkQueue, &present);
+            }
+
+            vk_getNextBackbuffer();
+        }
+#endif
+
+        if (bRenderFallback) {
+            // NOTE(Noah): Here we are going to call our custom windows platform layer function that
+            // will write our custom buffer to the screen.
+            HDC                    deviceContext = GetDC(g_hwnd);
+            ae::game_window_info_t winInfo       = Platform_getWindowInfo();
+            Win32DisplayBufferWindow(deviceContext, winInfo);
+            ReleaseDC(g_hwnd, deviceContext);
+        }
+
+        {
+            LARGE_INTEGER beforeVblankCall = Win32GetWallClock();
+
+            // TODO: upon app exit this thread can still be going and access game monitor which will have been dealloc.
+            // this thread needs to own the game monitor thing.
+            gameMonitor->WaitForVBlank();
+
+            LARGE_INTEGER after  = Win32GetWallClock();
+            LARGE_INTEGER before = {.QuadPart = LONGLONG(EM->timing.lastFrameMaybeVblankTime)};
+
+            // is this measured vblank greater than forecasted time based on last blank?
+            float fromLastVblank = Win32GetSecondsElapsed(before, after, g_PerfCountFrequency64);
+            if ((TargetSecondsElapsedPerFrame * 1.5f) < fromLastVblank) {
+
+                float fromLastAndBeforeWait    = Win32GetSecondsElapsed(before, beforeVblankCall, g_PerfCountFrequency64);
+                float fromLastAndBeforePresent = Win32GetSecondsElapsed(before, {.QuadPart = LONGLONG(ae::EM->timing.lastFrameGpuEndTime)}, g_PerfCountFrequency64);
+
+                AELoggerWarn(
+                    "missed the vblank!!!\n\tfromLastAndBeforeWait:%f\n\tfromLastVblank: "
+                    "%f\n\tfromLastAndBeforePresent: %f",
+                    fromLastAndBeforeWait,
+                    fromLastVblank,
+                    fromLastAndBeforePresent);
+            }
+
+            EM->timing.lastFrameMaybeVblankTime = after.QuadPart;
+
+            // do the frame pacing stuff.
+            doEndFrameWaitToTarget = true;
+
+            // wait until the next input poll.
+            LastCounter = Win32GetWallClock();  // begin wait from this point.
+
+            // wait after vblank for the "frame pacing".
+            endFrameTarget = (TargetSecondsElapsedPerFrame - GuaranteedFrameTime);
+        }
+
+        if (doEndFrameWaitToTarget) { Win32SliceWait(g_SleepGranular, LastCounter, endFrameTarget, "missed frame target");
+        }
+
+        static uint64_t thisFrameBeginTime = 0;  // TODO.
+
+        LARGE_INTEGER EndCounter = Win32GetWallClock();
+        LastCounter              = EndCounter;
+
+        EM->timing.lastFrameBeginTime = thisFrameBeginTime;
+        thisFrameBeginTime            = EndCounter.QuadPart;
+
+    }  // while(globalrunning)
+
+    ExitThread(0);
+}
+
+void Win32InputHandlingLoop()
+{
+    // TODO: this thread runs from the main thread, i.e. the thread that created the window.
+    //
+    // which means that our game update+render needs to be on a different thread.
+    //
+    // for OpenGL we are going to need to throw the following in the Hotload thing.
+    // BOOL wglMakeCurrent(HDC unnamedParam1, HGLRC unnamedParam2);
+    // and we could have some em->gl_pfn.getContext to get the HGLRC;
+
+    LARGE_INTEGER SliceBegin = Win32GetWallClock();
+
+    auto             &globalRunning = g_engineMemory.globalRunning;
+    ae::user_input_t &userInput     = g_engineMemory.userInput;
+
+    // TODO: expose that the game can modify the poll rate.
+    constexpr uint32_t inputPollRate = 500;
+    constexpr float endFrameTarget = 1.f / float(inputPollRate);
+
+    // NOTE: the idea behind using the std::atomic<T> data type is to ensure that we have atomic loads and stores to
+    // this global running variable. multiple threads are reading and writing. we don't want to observe a half-complete
+    // operation.
+    while (globalRunning.load()) {
+
+        MSG message;
+
+        // reset accumulation state.
+        userInput.deltaMouseX = 0;
+        userInput.deltaMouseY = 0;
+
+        // NOTE: this means there may have been more messages to Peek. yet, we did no such peeking and exited early
+        // because or "time was up".
+        bool earlyExit = false;
+
+        float estimatedPeekMessageHandlingTime = 0.f/1000.f;
+
+        while (PeekMessage(&message, NULL, 0, 0, PM_REMOVE)) {
+            if (message.message == WM_QUIT) {
+
+                // NOTE: in this case, this input thread will stop running.
+                // if this message is recieved before the 60hz sample point,
+                // then we won't run the next frame, and everything will quit pretty much immediately.
+                //
+                // however, this setting of global running to false might happen
+                // during the update+render loop. in this case, the game would continue
+                // to render that frame. but the next frame won't begin and the game will
+                // stop before then.
+                //
+                // this is OK afaik.
+                //
+                // the game won't know while its rendering that its going to quit next frame.
+                // and that's OK. it has the chance to exit "gracefully" via GameClose.
+                //
+                // there is the idea of if the user presses the X button at the top right to close
+                // window, that maybe the game keep rendering and its like, "do you really want to quit?".
+                //
+                // in this case, TODO: maybe we have a thing in the pre-init where the game can request
+                // to be "part of this process". in this case, we'd keep calling the update+render loop
+                // even after WM_QUIT.
+
+                globalRunning.store(false);
+                break;
+            }
+
+            TranslateMessage(&message);
+            DispatchMessage(&message);
+
+            // check if we have gathered messages for enough time.
+            float SecondsElapsedForFrame = Win32GetSecondsElapsed(SliceBegin, Win32GetWallClock(), g_PerfCountFrequency64);
+            if (earlyExit = (SecondsElapsedForFrame + estimatedPeekMessageHandlingTime > endFrameTarget))
+                break;
+        }
+
+        // wait until this slice is "done".
+        Win32SliceWait(g_SleepGranular, SliceBegin, endFrameTarget, "missed input poll target");
+
+        LARGE_INTEGER ThisTimer  = Win32GetWallClock();
+
+        // NOTE: the packet time live indicates how long the state should apply.
+        userInput.packetLiveTime = endFrameTarget;
+
+        // iter the timer.
+        SliceBegin = ThisTimer;
+
+        // NOTE: there is a concern where we could be running the main render loop, set globalRunning to false,
+        // but in this loop, we do the load JUST before that. so, we miss it and read the "wrong value".
+        //
+        // however, this concern is a non-issue. the guarantee of the engine is only that we won't call another
+        // update and render. it's not an "exit immediately". therefore, to have a potentially extra HandleInput call
+        // get made isn't an issue.
+
+        if (globalRunning.load()) {
+            // allowed to call the handle input code.
+            if (GameHandleInput) GameHandleInput(&g_gameMemory);
+        }
+    }
+}
 
 int CALLBACK WinMain(HINSTANCE instance,
   HINSTANCE prevInstance,
@@ -1692,6 +2027,9 @@ int CALLBACK WinMain(HINSTANCE instance,
     AssertSanePlatform();
 
     // setup the engine memory PFNs + context.
+    // NOTE: no need to do the below this is clear proper with the decl.
+    // g_engineMemory = {};
+
     ae::EM                          = &g_engineMemory;
     ae::EM->pfn.getWindowInfo       = Platform_getWindowInfo;
     ae::EM->pfn.fprintf_proxy       = Platform_fprintf_proxy;
@@ -1725,7 +2063,7 @@ int CALLBACK WinMain(HINSTANCE instance,
 #endif
 
     UINT DesiredSchedularGranularity = 1;
-	bool SleepGranular = (timeBeginPeriod(DesiredSchedularGranularity) == TIMERR_NOERROR);
+	g_SleepGranular = (timeBeginPeriod(DesiredSchedularGranularity) == TIMERR_NOERROR);
 
     // NOTE(Noah): There is a reason that when you read C code, all the variables are defined
     // at the top of the function. I'm just guessing here, but maybe back in the day people
@@ -1827,15 +2165,10 @@ int CALLBACK WinMain(HINSTANCE instance,
         ImGui::StyleColorsDark();
 #endif
 
-    FILETIME gameCodeLastWriteTime = {};
-
-    const char *SourceDLLName = AUTOMATA_ENGINE_PROJECT_NAME ".dll";
-    const char *TempDLLName   = AUTOMATA_ENGINE_PROJECT_NAME "_temp.dll";
-
     // NOTE: we call get last write time first because the load game code does a copy to the
     // temp DLL, and maybe that copy is considered a write and thus modifies the last write time.
-    gameCodeLastWriteTime = Win32GetLastWriteTime(SourceDLLName);
-    Win32LoadGameCode(SourceDLLName, TempDLLName);
+    g_gameCodeLastWriteTime = Win32GetLastWriteTime(g_SourceDLLName);
+    Win32LoadGameCode(g_SourceDLLName, g_TempDLLName);
     if (GameOnHotload) GameOnHotload(&g_gameMemory);
     
     do {
@@ -1965,29 +2298,6 @@ int CALLBACK WinMain(HINSTANCE instance,
             g_xa2Buffer.pContext = (void *)&g_gameMemory;
         }
 
-        IDXGIOutput   *gameMonitor = nullptr;
-        IDXGIAdapter1 *gameAdapter = nullptr;
-        defer(gameMonitor ? (void)gameMonitor->Release() : (void)0);
-        defer(gameAdapter ? (void)gameAdapter->Release() : (void)0);
-        // TODO: consider multiple monitor setups.
-        // TODO: consdier multiple GPU(adapter) setups.
-        // get information about the monitor connected.
-        {
-            IDXGIFactory4 *dxgiFactory = nullptr;
-            if (S_OK != CreateDXGIFactory1(IID_PPV_ARGS(&dxgiFactory))) {
-                AELoggerError("could not create factory");
-                globalProgramResult = -1;
-                break;
-            }
-            defer(dxgiFactory->Release());
-            dxgiFactory->EnumAdapters1(0, &gameAdapter);
-            HRESULT result = gameAdapter->EnumOutputs(0, &gameMonitor);
-            if (result != S_OK) {
-                AELoggerError("could not enumerate DXGI output 0");
-                globalProgramResult = -1;
-                break;
-            }
-        }
 
         if (GameInit != nullptr) {
             GameInit(&g_gameMemory);
@@ -2096,7 +2406,9 @@ int CALLBACK WinMain(HINSTANCE instance,
             ImGui_ImplVulkan_Init(&init_info, vk_MaybeCreateImguiRenderPass());
         }
 #endif
-        isImGuiInitialized = true;
+
+        g_isImGuiInitialized = true;
+
 #if defined(AUTOMATA_ENGINE_GL_BACKEND)
         ScaleImGuiForGL();
 #endif
@@ -2106,217 +2418,20 @@ int CALLBACK WinMain(HINSTANCE instance,
 #endif
         // TODO(Noah): Look into what the imGUI functions are going to return on failure!
 
-
-        LARGE_INTEGER LastCounter = Win32GetWallClock();
-        LARGE_INTEGER IntroCounter = Win32GetWallClock();
-
         g_bIsWindowFocused = true;//TODO: is this needed?
 
-        bool &globalRunning = g_engineMemory.globalRunning;
+        CreateThread(
+            nullptr,  // lp thread attributes.
+            0,        // default stack size.
+            Win32GameUpdateAndRenderHandlingLoop,
+            nullptr,  // lpParameter
+            0,        // thread runs immediately after creation.
+            nullptr   // pointer to a thing that recieves the thread identifier.
+                     );
 
-        while(globalRunning) {
+        // NOTE: input handling loop doesn't exit until global running is false.
+        Win32InputHandlingLoop();
 
-            // TODO: could this have better placement in the frame?
-            FILETIME NewDLLWriteTime = Win32GetLastWriteTime(SourceDLLName);
-            if (CompareFileTime(&NewDLLWriteTime, &gameCodeLastWriteTime))
-            {
-                if (GameOnUnload) GameOnUnload(&g_gameMemory);
-                Win32UnloadGameCode();
-                gameCodeLastWriteTime = Win32GetLastWriteTime(SourceDLLName);
-                Win32LoadGameCode(SourceDLLName, TempDLLName);
-                if (GameOnHotload) GameOnHotload(&g_gameMemory);
-                AELoggerLog("did the hotload.");
-            }
-
-            ae::user_input_t &userInput = g_engineMemory.userInput;
-
-            // reset accumulation state.
-            userInput.deltaMouseX = 0;
-            userInput.deltaMouseY = 0;
-
-            // Process windows messages
-            {
-                MSG message;
-                while(PeekMessage(&message, NULL, 0, 0, PM_REMOVE)) {
-                    switch (message.message) {
-                        case WM_QUIT:
-                            globalRunning = false;
-                        break;
-                        default:
-                        TranslateMessage(&message);
-                        DispatchMessage(&message);
-                        break;
-                    }
-                }
-            }
-
-            g_frameIndex++;
-
-            bool bRenderFallback = !g_gameMemory.getInitialized();
-
-#if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
-            if (isImGuiInitialized && !bRenderFallback) {
-#if defined(AUTOMATA_ENGINE_GL_BACKEND)
-                ImGui_ImplOpenGL3_NewFrame();
-#endif
-#if defined(AUTOMATA_ENGINE_VK_BACKEND)
-                ImGui_ImplVulkan_NewFrame();
-#endif
-                ImGui_ImplWin32_NewFrame();
-                ImGui::NewFrame();
-            }
-#endif
-
-            {
-                bool bFoundUpdate = false;
-                if (GameGetUpdateAndRender) {
-                    auto gameUpdateAndRender = GameGetUpdateAndRender(&g_gameMemory);
-                    if ((gameUpdateAndRender != nullptr)) {
-                        bFoundUpdate = true;
-                        gameUpdateAndRender(&g_gameMemory);
-                    }
-                }
-                if (!bFoundUpdate) AELoggerWarn("gameUpdateAndRender == nullptr");
-            }
-
-            // TODO: maybe imgui even works in the fallback mode?
-#if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
-            if (isImGuiInitialized && !bRenderFallback) {
-#if defined(AUTOMATA_ENGINE_GL_BACKEND)
-                ImGui::Render();
-                ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-#endif
-#if defined(AUTOMATA_ENGINE_VK_BACKEND)
-                // NOTE: app responsible to record imgui into its own command buffers.
-#endif
-            }
-
-#endif
-
-            ae::engine_memory_t *EM = &g_engineMemory;
-
-            LARGE_INTEGER WorkCounter         = Win32GetWallClock();
-            EM->timing.lastFrameUpdateEndTime = WorkCounter.QuadPart;
-
-            assert(EM->g_updateModel == ae::AUTOMATA_ENGINE_UPDATE_MODEL_ATOMIC);
-            bool bUsingAtomicUpdate = true;
-
-#if defined(AUTOMATA_ENGINE_GL_BACKEND)
-            if (!bRenderFallback) {
-                if (bUsingAtomicUpdate) {
-                    glFlush();   // push all buffered commands to GPU
-                    glFinish();  // block until GPU is complete
-                    EM->timing.lastFrameGpuEndTime = Win32GetWallClock().QuadPart;
-                }
-                // TODO: we might want to rethink how we do vsync on the GL side. there is some major oddness with
-                // the double wait idea that we are doing here.
-                SwapBuffers(gHdc);
-            }
-#endif
-
-            // NOTE: we know this number through observation. this is an upper bound. this number includes windows message pump, cpu update time, gpu work + present
-            // via mailbox mode (does not include vblank, ends after the call to vkQueuePresentKHR returns).
-            //
-            // TODO: both these constants are adhoc. what if the monitor has a different refresh rate?
-            // what if the round trip frame time is different?
-            static constexpr float GuaranteedFrameTime          = 0.004f;
-            static constexpr float TargetSecondsElapsedPerFrame = 1 / 60.f;
-
-            float endFrameTarget = TargetSecondsElapsedPerFrame;
-            bool  doEndFrameWaitToTarget = true;
-
-            // TODO: consider other update models.
-            if (bUsingAtomicUpdate)
-            { 
-                EM->timing.lastFrameVisibleTime = TargetSecondsElapsedPerFrame;
-            }
-
-#if defined(AUTOMATA_ENGINE_VK_BACKEND)
-            if (!bRenderFallback) {
-                LARGE_INTEGER gpuEnd;  // TODO: consider other update models.
-
-                if (bUsingAtomicUpdate) {
-                    gpuEnd                          = vk_WaitForAndResetFence(g_vkDevice, &g_vkPresentFence);
-                    ae::EM->timing.lastFrameGpuEndTime = gpuEnd.QuadPart;
-                }
-
-                {
-                    uint32_t swapchainCount = 1;
-
-                    VkPresentInfoKHR present = {};
-                    present.sType            = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-                    present.swapchainCount   = swapchainCount;
-                    present.pSwapchains      = &g_vkSwapchain;
-                    present.pImageIndices    = &g_vkCurrentImageIndex;
-
-                    vkQueuePresentKHR(g_vkQueue, &present);
-                }
-
-                vk_getNextBackbuffer();
-            }
-#endif
-
-            if (bRenderFallback) {
-                // NOTE(Noah): Here we are going to call our custom windows platform layer function that
-                // will write our custom buffer to the screen.
-                HDC                    deviceContext = GetDC(windowHandle);
-                ae::game_window_info_t winInfo       = Platform_getWindowInfo();
-                Win32DisplayBufferWindow(deviceContext, winInfo);
-                ReleaseDC(windowHandle, deviceContext);
-            }
-
-            {
-                gameMonitor->WaitForVBlank();
-
-                LARGE_INTEGER after  = Win32GetWallClock();
-                LARGE_INTEGER before = {.QuadPart = LONGLONG(EM->timing.lastFrameMaybeVblankTime)};
-
-                // is this measured vblank greater than forecasted time based on last blank?
-                if ((TargetSecondsElapsedPerFrame * 1.5f) <
-                    Win32GetSecondsElapsed(before, after, g_PerfCountFrequency64)) {
-                    AELoggerWarn("missed the vblank!!!");
-                }
-
-                EM->timing.lastFrameMaybeVblankTime = after.QuadPart;
-
-                // do the frame pacing stuff.
-                doEndFrameWaitToTarget = true;
-
-                // wait until the next input poll.
-                LastCounter    = Win32GetWallClock();  // begin wait from this point.
-                
-                // wait 8ms after vblank for the "frame pacing".
-                endFrameTarget = 0.008f;
-            }
-
-            // NOTE: the end frame wait utility for the above code (above code gets to set the wait time).
-            if (doEndFrameWaitToTarget) {
-                float SecondsElapsedForFrame =
-                    Win32GetSecondsElapsed(LastCounter, Win32GetWallClock(), g_PerfCountFrequency64);
-                if (SecondsElapsedForFrame < endFrameTarget) {
-                    if (SleepGranular) {
-                        DWORD SleepMS = (DWORD)ae::math::max(
-                            int32_t(0), int32_t(1000.0f * (endFrameTarget - SecondsElapsedForFrame)) - 1);
-                        if (SleepMS > 0) { Sleep(SleepMS); }
-                    }
-                    while ((SecondsElapsedForFrame < endFrameTarget)) {
-                        SecondsElapsedForFrame =
-                            Win32GetSecondsElapsed(LastCounter, Win32GetWallClock(), g_PerfCountFrequency64);
-                    }
-                } else {
-                    AELoggerWarn("missed end frame wait!");
-                }
-            }
-
-            static uint64_t thisFrameBeginTime = 0; // TODO.
-
-            LARGE_INTEGER EndCounter = Win32GetWallClock();
-            LastCounter              = EndCounter;
-
-            EM->timing.lastFrameBeginTime = thisFrameBeginTime;
-            thisFrameBeginTime            = EndCounter.QuadPart;
-
-        } // while(globalrunning)
 
     } while(0); // WinMainEnd
 
@@ -2338,7 +2453,7 @@ int CALLBACK WinMain(HINSTANCE instance,
 
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
         // ImGUI is tightly coupled with the platform.
-        if (isImGuiInitialized) {
+        if (g_isImGuiInitialized) {
 #if defined(AUTOMATA_ENGINE_GL_BACKEND)
             ImGui_ImplOpenGL3_Shutdown();
 #endif

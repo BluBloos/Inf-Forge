@@ -446,14 +446,8 @@ DllExport void GameInit(ae::game_memory_t *gameMemory)
     si.commandBufferCount = 1;
     si.pCommandBuffers    = &cmd;
     (vkQueueSubmit(gd->vkQueue, 1, &si, fence));
-}
-
-DllExport void GameInitAsync(ae::game_memory_t *gameMemory)
-{
-    game_state_t *gd = getGameState(gameMemory);
 
     // wait for the init command list.
-    auto &fence = gd->vkInitFence;
     WaitForAndResetFence(gd->vkDevice, &fence);
 
     ae::VK_CHECK(vkResetCommandBuffer(gd->commandBuffer, 0));
