@@ -55,7 +55,7 @@ static void MonkeyDemoInit(ae::game_memory_t *gameMemory)
 {
     ae::engine_memory_t *EM      = gameMemory->pEngineMemory;
     game_state_t *       gd      = getGameState(gameMemory);
-    auto                 winInfo = EM->pfn.getWindowInfo();
+    auto                 winInfo = EM->pfn.getWindowInfo(false);
 
     *gd = {};  // default initialize.
 
@@ -102,8 +102,11 @@ DllExport void GameHandleInput(ae::game_memory_t *gameMemory)
     const bool &            lockCamPitch        = gd->lockCamPitch;
     const float &           cameraSensitivity   = gd->cameraSensitivity;
 
-    bool &optInFirstPersonCam = gd->optInFirstPersonCam;
-    ae::math::camera_t &cam = gd->cam;
+    bool               &optInFirstPersonCam = gd->optInFirstPersonCam;
+    ae::math::camera_t &cam                 = gd->cam;
+    bool               &bFocusedLastFrame   = gd->bFocusedLastFrame;
+
+    auto                    winInfo   = EM->pfn.getWindowInfo(true);
 
     // NOTE: the user input to handle is stored within the engine memory.
     // whenever this is called from the engine, the input is "dirty" and we ought to
@@ -123,6 +126,19 @@ DllExport void GameHandleInput(ae::game_memory_t *gameMemory)
             // enter GUI.
             EM->pfn.showMouse(true);
             optInFirstPersonCam = false;
+        }
+
+        {
+            const bool isFocused         = winInfo.isFocused;
+            const bool bExitingFocus     = bFocusedLastFrame && !isFocused;
+
+            if (bExitingFocus) {
+                // enter GUI.
+                EM->pfn.showMouse(true);
+                optInFirstPersonCam = false;
+            }
+
+            bFocusedLastFrame = isFocused;
         }
     }
 
@@ -216,7 +232,7 @@ static void MonkeyDemoUpdate(ae::game_memory_t *gameMemory)
     bool optInFirstPersonCam_Snapshot = gd->optInFirstPersonCam;
 
     ae::engine_memory_t *   EM        = gameMemory->pEngineMemory;
-    auto                    winInfo   = EM->pfn.getWindowInfo();
+    auto                    winInfo   = EM->pfn.getWindowInfo(false);
 
     bool             &bSpin               = gd->bSpin;
     bool             &lockCamYaw          = gd->lockCamYaw;
@@ -263,27 +279,9 @@ static void MonkeyDemoUpdate(ae::game_memory_t *gameMemory)
     ImGui::End();
 #endif
 
-    bool &optInFirstPersonCam = gd->optInFirstPersonCam;
-    {
-        bool      &bFocusedLastFrame = gd->bFocusedLastFrame;
-        const bool isFocused         = winInfo.isFocused;
-        const bool bExitingFocus     = bFocusedLastFrame && !isFocused;
-
-        // TODO: this here appears to not be showing the mouse correctly.
-        // it could be a thing where the thread that is calling this function
-        // is not the main thread (the thread associated with the window).
-        if (bExitingFocus) {
-            // enter GUI.
-            EM->pfn.showMouse(true);
-            optInFirstPersonCam = false;
-        }
-
-        bFocusedLastFrame = isFocused;
-
-        if (optInFirstPersonCam_Snapshot) {
-            // clamp mouse cursor.
-            EM->pfn.setMousePos((int)(winInfo.width / 2.0f), (int)(winInfo.height / 2.0f));
-        }
+    if (optInFirstPersonCam_Snapshot) {
+        // clamp mouse cursor.
+        EM->pfn.setMousePos((int)(winInfo.width / 2.0f), (int)(winInfo.height / 2.0f));
     }
 
     // NOTE: the monkey spinning is not game state that needs to be updated at a high granularity. therefore we can update it here

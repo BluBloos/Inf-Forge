@@ -248,14 +248,14 @@ static inline int sign(int x)
     return (x > 0) - (x < 0);
 }
 
-ae::game_window_info_t Platform_getWindowInfo()
+ae::game_window_info_t Platform_getWindowInfo(bool useCache)
 {
-    ae::game_window_info_t winInfo;
+    static ae::game_window_info_t winInfo;
     winInfo.hWnd      = (intptr_t)g_hwnd;
     winInfo.hInstance = (intptr_t)g_hInstance;
     if (g_hwnd == NULL) { AELoggerError("g_hwnd == NULL"); }
     RECT rect;
-    if (GetClientRect(g_hwnd, &rect)) {
+    if (!useCache && GetClientRect(g_hwnd, &rect)) {
         winInfo.width    = rect.right - rect.left;
         int signedHeight = rect.top - rect.bottom;
         winInfo.height   = sign(signedHeight) * signedHeight;
@@ -380,7 +380,7 @@ void PlatformVK_renderAndRecordImGui(VkCommandBuffer cmd)
         info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
         VK_CHECK(vkBeginCommandBuffer(cmd, &info));
 
-        ae::game_window_info_t winInfo = Platform_getWindowInfo();
+        ae::game_window_info_t winInfo = Platform_getWindowInfo(false);
 
         VkRenderPassBeginInfo rpInfo    = {};
         rpInfo.sType                    = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -696,7 +696,7 @@ void PlatformVK_init(
     }
 
     // create the swapchain.
-    auto winInfo = Platform_getWindowInfo();
+    auto winInfo = Platform_getWindowInfo(false);
     vk_initSwapchain(winInfo.width, winInfo.height);
 }
 
@@ -1863,7 +1863,7 @@ DWORD WINAPI Win32GameUpdateAndRenderHandlingLoop(_In_ LPVOID lpParameter) {
             // NOTE(Noah): Here we are going to call our custom windows platform layer function that
             // will write our custom buffer to the screen.
             HDC                    deviceContext = GetDC(g_hwnd);
-            ae::game_window_info_t winInfo       = Platform_getWindowInfo();
+            ae::game_window_info_t winInfo       = Platform_getWindowInfo(false);
             Win32DisplayBufferWindow(deviceContext, winInfo);
             ReleaseDC(g_hwnd, deviceContext);
         }
@@ -2231,7 +2231,7 @@ int CALLBACK WinMain(HINSTANCE instance,
 
         // Create the globalBackBuffer
         {
-            ae::game_window_info_t winInfo = Platform_getWindowInfo();
+            ae::game_window_info_t winInfo = Platform_getWindowInfo(false);
             Win32ResizeBackbuffer(&globalBackBuffer, winInfo.width, winInfo.height);
         }
 

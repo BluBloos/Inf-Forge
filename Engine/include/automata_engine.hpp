@@ -1136,7 +1136,9 @@ namespace automata_engine {
     };
 
     /// @brief get information about the platform window.
-    typedef    game_window_info_t (*PFN_getWindowInfo)();
+    /// @param useCache if set to true, e.g. on the win32 backend this will prevent the call to GetClientRect and instead return
+    /// the data from the last query.
+    typedef    game_window_info_t (*PFN_getWindowInfo)(bool useCache);
 
     /// @brief prints to the console as if it were a printf call.
     ///
@@ -1151,7 +1153,7 @@ namespace automata_engine {
     /// @param xPos x pos in client pixel coords.
     typedef void (*PFN_setMousePos)(int xPos, int yPos);
 
-    /// @brief show or hide the mouse cursor.
+    /// @brief show or hide the mouse cursor. this can only be called from the HandleInput thread.
     typedef void (*PFN_showMouse)(bool shouldShow);
 
     /// @brief Get the frequency of the timer in ticks.

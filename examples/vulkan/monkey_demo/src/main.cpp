@@ -42,7 +42,7 @@ void MonkeyDemoHotload(ae::game_memory_t *gameMemory)
 DllExport void GameInit(ae::game_memory_t *gameMemory)
 {
     ae::engine_memory_t *EM      = gameMemory->pEngineMemory;
-    auto                 winInfo = EM->pfn.getWindowInfo();
+    auto                 winInfo = EM->pfn.getWindowInfo(false);
     game_state_t *gd      = getGameState(gameMemory);
 
     *gd = {};  // zero it out.
@@ -486,7 +486,7 @@ VkFramebuffer MaybeMakeFramebuffer(game_state_t *gd, VkImageView backbuffer, u32
 void MonkeyDemoRender(ae::game_memory_t *gameMemory)
 {
     ae::engine_memory_t *EM        = gameMemory->pEngineMemory;
-    auto          winInfo = EM->pfn.getWindowInfo();
+    auto          winInfo = EM->pfn.getWindowInfo(false);
     game_state_t    *gd        = getGameState(gameMemory);
 
     VkCommandBuffer cmd = gd->commandBuffer;
