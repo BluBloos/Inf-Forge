@@ -156,14 +156,14 @@ namespace automata_engine {
 
             if (ImGui::IsItemHovered())
                 ImGui::SetTooltip(
-                    "the amount of time the CPU portion of the frame took.\n");
+                    "the amount of time the CPU portion of the frame took.");
 
             ImGui::Text("CPU + GPU frame time: %.3f ms",
                 1000.0f * timing::getTimeElapsed(EM->timing.lastFrameBeginTime, EM->timing.lastFrameGpuEndTime));
 
             if (ImGui::IsItemHovered())
                 ImGui::SetTooltip(
-                    "the total time to render the frame."
+                    "the total time to render the frame.\n"
                     "this is the CPU portion plus the GPU render time.");
 
             float collectPeriod = EM->timing.lastFrameVisibleTime / 2.0f;

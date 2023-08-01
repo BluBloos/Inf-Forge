@@ -173,7 +173,6 @@ bool Platform_writeEntireFile(
 
 ae::loaded_file_t Platform_readEntireFile(const char *fileName)
 {
-    AELoggerLog("Reading file: %s", fileName);
 	void *result = 0;
 	int fileSize32 = 0;
 	HANDLE fileHandle = CreateFileA(fileName, GENERIC_READ,
@@ -218,7 +217,7 @@ ae::loaded_file_t Platform_readEntireFile(const char *fileName)
 	fileResult.contentSize = fileSize32;
     fileResult.fileName = fileName;
     if (fileResult.contents) {
-        AELoggerLog("File %s read successfully", fileName);
+        AELoggerLog("File '%s' read successfully", fileName);
     }
 	return fileResult;
 }
@@ -1199,13 +1198,9 @@ LRESULT CALLBACK Win32WindowProc(HWND window,
         case WM_SIZE: {
             uint32_t width = LOWORD(lParam);
             uint32_t height = HIWORD(lParam);
-            if ((GameHandleWindowResize != nullptr) && 
-                (g_gameMemory.data != nullptr)
+            if ((GameHandleWindowResize != nullptr)
             ) {
                 GameHandleWindowResize(&g_gameMemory, width, height);
-            } else {
-                AELoggerWarn("(GameHandleWindowResize == nullptr) OR\n"
-                    "(g_gameMemory.data == nullptr)");
             }
             Win32ResizeBackbuffer(&globalBackBuffer, width,height);
         } break;
@@ -1893,12 +1888,20 @@ DWORD WINAPI Win32GameUpdateAndRenderHandlingLoop(_In_ LPVOID lpParameter) {
                 float fromLastAndBeforeWait    = Win32GetSecondsElapsed(before, beforeVblankCall, g_PerfCountFrequency64);
                 float fromLastAndBeforePresent = Win32GetSecondsElapsed(before, {.QuadPart = LONGLONG(ae::EM->timing.lastFrameGpuEndTime)}, g_PerfCountFrequency64);
 
+#if defined(_DEBUG)
                 AELoggerWarn(
-                    "missed the vblank!!!\n\tfromLastAndBeforeWait:%f\n\tfromLastVblank: "
-                    "%f\n\tfromLastAndBeforePresent: %f",
+                    "missed the vertical blank"
+                    ". elapsed times:"
+                    "\n\tfrom last vblank until the end of the GPU work for this frame: %f"
+                    "\n\tfrom last vblank until just before presenting this frame: %f"
+                    "\n\telapsed time from last vblank until now: %f",
                     fromLastAndBeforeWait,
-                    fromLastVblank,
-                    fromLastAndBeforePresent);
+                    fromLastAndBeforePresent,
+                    fromLastVblank
+                );
+#else
+                AELoggerWarn("missed the vertical blank");                
+#endif
             }
 
             EM->timing.lastFrameMaybeVblankTime = after.QuadPart;
@@ -2087,7 +2090,9 @@ int CALLBACK WinMain(HINSTANCE instance,
     g_gameMemory.setInitialized(false);
     g_gameMemory.dataBytes = 67108864; // will allocate 64 MB
     g_gameMemory.data = Platform_alloc(g_gameMemory.dataBytes); 
+
     if (g_gameMemory.data == nullptr) {
+        AELoggerError("unable to allocate the %u bytes required to run the game", g_gameMemory.dataBytes);
         return -1;
     }
 
@@ -2141,10 +2146,10 @@ int CALLBACK WinMain(HINSTANCE instance,
 
         AELoggerLog("stdout initialized");
         // TODO(Noah): Would be nice to have unicode support with our platform logger. Emojis are awesome!
-        AELoggerWarn("Please NOTE below error is expected and NOT an error.");
+        AELoggerWarn("Please note that the below error is expected and is NOT an error");
         AELoggerError("testing stderr out");
         // TODO(Noah): Make this print version from a manifest or something...
-        AELoggerLog("\"Hello, World!\" from " AUTOMATA_ENGINE_NAME_STRING " version: %s", AUTOMATA_ENGINE_VERSION_STRING);
+        AELoggerLog("\"Hello, World!\" from " AUTOMATA_ENGINE_NAME_STRING " %s", AUTOMATA_ENGINE_VERSION_STRING);
     }
 #endif
 
@@ -2492,8 +2497,8 @@ int CALLBACK WinMain(HINSTANCE instance,
         
         // TODO(Noah): Sometimes this does not print?
         AELogger(
-            "\033[0;93m"
-            "\n\nPress any key to exit\n"
+            "\x1b[2;37;41m"
+            "\n\n====================================\nThanks for playing!\n====================================\nPress any key to exit\n"
             "\033[0m"
         );
 

@@ -268,14 +268,14 @@ static void MonkeyDemoUpdate(ae::game_memory_t *gameMemory)
 
     ImGui::Text(
         "\n---SCENE---\n");
-    ImGui::InputFloat3("sun pos", &lightPos[0]);
+    ImGui::InputFloat3("sun position", &lightPos[0]);
     ImGui::ColorPicker4("sun color", &lightColor[0]);
     ImGui::SliderFloat("ambient light", &ambientStrength, 0.0f, 1.0f, "%.3f");
     
     ImGui::Text(
         "\n---MONKEY---\n");
-    ImGui::Checkbox("make monke spin", &bSpin);    
-    ImGui::SliderFloat("make monke shiny", &specularStrength, 0.0f, 1.0f, "%.3f");
+    ImGui::Checkbox("make it spin", &bSpin);    
+    ImGui::SliderFloat("make it shiny", &specularStrength, 0.0f, 1.0f, "%.3f");
     
 
     ImGui::End();

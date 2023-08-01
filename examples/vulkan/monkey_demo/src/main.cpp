@@ -269,7 +269,7 @@ DllExport void GameInit(ae::game_memory_t *gameMemory)
 
     // load the checker data and upload to GPU.
     {
-        ae::loaded_image_t bitmap = ae::io::loadBMP("res\\highres_checker.bmp");
+        ae::loaded_image_t bitmap = ae::io::loadBMP("res\\checker.bmp");
 
         if (bitmap.pixelPointer == nullptr) {
             EM->setFatalExit();
