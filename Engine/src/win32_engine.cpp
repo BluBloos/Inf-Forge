@@ -2196,9 +2196,11 @@ int CALLBACK WinMain(HINSTANCE instance,
         const DWORD windowStyle = (WS_OVERLAPPEDWINDOW | WS_VISIBLE) &
             ((g_engineMemory.defaultWinProfile == ae::AUTOMATA_ENGINE_WINPROFILE_NORESIZE)
                 ?
-                (~WS_MAXIMIZEBOX & ~WS_THICKFRAME) : (DWORD)(0xFFFFFFFF));
+                (~WS_MAXIMIZEBOX & ~WS_THICKFRAME & ~WS_MINIMIZEBOX) : (DWORD)(0xFFFFFFFF));
         
-        const bool beginMaximized = (g_engineMemory.defaultWidth == UINT32_MAX) && (g_engineMemory.defaultHeight == UINT32_MAX);
+        // TODO: currently, beginMaximized works. but, it still allows for the window to resize if it is
+        // dragged. this conflict with WINPROFILE_NORESIZE. so, we won't be using this for now.
+        const bool beginMaximized = g_engineMemory.requestMaximize;
 
         windowHandle = CreateWindowExA(
             0, // dwExStyle

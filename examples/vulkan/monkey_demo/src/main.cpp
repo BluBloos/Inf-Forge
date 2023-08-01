@@ -491,6 +491,8 @@ void MonkeyDemoRender(ae::game_memory_t *gameMemory)
 
     VkCommandBuffer cmd = gd->commandBuffer;
 
+    bool bShouldRender = (winInfo.width > 0 && winInfo.height > 0);
+
     // reset the command buffer and allocator from last frame, which we know is okay due to atomic
     // update model.
     ae::VK_CHECK(vkResetCommandBuffer(gd->commandBuffer, 0));
@@ -500,120 +502,125 @@ void MonkeyDemoRender(ae::game_memory_t *gameMemory)
     {
         ae::VK::beginCommandBuffer(cmd);
 
-        VkImageView backbufferView;
-        VkImage     backbuffer;
-        uint32_t    backbufferIdx = EM->vk_pfn.getCurrentBackbuffer(&backbuffer, &backbufferView);
+        if (bShouldRender) {
+            VkImageView backbufferView;
+            VkImage     backbuffer;
+            uint32_t    backbufferIdx = EM->vk_pfn.getCurrentBackbuffer(&backbuffer, &backbufferView);
 
-        // NOTE: since the window cannot be resized, the swapchain will never be resized.
-        // for this reason, it is safe to rely that VkImageView is the same view across the entire
-        // app lifetime.
-        VkFramebuffer framebuffer =
-            MaybeMakeFramebuffer(gd, backbufferView, winInfo.width, winInfo.height, backbufferIdx);
+            // NOTE: since the window cannot be resized, the swapchain will never be resized.
+            // for this reason, it is safe to rely that VkImageView is the same view across the entire
+            // app lifetime.
+            VkFramebuffer framebuffer =
+                MaybeMakeFramebuffer(gd, backbufferView, winInfo.width, winInfo.height, backbufferIdx);
 
-        // NOTE: the barriers are special casing the fact that we have the atomic update model.
-        // so, we don't need to sync against any work before.
-        // and we don't need to sync against any work after.
+            // NOTE: the barriers are special casing the fact that we have the atomic update model.
+            // so, we don't need to sync against any work before.
+            // and we don't need to sync against any work after.
 
-        // transit from present to color attachment.
-        auto barrierInfo = ae::VK::imageMemoryBarrier(VK_ACCESS_NONE,
-            VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-            VK_IMAGE_LAYOUT_UNDEFINED,
-            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-            backbuffer);
+            // transit from present to color attachment.
+            auto barrierInfo = ae::VK::imageMemoryBarrier(VK_ACCESS_NONE,
+                VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                VK_IMAGE_LAYOUT_UNDEFINED,
+                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                backbuffer);
 
-        ae::VK::cmdImageMemoryBarrier(cmd,
-            VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,              // no stage before.
-            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,  // includes load op.
-            1,
-            &barrierInfo);
+            ae::VK::cmdImageMemoryBarrier(cmd,
+                VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,              // no stage before.
+                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,  // includes load op.
+                1,
+                &barrierInfo);
 
-        // TODO: we could batch the barriers.
-        // put a barrier for the dynamic ubo write -> read.
-        auto bufferBarrier = ae::VK::bufferMemoryBarrier(
-            VK_ACCESS_HOST_WRITE_BIT, VK_ACCESS_UNIFORM_READ_BIT, gd->dynamicFrameUbo, 0, sizeof(PushData));
-        ae::VK::cmdBufferMemoryBarrier(cmd,
-            VK_PIPELINE_STAGE_HOST_BIT,
-            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
-            1,
-            &bufferBarrier);
+            // TODO: we could batch the barriers.
+            // put a barrier for the dynamic ubo write -> read.
+            auto bufferBarrier = ae::VK::bufferMemoryBarrier(
+                VK_ACCESS_HOST_WRITE_BIT, VK_ACCESS_UNIFORM_READ_BIT, gd->dynamicFrameUbo, 0, sizeof(PushData));
+            ae::VK::cmdBufferMemoryBarrier(cmd,
+                VK_PIPELINE_STAGE_HOST_BIT,
+                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_VERTEX_SHADER_BIT,
+                1,
+                &bufferBarrier);
 
-        {
-            VkRect2D renderArea = {VkOffset2D{0, 0}, VkExtent2D{winInfo.width, winInfo.height}};
+            {
+                VkRect2D renderArea = {VkOffset2D{0, 0}, VkExtent2D{winInfo.width, winInfo.height}};
 
-            VkClearValue clearValues[2]       = {};
-            clearValues[0].color.float32[0]   = 1.f;
-            clearValues[0].color.float32[1]   = 1.f;
-            clearValues[0].color.float32[2]   = 0.f;
-            clearValues[0].color.float32[3]   = 1.f;
-            clearValues[1].depthStencil.depth = 1.f;
+                VkClearValue clearValues[2]       = {};
+                clearValues[0].color.float32[0]   = 1.f;
+                clearValues[0].color.float32[1]   = 1.f;
+                clearValues[0].color.float32[2]   = 0.f;
+                clearValues[0].color.float32[3]   = 1.f;
+                clearValues[1].depthStencil.depth = 1.f;
 
-            // Begin the render pass.
-            VkRenderPassBeginInfo rp_begin = {};
-            rp_begin.sType                 = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-            rp_begin.renderPass            = gd->vkRenderPass;
-            rp_begin.framebuffer           = framebuffer;
-            rp_begin.renderArea            = renderArea;
-            rp_begin.clearValueCount       = _countof(clearValues);
-            rp_begin.pClearValues          = clearValues;
-            
-            vkCmdBeginRenderPass(cmd, &rp_begin, VK_SUBPASS_CONTENTS_INLINE);
-            defer(vkCmdEndRenderPass(cmd));
+                // Begin the render pass.
+                VkRenderPassBeginInfo rp_begin = {};
+                rp_begin.sType                 = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+                rp_begin.renderPass            = gd->vkRenderPass;
+                rp_begin.framebuffer           = framebuffer;
+                rp_begin.renderArea            = renderArea;
+                rp_begin.clearValueCount       = _countof(clearValues);
+                rp_begin.pClearValues          = clearValues;
 
-            // NOTE: need to flip Y like so for NDC space in VK.
-            VkViewport viewport = {0.0f, winInfo.height, winInfo.width * 1.0f, winInfo.height * -1.0f, 0.0f, 1.0f};
+                vkCmdBeginRenderPass(cmd, &rp_begin, VK_SUBPASS_CONTENTS_INLINE);
+                defer(vkCmdEndRenderPass(cmd));
 
-            VkRect2D   scissor  = renderArea;
-            vkCmdSetViewport(cmd, 0, 1, &viewport);
-            vkCmdSetScissor(cmd, 0, 1, &scissor);
+                // NOTE: need to flip Y like so for NDC space in VK.
+                VkViewport viewport = {0.0f, winInfo.height, winInfo.width * 1.0f, winInfo.height * -1.0f, 0.0f, 1.0f};
 
-            VkDeviceSize verticesOffsetInBuffer = 0;
-            vkCmdBindVertexBuffers(cmd,
-                0,  // firstBinding,
-                1,  // bindingCount,
-                &gd->suzanneVbo,
-                &verticesOffsetInBuffer);
+                VkRect2D scissor = renderArea;
+                vkCmdSetViewport(cmd, 0, 1, &viewport);
+                vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-            VkDeviceSize indicesOffsetInBuffer = 0;
-            vkCmdBindIndexBuffer(cmd, gd->suzanneIbo, indicesOffsetInBuffer, VK_INDEX_TYPE_UINT32);
+                VkDeviceSize verticesOffsetInBuffer = 0;
+                vkCmdBindVertexBuffers(cmd,
+                    0,  // firstBinding,
+                    1,  // bindingCount,
+                    &gd->suzanneVbo,
+                    &verticesOffsetInBuffer);
 
-            vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, gd->gameShader);
+                VkDeviceSize indicesOffsetInBuffer = 0;
+                vkCmdBindIndexBuffer(cmd, gd->suzanneIbo, indicesOffsetInBuffer, VK_INDEX_TYPE_UINT32);
 
-            vkCmdBindDescriptorSets(cmd,
-                VK_PIPELINE_BIND_POINT_GRAPHICS,
-                gd->pipelineLayout,
-                0,  // set number of first descriptor set to bind.
-                1,  // number of sets to bind.
-                &gd->theDescSet,
-                0,       // dynamic offsets
-                nullptr  // ^
-            );
+                vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, gd->gameShader);
 
-            // write the dynamic ubo.
-            PushData pushData = {.modelMatrix = ae::math::buildMat4fFromTransform(gd->suzanneTransform),
-                .modelRotate                  = ae::math::buildRotMat4(gd->suzanneTransform.eulerAngles),
-                .projView                     = ae::math::buildProjMatForVk(gd->cam) * ae::math::buildViewMat(gd->cam),
-                .lightColor                   = gd->lightColor,
-                .ambientStrength              = gd->ambientStrength,
-                .lightPos                     = gd->lightPos,
-                .specularStrength             = gd->specularStrength,
-                .viewPos                      = gd->cam.trans.pos};  // NOTE: LOL, this looks like JS.
-            memcpy(gd->dynamicFrameUboMapped, &pushData, sizeof(PushData));
+                vkCmdBindDescriptorSets(cmd,
+                    VK_PIPELINE_BIND_POINT_GRAPHICS,
+                    gd->pipelineLayout,
+                    0,  // set number of first descriptor set to bind.
+                    1,  // number of sets to bind.
+                    &gd->theDescSet,
+                    0,       // dynamic offsets
+                    nullptr  // ^
+                );
 
-            vkCmdDrawIndexed(cmd, gd->suzanneIndexCount, 1, 0, 0, 0);
+                // write the dynamic ubo.
+                PushData pushData = {.modelMatrix = ae::math::buildMat4fFromTransform(gd->suzanneTransform),
+                    .modelRotate                  = ae::math::buildRotMat4(gd->suzanneTransform.eulerAngles),
+                    .projView         = ae::math::buildProjMatForVk(gd->cam) * ae::math::buildViewMat(gd->cam),
+                    .lightColor       = gd->lightColor,
+                    .ambientStrength  = gd->ambientStrength,
+                    .lightPos         = gd->lightPos,
+                    .specularStrength = gd->specularStrength,
+                    .viewPos          = gd->cam.trans.pos};  // NOTE: LOL, this looks like JS.
+                memcpy(gd->dynamicFrameUboMapped, &pushData, sizeof(PushData));
 
-        }  // end render pass.
+                vkCmdDrawIndexed(cmd, gd->suzanneIndexCount, 1, 0, 0, 0);
+
+            }  // end render pass.
 
 #if defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
-        // transit backbuffer from color attachment to present.
-        auto barrierInfo2 = ae::VK::imageMemoryBarrier(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-            VK_ACCESS_MEMORY_READ_BIT,  // ensure cache flush.
-            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-            VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-            backbuffer);
+            // transit backbuffer from color attachment to present.
+            auto barrierInfo2 = ae::VK::imageMemoryBarrier(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                VK_ACCESS_MEMORY_READ_BIT,  // ensure cache flush.
+                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                backbuffer);
 
-        ae::VK::cmdImageMemoryBarrier(
-            cmd, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 1, &barrierInfo2);
+            ae::VK::cmdImageMemoryBarrier(cmd,
+                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                1,
+                &barrierInfo2);
 #endif
+        }
 
         vkEndCommandBuffer(cmd);
     }
@@ -627,17 +634,19 @@ void MonkeyDemoRender(ae::game_memory_t *gameMemory)
     si.commandBufferCount = 1;
     si.pCommandBuffers    = &cmd;
 
+    if (bShouldRender) {
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
-    VkCommandBuffer ImguiCmd = gd->imgui_commandBuffer;
-    ae::VK_CHECK(vkResetCommandBuffer(ImguiCmd, 0));
+        VkCommandBuffer ImguiCmd = gd->imgui_commandBuffer;
+        ae::VK_CHECK(vkResetCommandBuffer(ImguiCmd, 0));
 
-    EM->vk_pfn.renderAndRecordImGui(ImguiCmd);
+        EM->vk_pfn.renderAndRecordImGui(ImguiCmd);
 
-    VkCommandBuffer cmds[] = {cmd, ImguiCmd};
-    si.commandBufferCount  = 2;
-    si.pCommandBuffers     = cmds;
+        static VkCommandBuffer cmds[] = {cmd, ImguiCmd};
+        si.commandBufferCount  = 2;
+        si.pCommandBuffers     = cmds;
 
 #endif
+    }
 
     (vkQueueSubmit(gd->vkQueue, 1, &si, *pFence));
 }

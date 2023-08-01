@@ -1284,14 +1284,16 @@ namespace automata_engine {
         /// this is used for e.g. to set if the window can be resized or not.
         game_window_profile_t defaultWinProfile = AUTOMATA_ENGINE_WINPROFILE_RESIZE;
 
-        // if both are UINT32_MAX, window maximizes. else it uses the OS defined default
-        // dim if UINT32_MAX.
+        // if the default dimensions are UINT32_MAX, this lets the OS pick the window size.
 
         /// @brief the width used to create the platform window.
         int32_t defaultWidth = UINT32_MAX;
 
         /// @brief the height used to create the platform window.
         int32_t defaultHeight = UINT32_MAX;
+
+        /// @brief if true, this requests that the window is maximized on creation.
+        bool requestMaximize = false;
 
         /// @brief the title used to create the platform window.
         const char *defaultWindowName = AUTOMATA_ENGINE_PROJECT_NAME;
