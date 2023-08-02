@@ -175,7 +175,7 @@ DllExport void GameHandleInput(ae::game_memory_t *gameMemory)
     if (cam.trans.eulerAngles.x > pitchClamp) cam.trans.eulerAngles.x = pitchClamp;
 
     float movementSpeed = 5.f;
-    float linearStep    = movementSpeed * userInput.packetLiveTime;
+    float linearStep    = movementSpeed;
 
     // NOTE: so there is this idea where if we consider the exact motion that the player would
     // take as the camera rotates, we realize that it's not a straight line. its instead an arc.
@@ -215,7 +215,7 @@ DllExport void GameHandleInput(ae::game_memory_t *gameMemory)
 
         float lerpT = 0.9f;
         cam.velocity = movDirNorm * linearStep * (1-lerpT) + cam.velocity * lerpT;
-        cam.trans.pos += cam.velocity;
+        cam.trans.pos += cam.velocity * userInput.packetLiveTime;
     }
 }
 

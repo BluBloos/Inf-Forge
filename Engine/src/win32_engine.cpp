@@ -49,10 +49,18 @@
 // this sort of struct thing. It was I think for reusability between projects.
 // so, we should strive to have all the Win32* functions to do _just_ win32 stuff.
 
+// TODO: use a big struct for all the globals and a simple helper func to return a
+// reference to that struct. that's good design :)
+
 #define MAX_CONSOLE_LINES 500
 
-static bool g_bEngineIntroOver = false;
 static HWND g_hwnd             = NULL;
+static HWND g_userInputHwnd    = NULL;
+
+// the value of the HANDLE is read from two threads, but not modified.
+// of course, the actual handle object itself is very much accessed by
+// multiple threads, but Windows OS handles that sort of sync.
+static HANDLE g_inputThreadEvent = NULL;
 
 static ae::game_memory_t   g_gameMemory     = {};
 static ae::engine_memory_t g_engineMemory   = {};
@@ -1092,42 +1100,54 @@ static void ProccessKeyboardMessage(unsigned int vkCode, bool down)
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 #endif
 
-LRESULT CALLBACK Win32WindowProc(HWND window,
-  UINT message,
-  WPARAM wParam,
-  LPARAM lParam)
+struct Win32WindowProcPayload {
+    HWND     window;
+    UINT     message;
+    WPARAM   wParam;
+    LPARAM   lParam;
+    LRESULT *pResult;
+    BOOL     bIsModal;
+};
+
+enum Win32ModalLoopKind {
+    WIN32_MODAL_LOOP_KIND_NONE = 0,
+    WIN32_MODAL_LOOP_KIND_DRAGWINDOW
+};
+
+//static std::atomic<BOOL> g_bModalRunning = FALSE;
+static std::atomic<Win32ModalLoopKind> g_currModalLoopKind = WIN32_MODAL_LOOP_KIND_NONE;
+
+DWORD WINAPI Win32WindowProcImpl(_In_ LPVOID lpParameter)
 {
-#if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
-    if (ImGui_ImplWin32_WndProcHandler(window, message, wParam, lParam))
-        return true;
-#endif
+    Win32WindowProcPayload *payload = (Win32WindowProcPayload *)lpParameter;
+
+    // unpack the payload.
+    HWND     &window = payload->window;
+    UINT     &message = payload->message;
+    WPARAM   &wParam = payload->wParam;
+    LPARAM   &lParam = payload->lParam;
+    LRESULT  &result = *payload->pResult;
 
     PAINTSTRUCT ps;
-    LRESULT     result = 0;
 
-    ae::user_input_t &userInput = g_engineMemory.userInput;
+    const bool bAllowInput = (g_currModalLoopKind.load() == WIN32_MODAL_LOOP_KIND_NONE);
+
+#if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
+    if (ImGui_ImplWin32_WndProcHandler(window, message, wParam, lParam))
+    {
+        result = true;
+        goto Win32WindowProcImpl_exit;
+    }
+#endif
 
     switch(message) {
-        case WM_INPUT: {
-            // TODO: we have registered just the mouse for raw input. yet, in the future we may register more things.
-            // here we would need to check what thing we just got the raw input from.
-            RAWINPUT       rawInput           = {};
-            constexpr UINT rawInputHeaderSize = sizeof(RAWINPUTHEADER);
-            constexpr UINT rawInputSize       = sizeof(RAWINPUT);
-            GetRawInputData((HRAWINPUT)lParam, RID_INPUT, &rawInput, (PUINT)&rawInputSize, sizeof(RAWINPUTHEADER));
-            auto mouseData = rawInput.data.mouse;
-            if (rawInput.header.dwType == RIM_TYPEMOUSE) {
-                // TODO: handle MOUSE_VIRTUAL_DESKTOP.
-                bool isVirtualDesktop = !!(mouseData.usFlags & MOUSE_VIRTUAL_DESKTOP);
-
-                if (!!(mouseData.usFlags & MOUSE_MOVE_ABSOLUTE)) {
-                    // TODO: handle this case.
-                } else if ((mouseData.lLastX != 0) || (mouseData.lLastY) != 0) {
-                    userInput.deltaMouseX += mouseData.lLastX;
-                    userInput.deltaMouseY += mouseData.lLastY;
-                }
-            }
-            if (GET_RAWINPUT_CODE_WPARAM(wParam) == RIM_INPUT) result = DefWindowProc(window, message, wParam, lParam);
+        case WM_ENTERSIZEMOVE: {
+            g_currModalLoopKind.store(WIN32_MODAL_LOOP_KIND_DRAGWINDOW);// = ;
+            PostMessageA( g_userInputHwnd, message, wParam, lParam );
+        } break;
+        case WM_EXITSIZEMOVE:
+        {
+            g_currModalLoopKind.store(WIN32_MODAL_LOOP_KIND_NONE);// = ;
         } break;
         case WM_DPICHANGED: {
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
@@ -1147,37 +1167,15 @@ LRESULT CALLBACK Win32WindowProc(HWND window,
                 prcNewWindow->bottom - prcNewWindow->top,
                 SWP_NOZORDER | SWP_NOACTIVATE);
         } break;
-        case WM_MOUSEMOVE: {
-            int x = (int)lParam & 0x0000FFFF;
-            int y = ((int)lParam & 0xFFFF0000) >> 16;
-            userInput.mouseX = x;
-            userInput.mouseY = y;
-        } break;
-        // left mouse button
-
-        // TODO: consider the half transition count. we are loosing granularity here.
-        case WM_LBUTTONDOWN: {
-            userInput.mouseLBttnDown = true;
-        } break;
-        case WM_LBUTTONUP:{
-            userInput.mouseLBttnDown = false;
-        } break;
-        // right mouse button
-        case WM_RBUTTONDOWN: {
-            userInput.mouseRBttnDown = true;
-        } break;
-        case WM_RBUTTONUP:{
-            userInput.mouseRBttnDown = false;
-        } break;
-        //keyboard messages
-        case WM_KEYUP: {
-            // TODO: argument conversion warning from WPARAM to unisgned int.
-            ProccessKeyboardMessage(wParam, false);
-        } break;
-        case WM_KEYDOWN: {
-            ProccessKeyboardMessage(wParam, true);
-        } break;
-
+        case WM_MOUSEMOVE:
+        case WM_LBUTTONDOWN:
+        case WM_LBUTTONUP:
+        case WM_RBUTTONDOWN:
+        case WM_RBUTTONUP:
+        case WM_KEYUP:
+        case WM_KEYDOWN:
+            if (bAllowInput) PostMessageA(g_userInputHwnd, message, wParam, lParam);
+            break;
         case WM_CREATE: {
 #if defined(AUTOMATA_ENGINE_GL_BACKEND)
             gHdc = GetDC(window);
@@ -1223,12 +1221,12 @@ LRESULT CALLBACK Win32WindowProc(HWND window,
 
         } break;
         case WM_DESTROY: {
-            // TODO(Noah): Handle as error
-            g_engineMemory.globalRunning = false;
+            // TODO(Noah): Handle as error?
+            PostQuitMessage(0);
         } break;
         case WM_CLOSE: {
-            //TODO(Noah): Handle as message to user
-            g_engineMemory.globalRunning = false;
+            //TODO(Noah): Handle as message to user?
+            PostQuitMessage(0);
         } break;
         case WM_NCCREATE: {
             EnableNonClientDpiScaling(window);
@@ -1237,6 +1235,104 @@ LRESULT CALLBACK Win32WindowProc(HWND window,
         default:
         result =  DefWindowProc(window, message, wParam, lParam);
     }
+
+    Win32WindowProcImpl_exit:
+
+    return 0;
+}
+
+LRESULT CALLBACK Win32WindowProc_UserInput(HWND window,
+  UINT message,
+  WPARAM wParam,
+  LPARAM lParam)
+{
+    ae::user_input_t &userInput = g_engineMemory.userInput;
+    RAWINPUT    rawInput = {};
+
+    constexpr UINT rawInputHeaderSize = sizeof(RAWINPUTHEADER);
+    constexpr UINT rawInputSize       = sizeof(RAWINPUT);
+
+    const bool bAllowInput = (g_currModalLoopKind.load() == WIN32_MODAL_LOOP_KIND_NONE);
+
+    LRESULT result = 0;
+
+    switch (message) {
+        case WM_ENTERSIZEMOVE: {
+            // clear all user input.
+            userInput = {};
+        } break;
+        case WM_INPUT: {            
+            GetRawInputData((HRAWINPUT)lParam, RID_INPUT, &rawInput, (PUINT)&rawInputSize, sizeof(RAWINPUTHEADER));
+            auto &mouseData = rawInput.data.mouse;
+            if (rawInput.header.dwType == RIM_TYPEMOUSE && bAllowInput) {
+                // TODO: handle MOUSE_VIRTUAL_DESKTOP.
+                bool isVirtualDesktop = !!(mouseData.usFlags & MOUSE_VIRTUAL_DESKTOP);
+
+                if (!!(mouseData.usFlags & MOUSE_MOVE_ABSOLUTE)) {
+                } else if ((mouseData.lLastX != 0) || (mouseData.lLastY != 0)) {
+                                        userInput.deltaMouseX += mouseData.lLastX;
+                                        userInput.deltaMouseY += mouseData.lLastY;
+                }
+            }
+            // TODO: I don't think that this check actually matters, since we register with RIM_INPUTSINK.
+            if (GET_RAWINPUT_CODE_WPARAM(wParam) == RIM_INPUT) result = DefWindowProc(window, message, wParam, lParam);
+        } break;
+        case WM_MOUSEMOVE: {
+            int x            = (int)lParam & 0x0000FFFF;
+            int y            = ((int)lParam & 0xFFFF0000) >> 16;
+            userInput.mouseX = x;
+            userInput.mouseY = y;
+        } break;
+        // left mouse button
+        case WM_LBUTTONDOWN: {
+            userInput.mouseLBttnDown = true;
+        } break;
+        case WM_LBUTTONUP: {
+            userInput.mouseLBttnDown = false;
+        } break;
+        // right mouse button
+        case WM_RBUTTONDOWN: {
+            userInput.mouseRBttnDown = true;
+        } break;
+        case WM_RBUTTONUP: {
+            userInput.mouseRBttnDown = false;
+        } break;
+        //keyboard messages
+        case WM_KEYUP: {
+        // TODO: argument conversion warning from WPARAM to unisgned int.
+            ProccessKeyboardMessage(wParam, false);
+        } break;
+        case WM_KEYDOWN: {
+            ProccessKeyboardMessage(wParam, true);
+        } break;
+        // NOTE: these four messages get at window create time. can ignore, but note that they are expected messages.
+        case WM_GETMINMAXINFO: // sent when size is about to change.
+        case WM_NCCREATE:      // sent before wm_create.
+        case WM_NCCALCSIZE:    // sent when need to determine size of client area.
+        case WM_CREATE: {      // sent on window create.
+            result = DefWindowProc(window, message, wParam, lParam);
+        } break;
+        default:
+#if defined(_DEBUG)
+        AELoggerError("got unexpected message 0x%x in Win32WindowProc_UserInput", message);
+#endif
+        result = DefWindowProc(window, message, wParam, lParam);
+    }
+    return result;
+}
+
+
+LRESULT CALLBACK Win32WindowProc(HWND window,
+  UINT message,
+  WPARAM wParam,
+  LPARAM lParam)
+{
+    LRESULT     result = 0;
+
+    Win32WindowProcPayload payload = {
+        .window = window, .message = message, .wParam = wParam, .lParam = lParam, .pResult = &result};
+    Win32WindowProcImpl(&payload);
+
 	return result;
 }
 
@@ -1691,7 +1787,7 @@ void          Wineventproc(HWINEVENTHOOK hWinEventHook,
 }
 
 // wait until this "slice" of time has reached some amount of wallclock time.
-void Win32SliceWait(bool SleepGranular, LARGE_INTEGER SliceBegin, float endFrameTarget, const char *warnMsg)
+bool Win32SliceWait(bool SleepGranular, LARGE_INTEGER SliceBegin, float endFrameTarget, const char *warnMsg)
 {
     float SecondsElapsedForFrame = Win32GetSecondsElapsed(SliceBegin, Win32GetWallClock(), g_PerfCountFrequency64);
     if (SecondsElapsedForFrame < endFrameTarget) {
@@ -1705,7 +1801,9 @@ void Win32SliceWait(bool SleepGranular, LARGE_INTEGER SliceBegin, float endFrame
         }
     } else {
         AELoggerWarn("missed Win32SliceWait by %f ms with warnMsg: %s", (SecondsElapsedForFrame - endFrameTarget) * 1000.f, warnMsg);
+        return true;
     }
+    return false;
 }
 
 const char  *g_SourceDLLName         = AUTOMATA_ENGINE_PROJECT_NAME ".dll";
@@ -1929,11 +2027,66 @@ DWORD WINAPI Win32GameUpdateAndRenderHandlingLoop(_In_ LPVOID lpParameter) {
 
     }  // while(globalrunning)
 
+    // global running is false, quit the main loop.
+    PostMessageA(g_hwnd, WM_QUIT, 0, 0);
+
     ExitThread(0);
 }
 
-void Win32InputHandlingLoop()
-{
+DWORD WINAPI Win32InputHandlingLoop(_In_ LPVOID lpParameter) {
+
+    // in order to recieve messages, this thread needs a queue, and therefore
+    // a window.
+    //
+    // this will be a hidden window.
+
+    // a disabled window recieves no keyboard/mouse input from user but can still get messages from other windows.
+    // a hidden window is simply not drawn. a hidden window can still process messages from other windows.
+    // a message only window may only recieve or send messages.
+
+    WNDCLASSA wc     = {};
+    wc.lpfnWndProc   = Win32WindowProc_UserInput;  // Set callback
+    wc.hInstance     = g_hInstance;
+    wc.hIcon         = LoadIcon(NULL, IDI_APPLICATION);
+    wc.hCursor       = LoadCursor(0, IDC_ARROW);
+    wc.lpszClassName = "Win32InputHandlingLoop";
+
+    ATOM classAtom = RegisterClassA(&wc);
+    if(classAtom == 0) {
+        AELoggerError("Unable to register window class \"%s\"", wc.lpszClassName);
+        ExitThread(-1);
+    }
+    
+    defer((classAtom != 0) ? (void)UnregisterClassA(wc.lpszClassName, g_hInstance) : (void)0);
+
+    const DWORD windowStyle = WS_DISABLED & (~WS_VISIBLE);
+
+    g_userInputHwnd = CreateWindowExA(
+            0, // dwExStyle
+            wc.lpszClassName,
+            "Win32InputHandlingLoop",
+            windowStyle,
+            CW_USEDEFAULT, // init X
+            CW_USEDEFAULT, // init Y
+            CW_USEDEFAULT,
+            CW_USEDEFAULT,
+            HWND_MESSAGE, // message only window.
+            NULL, // menu
+            g_hInstance,
+            NULL // structure to be passed to WM_CREATE message
+        );
+
+    // Register mouse for raw input capture
+    RAWINPUTDEVICE Rid[1];
+    Rid[0].usUsagePage = HID_USAGE_PAGE_GENERIC;
+    Rid[0].usUsage     = HID_USAGE_GENERIC_MOUSE;
+    Rid[0].dwFlags     = RIDEV_INPUTSINK;  // still get input when not in foreground.
+    Rid[0].hwndTarget  = g_userInputHwnd;
+    RegisterRawInputDevices(Rid, 1, sizeof(Rid[0]));
+    // TODO: unregister?
+
+    SetEvent(g_inputThreadEvent); // signal to the main thread that it can begin the main message loop.        
+
     // TODO: this thread runs from the main thread, i.e. the thread that created the window.
     //
     // which means that our game update+render needs to be on a different thread.
@@ -1966,7 +2119,12 @@ void Win32InputHandlingLoop()
         // because or "time was up".
         bool earlyExit = false;
 
-        float estimatedPeekMessageHandlingTime = 0.f/1000.f;
+        float estimatedPeekMessageHandlingTime = 1.f/1000.f;
+
+        LARGE_INTEGER beforeTranslate = {};
+        LARGE_INTEGER beforeDispatch = {};
+        LARGE_INTEGER afterDispatch = {};
+        UINT lastMessage = 0;
 
         while (PeekMessage(&message, NULL, 0, 0, PM_REMOVE)) {
             if (message.message == WM_QUIT) {
@@ -1996,8 +2154,15 @@ void Win32InputHandlingLoop()
                 break;
             }
 
-            TranslateMessage(&message);
+            beforeTranslate = Win32GetWallClock();
+
+            lastMessage = message.message;
+
+            beforeDispatch = Win32GetWallClock();
+
             DispatchMessage(&message);
+
+            afterDispatch =  Win32GetWallClock();
 
             // check if we have gathered messages for enough time.
             float SecondsElapsedForFrame = Win32GetSecondsElapsed(SliceBegin, Win32GetWallClock(), g_PerfCountFrequency64);
@@ -2006,12 +2171,38 @@ void Win32InputHandlingLoop()
         }
 
         // wait until this slice is "done".
-        Win32SliceWait(g_SleepGranular, SliceBegin, endFrameTarget, "missed input poll target");
+        bool didMiss = Win32SliceWait(g_SleepGranular, SliceBegin, endFrameTarget,
+            "missed input poll target"
+        );
+
+#if defined(_DEBUG)
+        if (didMiss)
+        {
+            LARGE_INTEGER now = Win32GetWallClock();
+            AELoggerWarn(
+                "missed input poll target extra info:"
+                "\t\nelapsed time from before translate: %.3f s"
+                "\t\nelapsed time from before dispatch: %.3f s"
+                "\t\nelapsed time from after dispatch: %.3f s"
+                "\t\nlast message code: 0x%x",
+                Win32GetSecondsElapsed(beforeTranslate, now, g_PerfCountFrequency64),
+                Win32GetSecondsElapsed(beforeDispatch, now, g_PerfCountFrequency64),
+                Win32GetSecondsElapsed(afterDispatch, now, g_PerfCountFrequency64),
+                lastMessage);
+        }
+#endif
 
         LARGE_INTEGER ThisTimer  = Win32GetWallClock();
 
         // NOTE: the packet time live indicates how long the state should apply.
-        userInput.packetLiveTime = endFrameTarget;
+        if (!didMiss)
+        {
+            userInput.packetLiveTime = endFrameTarget;
+        }
+        else
+        {
+            userInput.packetLiveTime = Win32GetSecondsElapsed(SliceBegin, Win32GetWallClock(), g_PerfCountFrequency64);
+        }
 
         // iter the timer.
         SliceBegin = ThisTimer;
@@ -2028,6 +2219,9 @@ void Win32InputHandlingLoop()
             if (GameHandleInput) GameHandleInput(&g_gameMemory);
         }
     }
+
+        ExitThread(0);
+
 }
 
 int CALLBACK WinMain(HINSTANCE instance,
@@ -2182,7 +2376,16 @@ int CALLBACK WinMain(HINSTANCE instance,
     g_gameCodeLastWriteTime = Win32GetLastWriteTime(g_SourceDLLName);
     Win32LoadGameCode(g_SourceDLLName, g_TempDLLName);
     if (GameOnHotload) GameOnHotload(&g_gameMemory);
-    
+
+    HANDLE renderThread = NULL;
+    HANDLE inputThread = NULL;
+
+    // NOTE: this event is used to wait for when the input thread window has completed create.
+    g_inputThreadEvent     = CreateEventA(NULL,
+        TRUE,                   //[in]           BOOL                  bManualReset,
+        FALSE /*nonsignaled*/,  // [in]           BOOL                  bInitialState,
+        NULL);
+
     do {
         // TODO(Noah): Here would be a nice instance for the defer statement.
         classAtom = RegisterClassA(&windowClass);
@@ -2194,9 +2397,12 @@ int CALLBACK WinMain(HINSTANCE instance,
 
         if (GamePreInit != nullptr) {
             GamePreInit(&g_gameMemory);
-        } else {
+        }
+#if defined(_DEBUG)
+        else {
             AELoggerWarn("GamePreInit == nullptr");
         }
+#endif
 
         const DWORD windowStyle = (WS_OVERLAPPEDWINDOW | WS_VISIBLE) &
             ((g_engineMemory.defaultWinProfile == ae::AUTOMATA_ENGINE_WINPROFILE_NORESIZE)
@@ -2248,15 +2454,6 @@ int CALLBACK WinMain(HINSTANCE instance,
             ae::game_window_info_t winInfo = Platform_getWindowInfo(false);
             Win32ResizeBackbuffer(&globalBackBuffer, winInfo.width, winInfo.height);
         }
-
-
-        // Register mouse for raw input capture
-        RAWINPUTDEVICE Rid[1];
-        Rid[0].usUsagePage = HID_USAGE_PAGE_GENERIC;
-        Rid[0].usUsage     = HID_USAGE_GENERIC_MOUSE;
-        Rid[0].dwFlags     = RIDEV_INPUTSINK;  // still get input when not in foreground.
-        Rid[0].hwndTarget  = windowHandle;
-        RegisterRawInputDevices(Rid, 1, sizeof(Rid[0]));
 
         // Initialize XAudio2 !!!
         // NOTE(Noah): When we free the xAudio2 object, that frees all subordinate objects.
@@ -2312,12 +2509,14 @@ int CALLBACK WinMain(HINSTANCE instance,
             g_xa2Buffer.pContext = (void *)&g_gameMemory;
         }
 
-
         if (GameInit != nullptr) {
             GameInit(&g_gameMemory);
-        } else {
+        }
+#if defined(_DEBUG)
+        else {
             AELoggerWarn("GameInit == nullptr");
         }
+#endif
 
 #if defined(AUTOMATA_ENGINE_VK_BACKEND)
 
@@ -2434,7 +2633,7 @@ int CALLBACK WinMain(HINSTANCE instance,
 
         g_bIsWindowFocused = true;//TODO: is this needed?
 
-        CreateThread(
+        renderThread = CreateThread(
             nullptr,  // lp thread attributes.
             0,        // default stack size.
             Win32GameUpdateAndRenderHandlingLoop,
@@ -2443,11 +2642,42 @@ int CALLBACK WinMain(HINSTANCE instance,
             nullptr   // pointer to a thing that recieves the thread identifier.
                      );
 
-        // NOTE: input handling loop doesn't exit until global running is false.
-        Win32InputHandlingLoop();
-
+        inputThread = CreateThread(
+            nullptr,  // lp thread attributes.
+            0,        // default stack size.
+            Win32InputHandlingLoop,
+            nullptr,  // lpParameter
+            0,        // thread runs immediately after creation.
+            nullptr   // pointer to a thing that recieves the thread identifier.
+                     );
 
     } while(0); // WinMainEnd
+
+    // NOTE: here we wait for the input window to exist so that we can immediately begin sending messages to it.
+    WaitForSingleObject(g_inputThreadEvent, INFINITE);
+
+    BOOL bRet;
+    MSG msg;
+    
+    // enter into the main message pump.
+    while( (bRet = GetMessage( &msg, NULL, 0, 0 )) != 0)
+    {
+        if (bRet == -1)
+        {
+            // handle the error and possibly exit
+        }
+        else
+        {
+            TranslateMessage(&msg); 
+            DispatchMessage(&msg); 
+        }
+    }
+
+    // communicate to the other threads that they should close and join with them here
+    // before terminate the application.
+    g_engineMemory.globalRunning.store(false);
+    if (renderThread) WaitForSingleObject(renderThread, INFINITE);
+    if (inputThread) WaitForSingleObject(inputThread, INFINITE);
 
     // TODO(Noah): Can we leverage our new nc_defer.h to replace this code below?
     {
@@ -2481,9 +2711,12 @@ int CALLBACK WinMain(HINSTANCE instance,
 
         if (GameCleanup != nullptr) {
             GameCleanup(&g_gameMemory);
-        } else {
+        }
+#if defined(_DEBUG)
+        else {
             AELoggerWarn("GameCleanup == nullptr");
         }
+#endif
 
         if (g_gameMemory.data != nullptr) {
             Platform_free(g_gameMemory.data);
