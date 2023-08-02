@@ -1154,7 +1154,7 @@ namespace automata_engine {
     /// @param xPos x pos in client pixel coords.
     typedef void (*PFN_setMousePos)(int xPos, int yPos);
 
-    /// @brief show or hide the mouse cursor. this can only be called from the HandleInput thread.
+    /// @brief show or hide the mouse cursor.
     typedef void (*PFN_showMouse)(bool shouldShow);
 
     /// @brief Get the frequency of the timer in ticks.

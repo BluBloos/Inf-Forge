@@ -110,7 +110,19 @@ void Platform_setMousePos(int xPos, int yPos)
     SetCursorPos(pt.x, pt.y);
 }
 
+
+// mouse begins as shown.
+static std::atomic<bool> g_showMouseRequestedValue = true;
+static bool g_showMouseCurrentValue = true;
+
+
 void Platform_showMouse(bool show) {
+    g_showMouseRequestedValue.store(show);
+}
+
+// NOTE: the reason for this deferral is because ShowCursor must be called on the same thread that
+// created the window.
+void Platform_showMouse_deferred(bool show) {
     if (!show)
     {
         while(ShowCursor(FALSE) >= 0);
@@ -2670,6 +2682,19 @@ int CALLBACK WinMain(HINSTANCE instance,
         {
             TranslateMessage(&msg); 
             DispatchMessage(&msg); 
+        }
+
+        // TODO: is it possible that we may not
+        // proper handle the show mouse request in time
+        // due to there being zero message on the queue,
+        // and thus this loop blocking?
+        
+        // check for request to show mouse.
+        bool &currValue = g_showMouseCurrentValue;
+        bool request = g_showMouseRequestedValue.load();
+        if (currValue != request) {
+            Platform_showMouse_deferred(request);
+            g_showMouseCurrentValue = request;
         }
     }
 
