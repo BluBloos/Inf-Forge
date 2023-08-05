@@ -2371,6 +2371,7 @@ int CALLBACK WinMain(HINSTANCE instance,
     windowClass.hInstance     = instance;
     windowClass.hCursor       = LoadCursor(0, IDC_ARROW);
     windowClass.lpszClassName = AUTOMATA_ENGINE_NAME_STRING;
+    windowClass.hIcon         = LoadIconA(instance, "MonkeyDemoIcon");
 
     int &globalProgramResult = g_engineMemory.globalProgramResult;
 

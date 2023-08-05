@@ -1,0 +1,7 @@
+// this file is to be compiled by microsoft resource compiler.
+// https://learn.microsoft.com/en-us/windows/win32/menurc/resource-compiler
+//
+// generally, the resource script language supports comments.
+// so, that's what these lines are of course.
+
+MonkeyDemoIcon               ICON                    "monkey_demo2.ico"

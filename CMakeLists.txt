@@ -48,9 +48,15 @@ endif()
 
 set(PROJ_SOURCES ${PROJ_SOURCES})
 
+file(GLOB_RECURSE ENGINE_SOURCES_GLOB
+    "${ProjectRoot}/src/*.rc"
+    "${ProjectRoot}/src/*.ico")
+
 set(ENGINE_SOURCES
     "${ENGINE_ROOT}/src/win32_engine.cpp"
     "${ENGINE_ROOT}/src/app.manifest")
+
+set(ENGINE_SOURCES ${ENGINE_SOURCES} ${ENGINE_SOURCES_GLOB})
 # =========== FIND SOURCES ===========
 
 # george w3as here
@@ -204,7 +210,10 @@ endfunction()
 SetupTarget(${ProjectName})
 SetupTarget(${ProjectName}_engine)
 
-source_group(TREE "${ENGINE_ROOT}/src/" PREFIX "engine/" FILES ${ENGINE_SOURCES})
+set_target_properties(${ProjectName}_engine PROPERTIES OUTPUT_NAME ${ProjectName})
+
+# TODO: get the below back.
+#source_group(TREE "${ENGINE_ROOT}/src/" PREFIX "engine/" FILES ${ENGINE_SOURCES})
 source_group(TREE "${ProjectRoot}/src/" PREFIX "app/" FILES ${PROJ_SOURCES})
 
 # setup the automata tests target.
