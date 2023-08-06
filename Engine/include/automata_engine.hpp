@@ -1315,7 +1315,7 @@ namespace automata_engine {
             uint64_t lastFrameBeginTime;
 
             /// @brief the timestamp taken right before the input message loop. for this frame.
-            uint64_t thisFrameBeginTime;
+            uint64_t thisFrameBeginTime = 0;
 
             /// @brief the timestamp taken right after the game update function completes.
             uint64_t lastFrameUpdateEndTime;

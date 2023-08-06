@@ -170,7 +170,7 @@ namespace automata_engine {
                     "the total time to render the frame.\n"
                     "this is the CPU portion plus the GPU render time.");
 
-            float collectPeriod = EM->timing.lastFrameVisibleTime / 2.0f;
+        /*    float collectPeriod = EM->timing.lastFrameVisibleTime / 2.0f;
             
             // TODO:
             //ImGui::Text("input latency: %.3f s", collectPeriod);
@@ -180,11 +180,12 @@ namespace automata_engine {
             ImGui::Text("present latency: %.3f s",
                 timing::getTimeElapsed(EM->timing.lastFrameBeginTime, EM->timing.lastFrameMaybeVblankTime) -
                     collectPeriod / 2.f);
+                    
             
             if (ImGui::IsItemHovered())
                 ImGui::SetTooltip(
                     "the phase shift of the game signal to the vertical blank signal.\n"
-                    "if this is negative, that implies the vblank leads the game signal.");
+                    "if this is negative, that implies the vblank leads the game signal.");*/
 
             ImGui::Text("frames per second: %.3f FPS", 1.f / EM->timing.lastFrameVisibleTime);
             // ImGui::Text("update model: %s", updateModelToString(EM->g_updateModel));           

@@ -1850,6 +1850,22 @@ DWORD WINAPI Win32GameUpdateAndRenderHandlingLoop(_In_ LPVOID lpParameter) {
         }
     }
 
+    // get the monitor refresh rate
+    int MonitorRefreshRateHz = 60; // guess.
+    {
+#if 1
+        HDC RefreshDC = GetDC(g_hwnd);
+
+        int Win32RefreshRate = GetDeviceCaps(RefreshDC, VREFRESH);
+        if (Win32RefreshRate > 1) {
+            MonitorRefreshRateHz = Win32RefreshRate;
+        } else {
+            AELoggerError("failed to query monitor refresh, assuming 60 Hz");
+        }
+        ReleaseDC(g_hwnd, RefreshDC);
+#endif
+    }
+
     std::atomic<bool> &globalRunning = g_engineMemory.globalRunning;
 
     LARGE_INTEGER LastCounter = Win32GetWallClock();
@@ -1937,13 +1953,13 @@ DWORD WINAPI Win32GameUpdateAndRenderHandlingLoop(_In_ LPVOID lpParameter) {
         // TODO: both these constants are adhoc. what if the monitor has a different refresh rate?
         // what if the round trip frame time is different?
         static constexpr float GuaranteedFrameTime          = 0.013f;
-        static constexpr float TargetSecondsElapsedPerFrame = 1 / 60.f;
+        const float TargetSecondsElapsedPerFrame = 1.f / float(MonitorRefreshRateHz);
 
         float endFrameTarget         = TargetSecondsElapsedPerFrame;
         bool  doEndFrameWaitToTarget = true;
 
         // TODO: consider other update models.
-        if (bUsingAtomicUpdate) { EM->timing.lastFrameVisibleTime = TargetSecondsElapsedPerFrame; }
+        EM->timing.lastFrameVisibleTime = TargetSecondsElapsedPerFrame;
 
 #if defined(AUTOMATA_ENGINE_VK_BACKEND)
         if (!bRenderFallback) {
@@ -1985,8 +2001,12 @@ DWORD WINAPI Win32GameUpdateAndRenderHandlingLoop(_In_ LPVOID lpParameter) {
         {
             LARGE_INTEGER beforeVblankCall = Win32GetWallClock();
 
-            // TODO: upon app exit this thread can still be going and access game monitor which will have been dealloc.
-            // this thread needs to own the game monitor thing.
+            // TODO: need to handle WM_DISPLAYCHANGE, else the HMONITOR that we are relying on here may simply become
+            // invalid. its entirely possible for the user to hotswap the monitor.
+            //
+            // its also the case that we generally need to handle multiple monitor setups. there can be two monitors that
+            // have different refresh rates and our window is spanning across both of them.
+            // in such a case, our app should wait on the vblank of the monitor with the lower refresh rate.
             gameMonitor->WaitForVBlank();
 
             LARGE_INTEGER after  = Win32GetWallClock();
@@ -2003,16 +2023,19 @@ DWORD WINAPI Win32GameUpdateAndRenderHandlingLoop(_In_ LPVOID lpParameter) {
                 AELoggerWarn(
                     "missed the vertical blank"
                     ". elapsed times:"
-                    "\n\tfrom last vblank until the end of the GPU work for this frame: %f"
                     "\n\tfrom last vblank until just before presenting this frame: %f"
+                    "\n\tfrom last vblank until after present and before vblank wait: %f"
                     "\n\telapsed time from last vblank until now: %f",
-                    fromLastAndBeforeWait,
                     fromLastAndBeforePresent,
+                    fromLastAndBeforeWait,
                     fromLastVblank
                 );
 #else
                 AELoggerWarn("missed the vertical blank");                
 #endif
+                // TODO: putting this line here seems to cause the monkey to stop spinning entirely. what the fuck is going on?
+                // is this a compiler bug? this value is read correctly during the ImGui update. so what gives?
+                //EM->timing.lastFrameVisibleTime = fromLastVblank;
             }
 
             EM->timing.lastFrameMaybeVblankTime = after.QuadPart;
@@ -2027,16 +2050,17 @@ DWORD WINAPI Win32GameUpdateAndRenderHandlingLoop(_In_ LPVOID lpParameter) {
             endFrameTarget = (TargetSecondsElapsedPerFrame - GuaranteedFrameTime);
         }
 
-        if (doEndFrameWaitToTarget) { Win32SliceWait(g_SleepGranular, LastCounter, endFrameTarget, "missed frame target");
+        if (doEndFrameWaitToTarget) {
+            Win32SliceWait(g_SleepGranular, LastCounter, endFrameTarget, "missed frame target");
         }
 
-        static uint64_t thisFrameBeginTime = 0;  // TODO.
+        // EM->timing.thisFrameBeginTime = 0;  // TODO.
 
         LARGE_INTEGER EndCounter = Win32GetWallClock();
         LastCounter              = EndCounter;
 
-        EM->timing.lastFrameBeginTime = thisFrameBeginTime;
-        thisFrameBeginTime            = EndCounter.QuadPart;
+        EM->timing.lastFrameBeginTime = EM->timing.thisFrameBeginTime;
+        EM->timing.thisFrameBeginTime            = EndCounter.QuadPart;
 
     }  // while(globalrunning)
 

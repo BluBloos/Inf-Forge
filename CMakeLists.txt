@@ -210,7 +210,8 @@ endfunction()
 SetupTarget(${ProjectName})
 SetupTarget(${ProjectName}_engine)
 
-set_target_properties(${ProjectName}_engine PROPERTIES OUTPUT_NAME ${ProjectName})
+# TODO: get this back. but for now, this is affecting our ability to debug.
+# set_target_properties(${ProjectName}_engine PROPERTIES OUTPUT_NAME ${ProjectName})
 
 # TODO: get the below back.
 #source_group(TREE "${ENGINE_ROOT}/src/" PREFIX "engine/" FILES ${ENGINE_SOURCES})
