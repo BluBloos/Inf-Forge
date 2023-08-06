@@ -1329,8 +1329,12 @@ namespace automata_engine {
 
         } timing;
 
-        /// @brief a bool to control ALL ImGui rendering.
-        bool g_renderImGui = true;
+        /// @brief a bool to control ALL ImGui rendering. this is modified by at least two threads. it is read once per frame
+        /// to ensure that a change midway through the frame doesn't result in partial ImGui code execution (which would
+        /// obviously result in errors). as such, there is a bCanRenderImGui just for this update.
+        std::atomic<bool> g_renderImGui = true;
+
+        bool bCanRenderImGui = true;
 
         // TODO: for now, the only supported update model is "ATOMIC".
         //

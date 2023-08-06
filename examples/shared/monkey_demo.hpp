@@ -117,32 +117,43 @@ DllExport void GameHandleInput(ae::game_memory_t *gameMemory)
     const ae::user_input_t &userInput = EM->userInput;
 
     // TODO: can we call showMouse less often?
-    
+
+    auto enterGui = [&]() {
+        EM->pfn.showMouse(true);
+        optInFirstPersonCam = false;
+    };
+
+    auto exitGui = [&]() {
+        EM->pfn.showMouse(false);
+        optInFirstPersonCam = true;
+    };
+
     // check if opt in.
     {
-        if (userInput.mouseRBttnDown) {
-            EM->pfn.showMouse(false);
-            optInFirstPersonCam = true;
-        }
+        if (userInput.mouseRBttnDown) { exitGui(); }
 
-        if (userInput.keyDown[ae::GAME_KEY_ESCAPE]) {
-            // enter GUI.
-            EM->pfn.showMouse(true);
-            optInFirstPersonCam = false;
-        }
+        if (userInput.keyDown[ae::GAME_KEY_ESCAPE]) { enterGui(); }
 
         {
-            const bool isFocused         = winInfo.isFocused;
-            const bool bExitingFocus     = bFocusedLastFrame && !isFocused;
+            const bool isFocused     = winInfo.isFocused;
+            const bool bExitingFocus = bFocusedLastFrame && !isFocused;
 
-            if (bExitingFocus) {
-                // enter GUI.
-                EM->pfn.showMouse(true);
-                optInFirstPersonCam = false;
-            }
+            if (bExitingFocus) { enterGui(); }
 
             bFocusedLastFrame = isFocused;
         }
+    }
+
+    // check for toggle the ImGui overlay.
+    {
+        bool &lastFrameF5 = gd->lastFrameF5;
+        if (userInput.keyDown[ae::GAME_KEY_F5] && !lastFrameF5) {
+            bool prevVal = EM->g_renderImGui.load();
+            EM->g_renderImGui.store(!prevVal);  // = !;
+
+            (!prevVal) ? enterGui() : exitGui();
+        }
+        lastFrameF5 = userInput.keyDown[ae::GAME_KEY_F5];
     }
 
     auto beginEulerAngles = cam.trans.eulerAngles;
@@ -246,42 +257,43 @@ static void MonkeyDemoUpdate(ae::game_memory_t *gameMemory)
     ae::math::vec3_t &lightPos            = gd->lightPos;
     float            &cameraSensitivity   = gd->cameraSensitivity;
 
+    bool bRenderImGui = EM->bCanRenderImGui;
 
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
-    ImGui::Begin(AUTOMATA_ENGINE_PROJECT_NAME);
 
-    ImGui::Text(
-        "---CONTROLS---\n"
-        "WASD to move\n"
-        "Right click to enter first person cam.\n"
-        "ESC to exit first person cam.\n"
-        "SPACE to fly up\n"
-        "SHIFT to fly down\n\n");
+    if (bRenderImGui) {
+        ImGui::Begin(AUTOMATA_ENGINE_PROJECT_NAME);
 
-    // inputs.
+        ImGui::Text(
+            "---CONTROLS---\n"
+            "F5 to toggle the GUI\n"
+            "WASD to move\n"
+            "Right click to enter first person cam.\n"
+            "ESC to exit first person cam.\n"
+            "SPACE to fly up\n"
+            "SHIFT to fly down\n\n");
+
+        // inputs.
 #if !defined(AUTOMATA_ENGINE_VK_BACKEND)
-    ImGui::Checkbox("debugRenderDepth", &gd->debugRenderDepthFlag);
+        ImGui::Checkbox("debugRenderDepth", &gd->debugRenderDepthFlag);
 #endif
 
-    ImGui::Text(
-        "---CAMERA---\n");
-    ImGui::Checkbox("lock yaw", &lockCamYaw);
-    ImGui::Checkbox("lock pitch", &lockCamPitch);
-    ImGui::SliderFloat("camera sensitivity", &cameraSensitivity, 1, 10);
+        ImGui::Text("---CAMERA---\n");
+        ImGui::Checkbox("lock yaw", &lockCamYaw);
+        ImGui::Checkbox("lock pitch", &lockCamPitch);
+        ImGui::SliderFloat("camera sensitivity", &cameraSensitivity, 1, 10);
 
-    ImGui::Text(
-        "\n---SCENE---\n");
-    ImGui::InputFloat3("sun position", &lightPos[0]);
-    ImGui::ColorPicker4("sun color", &lightColor[0]);
-    ImGui::SliderFloat("ambient light", &ambientStrength, 0.0f, 1.0f, "%.3f");
-    
-    ImGui::Text(
-        "\n---MONKEY---\n");
-    ImGui::Checkbox("make it spin", &bSpin);    
-    ImGui::SliderFloat("make it shiny", &specularStrength, 0.0f, 1.0f, "%.3f");
-    
+        ImGui::Text("\n---SCENE---\n");
+        ImGui::InputFloat3("sun position", &lightPos[0]);
+        ImGui::ColorPicker4("sun color", &lightColor[0]);
+        ImGui::SliderFloat("ambient light", &ambientStrength, 0.0f, 1.0f, "%.3f");
 
-    ImGui::End();
+        ImGui::Text("\n---MONKEY---\n");
+        ImGui::Checkbox("make it spin", &bSpin);
+        ImGui::SliderFloat("make it shiny", &specularStrength, 0.0f, 1.0f, "%.3f");
+
+        ImGui::End();
+    }
 #endif
 
     if (optInFirstPersonCam_Snapshot) {

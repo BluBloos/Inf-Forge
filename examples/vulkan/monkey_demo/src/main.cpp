@@ -498,6 +498,12 @@ void MonkeyDemoRender(ae::game_memory_t *gameMemory)
     ae::VK_CHECK(vkResetCommandBuffer(gd->commandBuffer, 0));
     ae::VK_CHECK(vkResetCommandPool(gd->vkDevice, gd->commandPool, 0));
 
+    bool bRenderImGui = EM->bCanRenderImGui;
+
+#if defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
+    bRenderImGui = false;
+#endif
+
     // main render loop.
     {
         ae::VK::beginCommandBuffer(cmd);
@@ -606,20 +612,21 @@ void MonkeyDemoRender(ae::game_memory_t *gameMemory)
 
             }  // end render pass.
 
-#if defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
-            // transit backbuffer from color attachment to present.
-            auto barrierInfo2 = ae::VK::imageMemoryBarrier(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-                VK_ACCESS_MEMORY_READ_BIT,  // ensure cache flush.
-                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-                backbuffer);
+            if (!bRenderImGui)
+            {
+                // transit backbuffer from color attachment to present.
+                auto barrierInfo2 = ae::VK::imageMemoryBarrier(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                    VK_ACCESS_MEMORY_READ_BIT,  // ensure cache flush.
+                    VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                    VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                    backbuffer);
 
-            ae::VK::cmdImageMemoryBarrier(cmd,
-                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                1,
-                &barrierInfo2);
-#endif
+                ae::VK::cmdImageMemoryBarrier(cmd,
+                    VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                    VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                    1,
+                    &barrierInfo2);
+            }
         }
 
         vkEndCommandBuffer(cmd);
@@ -634,7 +641,7 @@ void MonkeyDemoRender(ae::game_memory_t *gameMemory)
     si.commandBufferCount = 1;
     si.pCommandBuffers    = &cmd;
 
-    if (bShouldRender) {
+    if ( bShouldRender &&  bRenderImGui ) {
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
         VkCommandBuffer ImguiCmd = gd->imgui_commandBuffer;
         ae::VK_CHECK(vkResetCommandBuffer(ImguiCmd, 0));

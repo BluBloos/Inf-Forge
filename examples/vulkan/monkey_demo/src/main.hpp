@@ -68,6 +68,8 @@ typedef struct game_state {
     bool             optInFirstPersonCam;
 
     bool  bFocusedLastFrame;
+    bool  lastFrameF5;
+
     float lastDeltaX[2];
     float lastDeltaY[2];
     

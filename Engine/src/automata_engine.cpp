@@ -144,7 +144,7 @@ namespace automata_engine {
         auto &bifrost = gameMemory->bifrost;
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
         // Present the ImGui stuff to allow user to switch apps.
-        if (EM->g_renderImGui) {
+        if (EM->bCanRenderImGui) {
             ImGui::Begin(AUTOMATA_ENGINE_NAME_STRING);
 
             ImGui::Text("engine version: %s", AUTOMATA_ENGINE_VERSION_STRING);

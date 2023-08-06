@@ -1894,8 +1894,11 @@ DWORD WINAPI Win32GameUpdateAndRenderHandlingLoop(_In_ LPVOID lpParameter) {
 
         bool bRenderFallback = !g_gameMemory.getInitialized();
 
+        bool bRenderImGui              = g_engineMemory.g_renderImGui.load();
+        g_engineMemory.bCanRenderImGui = bRenderImGui;
+
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
-        if (g_isImGuiInitialized && !bRenderFallback) {
+        if (bRenderImGui && g_isImGuiInitialized && !bRenderFallback) {
 #if defined(AUTOMATA_ENGINE_GL_BACKEND)
             ImGui_ImplOpenGL3_NewFrame();
 #endif
@@ -1921,7 +1924,7 @@ DWORD WINAPI Win32GameUpdateAndRenderHandlingLoop(_In_ LPVOID lpParameter) {
 
         // TODO: maybe imgui even works in the fallback mode?
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
-        if (g_isImGuiInitialized && !bRenderFallback) {
+        if (bRenderImGui && g_isImGuiInitialized && !bRenderFallback) {
 #if defined(AUTOMATA_ENGINE_GL_BACKEND)
             ImGui::Render();
             ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
