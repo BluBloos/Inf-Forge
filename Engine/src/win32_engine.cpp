@@ -55,6 +55,7 @@
 #define MAX_CONSOLE_LINES 500
 
 static HWND g_hwnd             = NULL;
+static HWND g_consoleHwnd      = NULL;
 static HWND g_userInputHwnd    = NULL;
 
 // the value of the HANDLE is read from two threads, but not modified.
@@ -1771,7 +1772,7 @@ void Platform_fprintf_proxy(int h, const char *fmt, ...)
     // TODO: in cases like this, alloc dynamic buffer to print with.
     assert(written != maxSize);
 
-    HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
+    HANDLE handle;
     switch (h) {
         case ae::platform::AE_STDERR:
             handle = GetStdHandle(STD_ERROR_HANDLE);
@@ -1782,7 +1783,33 @@ void Platform_fprintf_proxy(int h, const char *fmt, ...)
         default:
             handle = GetStdHandle(STD_OUTPUT_HANDLE);
     }
+
+    //LARGE_INTEGER begin = Win32GetWallClock();
+
+    // NOTE: here we do this cool workaround where we send keyboard input to the console
+    // window. we do this so that we can clear any sort of state where we are pending for
+    // input. if we enter in this state somehow (e.g. the user clicks anywhere in the console,
+    // or marks a region of the console), any call to WriteFile will block until that get input
+    // operation is complete.
+    {
+        // Send the WM_KEYDOWN and WM_KEYUP messages to the console window
+        SendMessage(g_consoleHwnd, WM_KEYDOWN, 'C', 0);
+        SendMessage(g_consoleHwnd, WM_KEYUP, 'C', 0);
+    }
+
     WriteConsoleA(handle, (void *)_buf, strlen(_buf), NULL, NULL);
+
+    //LARGE_INTEGER after = Win32GetWallClock();
+
+    /*float timeElapsed = Win32GetSecondsElapsed(begin, after, g_PerfCountFrequency64);
+
+    // print timeElapsed, but don't do it recursively.
+    {
+        auto written = 1 + snprintf(_buf, maxSize, "WriteConsoleA timeElapsed: %.3f", timeElapsed);
+        HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
+        WriteConsoleA(handle, (void *)_buf, strlen(_buf), NULL, NULL);
+    }*/
+
 
     if (g_redirectedFprintf) { g_redirectedFprintf(_buf); }
 }
@@ -2490,8 +2517,9 @@ int CALLBACK WinMain(HINSTANCE instance,
             break;
         }
 
-        g_hwnd = windowHandle;
-        g_hInstance = instance;
+        g_hwnd        = windowHandle;
+        g_hInstance   = instance;
+        g_consoleHwnd = ::GetConsoleWindow();
 
         if (!beginMaximized && GameHandleWindowResize) {
             // get height and width of window
