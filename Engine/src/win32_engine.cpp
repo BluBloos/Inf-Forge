@@ -1154,6 +1154,13 @@ DWORD WINAPI Win32WindowProcImpl(_In_ LPVOID lpParameter)
 #endif
 
     switch(message) {
+        case WM_SETCURSOR:
+        if (LOWORD(lParam) == HTCLIENT)
+        {
+            SetCursor(::LoadCursorA(g_hInstance, "MonkeyDemoIconCursor"));
+            return TRUE;
+        }
+        break;
         case WM_ENTERSIZEMOVE: {
             g_currModalLoopKind.store(WIN32_MODAL_LOOP_KIND_DRAGWINDOW);// = ;
             PostMessageA( g_userInputHwnd, message, wParam, lParam );
@@ -2316,7 +2323,7 @@ int CALLBACK WinMain(HINSTANCE instance,
     ATOM classAtom = 0;
     HWND windowHandle = NULL;
     HRESULT comResult = S_FALSE;
-    WNDCLASS windowClass = {};
+    WNDCLASSA windowClass = {};
 
     // Before doing ANYTHING, we alloc memory.
     g_gameMemory.pEngineMemory = &g_engineMemory;
@@ -2396,7 +2403,7 @@ int CALLBACK WinMain(HINSTANCE instance,
     windowClass.style         = CS_VREDRAW | CS_HREDRAW;  // Set window to redraw after being resized
     windowClass.lpfnWndProc   = Win32WindowProc;          // Set callback
     windowClass.hInstance     = instance;
-    windowClass.hCursor       = LoadCursor(0, IDC_ARROW);
+    windowClass.hCursor       = LoadCursorA(instance, "MonkeyDemoIconCursor");
     windowClass.lpszClassName = AUTOMATA_ENGINE_NAME_STRING;
     windowClass.hIcon         = LoadIconA(instance, "MonkeyDemoIcon");
 
@@ -2409,6 +2416,10 @@ int CALLBACK WinMain(HINSTANCE instance,
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
         ImGui::StyleColorsDark();
+        {
+            ImGuiIO& io = ImGui::GetIO();
+            io.ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange;
+        }
 #endif
 
     // NOTE: we call get last write time first because the load game code does a copy to the

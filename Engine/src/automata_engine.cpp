@@ -201,9 +201,34 @@ namespace automata_engine {
             ImGui::Text("total GPU memory: %llu KB", userGpuInfo.dedicatedVideoMemory >> 10 );
 
             ImGui::Checkbox("show ImGui demo window", &bifrost.bShowDemoWindow);
+
+            ImGui::Checkbox("show Inf-Forge engine README.txt", &bifrost.bShowEngineReadme);
+
             ImGui::End();
 
             if (bifrost.bShowDemoWindow) ImGui::ShowDemoWindow();
+
+            if (bifrost.bShowEngineReadme) {
+
+                ImGuiWindowFlags window_flags = 0;
+
+                ImGui::SetNextWindowSize(ImVec2(520, 600), ImGuiCond_FirstUseEver);
+
+                // Main body of the Demo window starts here.
+                if (!ImGui::Begin("Inf-Forge README"))
+                {
+                    // Early out if the window is collapsed, as an optimization.
+                    ImGui::End();
+                    // return;
+                }
+
+                ImGui::TextWrapped(
+                    "The following is a listing of Inf-Forge engine facts:\n"
+                    "- Minimum supported OS: Windows Vista" // the reasoning here is that we put PNG in the .ICO for .EXE icon. windows vista added support for PNG in the icons.
+                );
+
+                ImGui::End();
+            }
         }
 #endif
     }

@@ -50,7 +50,8 @@ set(PROJ_SOURCES ${PROJ_SOURCES})
 
 file(GLOB_RECURSE ENGINE_SOURCES_GLOB
     "${ProjectRoot}/src/*.rc"
-    "${ProjectRoot}/src/*.ico")
+    "${ProjectRoot}/src/*.ico"
+    "${ProjectRoot}/src/*.cur")
 
 set(ENGINE_SOURCES
     "${ENGINE_ROOT}/src/win32_engine.cpp"

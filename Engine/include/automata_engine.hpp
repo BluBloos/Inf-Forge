@@ -1011,6 +1011,7 @@ namespace automata_engine {
             const char **appTable_names = nullptr;
 
             bool bShowDemoWindow = false;
+            bool bShowEngineReadme = false;
         } bifrost;
 
         struct {
