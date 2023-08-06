@@ -2211,9 +2211,8 @@ DWORD WINAPI Win32InputHandlingLoop(_In_ LPVOID lpParameter) {
         // because or "time was up".
         bool earlyExit = false;
 
-        float estimatedPeekMessageHandlingTime = 1.f/1000.f;
+        float estimatedPeekMessageHandlingTime = 0.f/1000.f;
 
-        LARGE_INTEGER beforeTranslate = {};
         LARGE_INTEGER beforeDispatch = {};
         LARGE_INTEGER afterDispatch = {};
         UINT lastMessage = 0;
@@ -2246,8 +2245,6 @@ DWORD WINAPI Win32InputHandlingLoop(_In_ LPVOID lpParameter) {
                 break;
             }
 
-            beforeTranslate = Win32GetWallClock();
-
             lastMessage = message.message;
 
             beforeDispatch = Win32GetWallClock();
@@ -2273,11 +2270,9 @@ DWORD WINAPI Win32InputHandlingLoop(_In_ LPVOID lpParameter) {
             LARGE_INTEGER now = Win32GetWallClock();
             AELoggerWarn(
                 "missed input poll target extra info:"
-                "\t\nelapsed time from before translate: %.3f s"
                 "\t\nelapsed time from before dispatch: %.3f s"
                 "\t\nelapsed time from after dispatch: %.3f s"
                 "\t\nlast message code: 0x%x",
-                Win32GetSecondsElapsed(beforeTranslate, now, g_PerfCountFrequency64),
                 Win32GetSecondsElapsed(beforeDispatch, now, g_PerfCountFrequency64),
                 Win32GetSecondsElapsed(afterDispatch, now, g_PerfCountFrequency64),
                 lastMessage);
