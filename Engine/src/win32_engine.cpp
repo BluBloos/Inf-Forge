@@ -1074,10 +1074,30 @@ void Win32DisplayBufferWindow(HDC deviceContext,
         SRCCOPY);
 }
 
-// NOTE: we use the frameIndex to decouple the input polling from the game update.
-// we poll the input at a faster rate so that if the app wants it can supersample
-// the game world simulation to prevent temporal aliasing artifacts.
-uint32_t g_frameIndex = 0;
+BOOL Win32CtrlHandler(DWORD ctrlType) {
+    switch (ctrlType) {
+        case CTRL_C_EVENT:
+        case CTRL_BREAK_EVENT: // Ctrl+Break
+        case CTRL_CLOSE_EVENT: // Closing the console window
+            {
+                // TODO: we want to do this a little more gracefully.
+                // we want this to take the same exit path that the main
+                // thread takes when it exits.
+                // the issue is that returning from this function will
+                // have that windows terminates our app.
+                // therefore, we cannot do something like sending a WM_QUIT message
+                // to the main window.
+                //
+                // the challenge with getting this to exit correctly is like,
+                // how do we even know from where and when that this callback is called?
+                // is this called from another thread?
+                ExitProcess(0);
+            }
+        // Add other cases for other types of Ctrl events if needed.
+        default:
+            return FALSE;
+    }
+}
 
 
 static void ProccessKeyboardMessage(unsigned int vkCode, bool down)
@@ -1917,8 +1937,6 @@ DWORD WINAPI Win32GameUpdateAndRenderHandlingLoop(_In_ LPVOID lpParameter) {
             AELoggerLog("did the hotload.");
         }
 
-        g_frameIndex++;
-
         bool bRenderFallback = !g_gameMemory.getInitialized();
 
         bool bRenderImGui              = g_engineMemory.g_renderImGui.load();
@@ -2414,12 +2432,21 @@ int CALLBACK WinMain(HINSTANCE instance,
             SetConsoleMode(stdOutHandle, stdOutMode | 0x0004);
         }
 
+        g_consoleHwnd = ::GetConsoleWindow();
+
         AELoggerLog("stdout initialized");
         // TODO(Noah): Would be nice to have unicode support with our platform logger. Emojis are awesome!
         AELoggerWarn("Please note that the below error is expected and is NOT an error");
         AELoggerError("testing stderr out");
         // TODO(Noah): Make this print version from a manifest or something...
         AELoggerLog("\"Hello, World!\" from " AUTOMATA_ENGINE_NAME_STRING " %s", AUTOMATA_ENGINE_VERSION_STRING);
+
+        // NOTE: Set up the Ctrl+C signal handler.
+        // this allows us to handle the precise flow of application exit if the console is closed.
+        if (!SetConsoleCtrlHandler((PHANDLER_ROUTINE)Win32CtrlHandler, TRUE)) {
+            DWORD resultCode = GetLastError();
+            LogLastError(resultCode, "unable to setup Win32CtrlHandler.");
+        }
     }
 #endif
 
@@ -2519,7 +2546,6 @@ int CALLBACK WinMain(HINSTANCE instance,
 
         g_hwnd        = windowHandle;
         g_hInstance   = instance;
-        g_consoleHwnd = ::GetConsoleWindow();
 
         if (!beginMaximized && GameHandleWindowResize) {
             // get height and width of window
@@ -2830,9 +2856,6 @@ int CALLBACK WinMain(HINSTANCE instance,
             "\033[0m"
         );
 
-        //HANDLE outputHdl = GetStdHandle(STD_OUTPUT_HANDLE);
-        //FlushConsoleOutputBuffer(outputHdl);
-
         INPUT_RECORD record;
         DWORD inputsRead;
         HANDLE inputHandle = GetStdHandle(STD_INPUT_HANDLE);
@@ -2840,5 +2863,5 @@ int CALLBACK WinMain(HINSTANCE instance,
         ReadConsoleInput(inputHandle, &record, 1, &inputsRead);
     }
 
-    return globalProgramResult;
+    ExitProcess(globalProgramResult);
 }
