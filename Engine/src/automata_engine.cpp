@@ -20,12 +20,16 @@ namespace automata_engine {
 
     engine_memory_t *EM;
 
+    static gpu_info_t userGpuInfo;
+
     void initModuleGlobals()
     {
         // NOTE: this is a setting that needs to be set again each time that we hot-load the game
         // DLL. we can't just rely on the memory stored in game_memory.
         stbi_set_flip_vertically_on_load(true);
         stbi_flip_vertically_on_write(true);
+
+        ae::EM->pfn.getGpuInfos(&userGpuInfo, 1);
     }
 
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
@@ -187,6 +191,14 @@ namespace automata_engine {
             // TODO: for now VSYNC is always on.
             ImGui::Text("VSync: ON");
 
+            ImGui::Text("GPU in use: %s", userGpuInfo.description);
+            
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip(
+                    "this info is only valid so long as there is just one GPU in the system.");
+
+            ImGui::Text("total GPU memory: %llu KB", userGpuInfo.dedicatedVideoMemory >> 10 );
+
             ImGui::Checkbox("show ImGui demo window", &bifrost.bShowDemoWindow);
             ImGui::End();
 
@@ -198,6 +210,7 @@ namespace automata_engine {
 #if defined(AUTOMATA_ENGINE_DX12_BACKEND) || defined(AUTOMATA_ENGINE_VK_BACKEND)
         ae::HLSL::_close();
 #endif
+        ae::EM->pfn.freeGpuInfos(&userGpuInfo, 1);
     }
 
     const char *updateModelToString(update_model_t updateModel) {

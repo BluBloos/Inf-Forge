@@ -11,10 +11,13 @@ DllExport void GameOnHotload(ae::game_memory_t *gameMemory)
 {
     ae::engine_memory_t *EM = gameMemory->pEngineMemory;
 
+    // TODO: we might be able to merge these two calls?
+    // for now, we need to ensure that we set the engine context
+    // before we make the call to init module globals.
+    ae::setEngineContext(EM);
+
     // NOTE: this inits the automata engine module globals.
     ae::initModuleGlobals();
-    // TODO: we might be able to merge these two calls?
-    ae::setEngineContext(EM);
 
     // NOTE: ImGui has global state. therefore, we need to make sure
     // that we use the same state that the engine is using.

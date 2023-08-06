@@ -878,7 +878,7 @@ void *Platform_alloc(uint32_t bytes) {
 
 // TODO: make _these_ work for when the adapter has multiple nodes attached.
 // i.e. https://learn.microsoft.com/en-us/windows/win32/direct3d12/multi-engine#:~:text=Multi%2Dadapter%20APIs,single%20IDXGIAdapter3%20object.
-void ae::platform::getGpuInfos(gpu_info_t *pInfo, uint32_t numGpus)
+void Platform_getGpuInfos(ae::gpu_info_t *pInfo, uint32_t numGpus)
 {
     uint32_t currGpu = 0;
     if (pInfo == nullptr) return;
@@ -916,8 +916,9 @@ void ae::platform::getGpuInfos(gpu_info_t *pInfo, uint32_t numGpus)
     }
 }
 
-void ae::platform::freeGpuInfos(gpu_info_t *pInfo, uint32_t numGpus)
+void Platform_freeGpuInfos(ae::gpu_info_t *pInfo, uint32_t numGpus)
 {
+    // TODO: don't we need to free the string that we allocated?
     for (uint32_t i = 0; i < numGpus; i++) {
         if (pInfo[i].adapter) ((IDXGIAdapter3 *)pInfo[i].adapter)->Release();
     }
@@ -2263,6 +2264,8 @@ int CALLBACK WinMain(HINSTANCE instance,
     ae::EM->pfn.voicePlayBuffer     = Platform_voicePlayBuffer;
     ae::EM->pfn.voiceSubmitBuffer   = Platform_voiceSubmitBuffer;
     ae::EM->pfn.createVoice         = Platform_createVoice;
+    ae::EM->pfn.getGpuInfos         = Platform_getGpuInfos;
+    ae::EM->pfn.freeGpuInfos        = Platform_freeGpuInfos;
 
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
     ae::EM->pfn.imguiGetCurrentContext     = Platform_imguiGetCurrentContext;

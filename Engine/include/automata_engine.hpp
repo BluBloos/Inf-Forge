@@ -830,19 +830,9 @@ namespace automata_engine {
         /// @returns false on failure, true otherwise.
         bool createDirectory(const char *dirPath);
 
-        /// @brief  get numGpus many GPU infos. the infos _MUST_ be provided back to AE to free the enumerated adapters.
-        /// @param pInfo   output array with size numGpus to receive the gpu info into.
-        /// @param numGpus the size of the pInfo array.
-        void getGpuInfos(gpu_info_t *pInfo, uint32_t numGpus);
-
-        /// @brief  free the priorly enumerated adapters.
-        /// @param pInfo 
-        /// @param numGpus 
-        void freeGpuInfos(gpu_info_t *pInfo, uint32_t numGpus);
-
         /// @brief  get the current dedicated video memory usage for a GPU.
         /// @param gpuAdapter the GPU to get the memory for.
-        size_t getGpuCurrentMemoryUsage(intptr_t gpuAdapter);        
+        size_t getGpuCurrentMemoryUsage(intptr_t gpuAdapter);
 
 // --------- [SECTION] PLATFORM AUDIO ----------------
 //
@@ -1195,6 +1185,16 @@ namespace automata_engine {
     /// @returns INVALID_VOICE on failure, a handle to the voice on success.
     typedef intptr_t (*PFN_createVoice)();
 
+    /// @brief  get numGpus many GPU infos. the infos _MUST_ be provided back to AE to free the enumerated adapters.
+    /// @param pInfo   output array with size numGpus to receive the gpu info into.
+    /// @param numGpus the size of the pInfo array.
+    typedef void (*PFN_getGpuInfos)(gpu_info_t *pInfo, uint32_t numGpus);
+
+    /// @brief  free the previously enumerated adapters.
+    /// @param pInfo 
+    /// @param numGpus 
+    typedef void (*PFN_freeGpuInfos)(gpu_info_t *pInfo, uint32_t numGpus);
+
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
     typedef ImGuiContext* (*PFN_imguiGetCurrentContext)();
     typedef void (*PFN_imguiGetAllocatorFunctions)(ImGuiMemAllocFunc *, ImGuiMemFreeFunc *, void**);
@@ -1252,6 +1252,8 @@ namespace automata_engine {
             PFN_voicePlayBuffer     voicePlayBuffer;
             PFN_voiceSubmitBuffer   voiceSubmitBuffer;
             PFN_createVoice         createVoice;
+            PFN_getGpuInfos         getGpuInfos;
+            PFN_freeGpuInfos        freeGpuInfos;
 
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
             PFN_imguiGetCurrentContext imguiGetCurrentContext; 
