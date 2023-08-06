@@ -57,15 +57,18 @@ typedef struct game_state {
     VkBuffer              suzanneVbo;
     VkDeviceMemory        suzanneVboBacking;
 
+    std::atomic<float>            cameraSensitivity;
+    std::atomic<bool>             lockCamYaw;
+    std::atomic<bool>             lockCamPitch;
+
     bool             bSpin;
-    bool             lockCamYaw;
-    bool             lockCamPitch;
     float            ambientStrength;
     float            specularStrength;
     ae::math::vec4_t lightColor;
     ae::math::vec3_t lightPos;
-    float            cameraSensitivity;
-    bool             optInFirstPersonCam;
+
+    std::atomic<bool>               optInFirstPersonCam;
+    std::atomic<ae::math::camera_t> cam;
 
     bool  bFocusedLastFrame;
     bool  lastFrameF5;
@@ -75,7 +78,7 @@ typedef struct game_state {
     
     bool debugRenderDepthFlag;
 
-    ae::math::camera_t cam;
+    
 } game_state_t;
 
 struct Vertex {

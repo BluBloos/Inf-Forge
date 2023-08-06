@@ -57,17 +57,21 @@ DllExport void GamePreInit(ae::game_memory_t *gameMemory)
 static void MonkeyDemoInit(ae::game_memory_t *gameMemory)
 {
     ae::engine_memory_t *EM      = gameMemory->pEngineMemory;
-    game_state_t *       gd      = getGameState(gameMemory);
     auto                 winInfo = EM->pfn.getWindowInfo(false);
 
-    *gd = {};  // default initialize.
+    // default initialize.
+    game_state_t *gd = new (gameMemory->data) game_state_t();
 
-    gd->cam.trans.scale              = ae::math::vec3_t(1.0f, 1.0f, 1.0f);
-    gd->cam.fov                      = 90.0f;
-    gd->cam.nearPlane                = 0.01f;
-    gd->cam.farPlane                 = 100.0f;
-    gd->cam.width                    = winInfo.width;
-    gd->cam.height                   = winInfo.height;
+    ae::math::camera_t initCamData = {};
+    initCamData.trans.scale        = ae::math::vec3_t(1.0f, 1.0f, 1.0f);
+    initCamData.fov                = 90.0f;
+    initCamData.nearPlane          = 0.01f;
+    initCamData.farPlane           = 100.0f;
+    initCamData.width              = winInfo.width;
+    initCamData.height             = winInfo.height;
+
+    gd->cam.store(initCamData);
+
     gd->suzanneTransform.scale       = ae::math::vec3_t(1.0f, 1.0f, 1.0f);
     gd->suzanneTransform.pos         = ae::math::vec3_t(0.0f, 0.0f, -3.0f);
     gd->suzanneTransform.eulerAngles = {};
@@ -93,23 +97,21 @@ DllExport void GameHandleInput(ae::game_memory_t *gameMemory)
     ae::engine_memory_t *EM = gameMemory->pEngineMemory;
     game_state_t        *gd = getGameState(gameMemory);
 
-    // TODO: we should be using std::atomic with optInFirstPersonCam.
-    // the same goes for cam. indeed, the same goes for any data that is written by this function
-    // and accessed also by the main update+render loop.
-    //
-    // likewise, the same goes for the ImGui panel settings below.
-    // these are read here, but modified in the other thread. we could read half-written data.
+    // ImGui panel settings (we just read these, but they are written to from the other thread).
+    const bool  lockCamYaw        = gd->lockCamYaw.load();
+    const bool  lockCamPitch      = gd->lockCamPitch.load();
+    const float cameraSensitivity = gd->cameraSensitivity.load();
 
-    // ImGui panel settings.
-    const bool &            lockCamYaw          = gd->lockCamYaw;
-    const bool &            lockCamPitch        = gd->lockCamPitch;
-    const float &           cameraSensitivity   = gd->cameraSensitivity;
+    std::atomic<bool>               &optInFirstPersonCam = gd->optInFirstPersonCam;
+    std::atomic<ae::math::camera_t> &cam                 = gd->cam;
 
-    bool               &optInFirstPersonCam = gd->optInFirstPersonCam;
-    ae::math::camera_t &cam                 = gd->cam;
-    bool               &bFocusedLastFrame   = gd->bFocusedLastFrame;
+    bool               local_optInFirstPersonCam = optInFirstPersonCam.load();
+    ae::math::camera_t local_cam                 = cam.load();
 
-    auto                    winInfo   = EM->pfn.getWindowInfo(true);
+    // modified by only this thread.
+    bool &bFocusedLastFrame = gd->bFocusedLastFrame;
+
+    auto winInfo = EM->pfn.getWindowInfo(true);
 
     // NOTE: the user input to handle is stored within the engine memory.
     // whenever this is called from the engine, the input is "dirty" and we ought to
@@ -120,12 +122,12 @@ DllExport void GameHandleInput(ae::game_memory_t *gameMemory)
 
     auto enterGui = [&]() {
         EM->pfn.showMouse(true);
-        optInFirstPersonCam = false;
+        local_optInFirstPersonCam = false;
     };
 
     auto exitGui = [&]() {
         EM->pfn.showMouse(false);
-        optInFirstPersonCam = true;
+        local_optInFirstPersonCam = true;
     };
 
     // check if opt in.
@@ -156,11 +158,10 @@ DllExport void GameHandleInput(ae::game_memory_t *gameMemory)
         lastFrameF5 = userInput.keyDown[ae::GAME_KEY_F5];
     }
 
-    auto beginEulerAngles = cam.trans.eulerAngles;
+    auto beginEulerAngles = local_cam.trans.eulerAngles;
 
     float yaw = 0.f;
-    if (optInFirstPersonCam) {
-
+    if (local_optInFirstPersonCam) {
         // we'll assume that this is in pixels.
         float deltaX = userInput.deltaMouseX;
         float deltaY = userInput.deltaMouseY;
@@ -168,25 +169,25 @@ DllExport void GameHandleInput(ae::game_memory_t *gameMemory)
         if (lockCamYaw) deltaX = 0.f;
         if (lockCamPitch) deltaY = 0.f;
 
-        float r = ae::math::tan(cam.fov * DEGREES_TO_RADIANS / 2.0f) * cam.nearPlane;
-        float t = r * (float(cam.height) / cam.width);
+        float r = ae::math::tan(local_cam.fov * DEGREES_TO_RADIANS / 2.0f) * local_cam.nearPlane;
+        float t = r * (float(local_cam.height) / local_cam.width);
 
-        deltaX *= r / (cam.width * 0.5f);
-        deltaY *= t / (cam.height * 0.5f);
+        deltaX *= r / (local_cam.width * 0.5f);
+        deltaY *= t / (local_cam.height * 0.5f);
 
-        yaw         = ae::math::atan2(deltaX, cam.nearPlane);
-        float pitch = ae::math::atan2(deltaY, cam.nearPlane);
+        yaw         = ae::math::atan2(deltaX, local_cam.nearPlane);
+        float pitch = ae::math::atan2(deltaY, local_cam.nearPlane);
 
         float lerpT = 0.9f;
-        cam.angularVelocity =
-            ae::math::vec3_t(-pitch, yaw, 0.0f) * cameraSensitivity * (1 - lerpT) + cam.angularVelocity * (lerpT);
-        cam.trans.eulerAngles += cam.angularVelocity;
+        local_cam.angularVelocity =
+            ae::math::vec3_t(-pitch, yaw, 0.0f) * cameraSensitivity * (1 - lerpT) + local_cam.angularVelocity * (lerpT);
+        local_cam.trans.eulerAngles += local_cam.angularVelocity;
     }
 
     // clamp camera pitch
     float pitchClamp = PI / 2.0f - 0.01f;
-    if (cam.trans.eulerAngles.x < -pitchClamp) cam.trans.eulerAngles.x = -pitchClamp;
-    if (cam.trans.eulerAngles.x > pitchClamp) cam.trans.eulerAngles.x = pitchClamp;
+    if (local_cam.trans.eulerAngles.x < -pitchClamp) local_cam.trans.eulerAngles.x = -pitchClamp;
+    if (local_cam.trans.eulerAngles.x > pitchClamp) local_cam.trans.eulerAngles.x = pitchClamp;
 
     float movementSpeed = 5.f;
     float linearStep    = movementSpeed;
@@ -200,37 +201,28 @@ DllExport void GameHandleInput(ae::game_memory_t *gameMemory)
 
     {
         ae::math::vec3_t movDir = ae::math::vec3_t();
-        
-        if (userInput.keyDown[ae::GAME_KEY_W]) {
-            movDir += camBasisBegin * ae::math::vec3_t(0.0f, 0.0f, -1);
-        }
 
-        if (userInput.keyDown[ae::GAME_KEY_S]) {
-            movDir += camBasisBegin * ae::math::vec3_t(0.0f, 0.0f, 1);
-        }
-        
-        if (userInput.keyDown[ae::GAME_KEY_A]) {
-            movDir += camBasisBegin * ae::math::vec3_t(-1, 0.0f, 0.0f);
-        }
+        if (userInput.keyDown[ae::GAME_KEY_W]) { movDir += camBasisBegin * ae::math::vec3_t(0.0f, 0.0f, -1); }
 
-        if (userInput.keyDown[ae::GAME_KEY_D]) {
-            movDir += camBasisBegin * ae::math::vec3_t(1, 0.0f, 0.0f);
-        }
+        if (userInput.keyDown[ae::GAME_KEY_S]) { movDir += camBasisBegin * ae::math::vec3_t(0.0f, 0.0f, 1); }
 
-        if (userInput.keyDown[ae::GAME_KEY_SHIFT]) {
-            movDir += ae::math::vec3_t(0.0f, -1, 0.0f);
-        }
+        if (userInput.keyDown[ae::GAME_KEY_A]) { movDir += camBasisBegin * ae::math::vec3_t(-1, 0.0f, 0.0f); }
 
-        if (userInput.keyDown[ae::GAME_KEY_SPACE]) {
-            movDir += ae::math::vec3_t(0.0f, 1, 0.0f);
-        }
+        if (userInput.keyDown[ae::GAME_KEY_D]) { movDir += camBasisBegin * ae::math::vec3_t(1, 0.0f, 0.0f); }
+
+        if (userInput.keyDown[ae::GAME_KEY_SHIFT]) { movDir += ae::math::vec3_t(0.0f, -1, 0.0f); }
+
+        if (userInput.keyDown[ae::GAME_KEY_SPACE]) { movDir += ae::math::vec3_t(0.0f, 1, 0.0f); }
 
         auto movDirNorm = ae::math::normalize(movDir);
 
-        float lerpT = 0.9f;
-        cam.velocity = movDirNorm * linearStep * (1-lerpT) + cam.velocity * lerpT;
-        cam.trans.pos += cam.velocity * userInput.packetLiveTime;
+        float lerpT        = 0.9f;
+        local_cam.velocity = movDirNorm * linearStep * (1 - lerpT) + local_cam.velocity * lerpT;
+        local_cam.trans.pos += local_cam.velocity * userInput.packetLiveTime;
     }
+
+    optInFirstPersonCam.store(local_optInFirstPersonCam);
+    cam.store(local_cam);
 }
 
 static void MonkeyDemoUpdate(ae::game_memory_t *gameMemory)
@@ -239,29 +231,33 @@ static void MonkeyDemoUpdate(ae::game_memory_t *gameMemory)
 
     if (!gameMemory->getInitialized()) return;
 
-    // TODO: again, need to be using std::atomic here.
+    // NOTE: these are read by us and written from the handle input thread.
+    bool optInFirstPersonCam_Snapshot = gd->optInFirstPersonCam.load();
 
-    // sample game for rendering.
-    ae::math::camera_t cam_Snapshot = gd->cam;
-    bool optInFirstPersonCam_Snapshot = gd->optInFirstPersonCam;
+    ae::engine_memory_t *EM      = gameMemory->pEngineMemory;
+    auto                 winInfo = EM->pfn.getWindowInfo(false);
 
-    ae::engine_memory_t *   EM        = gameMemory->pEngineMemory;
-    auto                    winInfo   = EM->pfn.getWindowInfo(false);
+    // NOTE: these are thread local variables.
+    bool             &bSpin            = gd->bSpin;
+    float            &ambientStrength  = gd->ambientStrength;
+    float            &specularStrength = gd->specularStrength;
+    ae::math::vec4_t &lightColor       = gd->lightColor;
+    ae::math::vec3_t &lightPos         = gd->lightPos;
 
-    bool             &bSpin               = gd->bSpin;
-    bool             &lockCamYaw          = gd->lockCamYaw;
-    bool             &lockCamPitch        = gd->lockCamPitch;
-    float            &ambientStrength     = gd->ambientStrength;
-    float            &specularStrength    = gd->specularStrength;
-    ae::math::vec4_t &lightColor          = gd->lightColor;
-    ae::math::vec3_t &lightPos            = gd->lightPos;
-    float            &cameraSensitivity   = gd->cameraSensitivity;
+    // NOTE: these are written by us and read by the handle input thread.
+    std::atomic<bool>  &lockCamYaw        = gd->lockCamYaw;
+    std::atomic<bool>  &lockCamPitch      = gd->lockCamPitch;
+    std::atomic<float> &cameraSensitivity = gd->cameraSensitivity;
 
     bool bRenderImGui = EM->bCanRenderImGui;
 
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
 
     if (bRenderImGui) {
+        float local_cameraSensitivity = cameraSensitivity.load();
+        bool  local_lockCamYaw        = lockCamYaw.load();
+        bool  local_lockCamPitch      = lockCamPitch.load();
+
         ImGui::Begin(AUTOMATA_ENGINE_PROJECT_NAME);
 
         ImGui::Text(
@@ -279,9 +275,9 @@ static void MonkeyDemoUpdate(ae::game_memory_t *gameMemory)
 #endif
 
         ImGui::Text("---CAMERA---\n");
-        ImGui::Checkbox("lock yaw", &lockCamYaw);
-        ImGui::Checkbox("lock pitch", &lockCamPitch);
-        ImGui::SliderFloat("camera sensitivity", &cameraSensitivity, 1, 10);
+        ImGui::Checkbox("lock yaw", &local_lockCamYaw);
+        ImGui::Checkbox("lock pitch", &local_lockCamPitch);
+        ImGui::SliderFloat("camera sensitivity", &local_cameraSensitivity, 1, 10);
 
         ImGui::Text("\n---SCENE---\n");
         ImGui::InputFloat3("sun position", &lightPos[0]);
@@ -293,6 +289,10 @@ static void MonkeyDemoUpdate(ae::game_memory_t *gameMemory)
         ImGui::SliderFloat("make it shiny", &specularStrength, 0.0f, 1.0f, "%.3f");
 
         ImGui::End();
+
+        cameraSensitivity.store(local_cameraSensitivity);
+        lockCamYaw.store(local_lockCamYaw);
+        lockCamPitch.store(local_lockCamPitch);
     }
 #endif
 

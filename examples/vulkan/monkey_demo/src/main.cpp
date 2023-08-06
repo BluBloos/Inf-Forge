@@ -45,8 +45,7 @@ DllExport void GameInit(ae::game_memory_t *gameMemory)
     auto                 winInfo = EM->pfn.getWindowInfo(false);
     game_state_t *gd      = getGameState(gameMemory);
 
-    *gd = {};  // zero it out.
-
+    // NOTE: this func will default initialize the game state data.
     MonkeyDemoInit(gameMemory);
 
     ae::VK::doDefaultInit(
@@ -498,6 +497,8 @@ void MonkeyDemoRender(ae::game_memory_t *gameMemory)
     ae::VK_CHECK(vkResetCommandBuffer(gd->commandBuffer, 0));
     ae::VK_CHECK(vkResetCommandPool(gd->vkDevice, gd->commandPool, 0));
 
+    ae::math::camera_t cam_Snapshot   = gd->cam.load();
+
     bool bRenderImGui = EM->bCanRenderImGui;
 
 #if defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
@@ -600,12 +601,12 @@ void MonkeyDemoRender(ae::game_memory_t *gameMemory)
                 // write the dynamic ubo.
                 PushData pushData = {.modelMatrix = ae::math::buildMat4fFromTransform(gd->suzanneTransform),
                     .modelRotate                  = ae::math::buildRotMat4(gd->suzanneTransform.eulerAngles),
-                    .projView         = ae::math::buildProjMatForVk(gd->cam) * ae::math::buildViewMat(gd->cam),
+                    .projView         = ae::math::buildProjMatForVk(cam_Snapshot) * ae::math::buildViewMat(cam_Snapshot),
                     .lightColor       = gd->lightColor,
                     .ambientStrength  = gd->ambientStrength,
                     .lightPos         = gd->lightPos,
                     .specularStrength = gd->specularStrength,
-                    .viewPos          = gd->cam.trans.pos};  // NOTE: LOL, this looks like JS.
+                    .viewPos          = cam_Snapshot.trans.pos};  // NOTE: LOL, this looks like JS.
                 memcpy(gd->dynamicFrameUboMapped, &pushData, sizeof(PushData));
 
                 vkCmdDrawIndexed(cmd, gd->suzanneIndexCount, 1, 0, 0, 0);
