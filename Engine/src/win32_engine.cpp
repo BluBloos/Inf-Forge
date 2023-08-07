@@ -942,34 +942,27 @@ size_t ae::platform::getGpuCurrentMemoryUsage(intptr_t gpuAdapter)
 }
 
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
-void ScaleImGui_Impl()
+void ScaleImGui_Impl(float systemScale)
 {
     if (g_isImGuiInitialized) {
-        HMONITOR            hMonitor = MonitorFromWindow(g_hwnd, MONITOR_DEFAULTTONEAREST);
-        DEVICE_SCALE_FACTOR scaleFactor;
-        if (SUCCEEDED(GetScaleFactorForMonitor(hMonitor, &scaleFactor))) {
-            float SCALE = (int)scaleFactor / 100.f;
-            //ImFontConfig cfg; // = {};
-            float size_in_pixels = float(uint32_t(16 * SCALE));
-            ImGui::GetIO().Fonts->Clear();
-            ImGui::GetStyle() = ImGuiStyle();  // reset
-            ImGui::GetIO().Fonts->AddFontFromFileTTF("ProggyVector Regular.ttf", size_in_pixels);
-            //#if 0
-            if (SCALE >= 1.f)
-            {
-                float adjustedScale = 1.f + (SCALE - 1.f) * 0.5f;
-                ImGui::GetStyle().ScaleAllSizes(adjustedScale);
-            }
-            //#endif
-            //ImGui::GetStyle().ScaleAllSizes(SCALE);
+        float size_in_pixels = float(uint32_t(16 * systemScale));
+
+        ImGui::GetIO().Fonts->Clear();
+        ImGui::GetStyle() = ImGuiStyle();  // reset
+        ImGui::GetIO().Fonts->AddFontFromFileTTF("ProggyVector Regular.ttf", size_in_pixels);
+
+        if (systemScale >= 1.f)
+        {
+            float adjustedScale = 1.f + (systemScale - 1.f) * 0.5f;
+            ImGui::GetStyle().ScaleAllSizes(adjustedScale);
         }
     }
 }
 
 #if defined(AUTOMATA_ENGINE_GL_BACKEND)
-void ScaleImGuiForGL()
+void ScaleImGuiForGL(float systemScale)
 {
-    ScaleImGui_Impl();
+    ScaleImGui_Impl(systemScale);
 
     ImGui_ImplOpenGL3_DestroyFontsTexture();
     ImGui_ImplOpenGL3_CreateFontsTexture();
@@ -977,9 +970,9 @@ void ScaleImGuiForGL()
 #endif
 
 #if defined(AUTOMATA_ENGINE_VK_BACKEND)
-void ScaleImGuiForVK(VkCommandBuffer cmd, VkCommandPool cmdPool)
+void ScaleImGuiForVK(VkCommandBuffer cmd, VkCommandPool cmdPool, float systemScale)
 {
-    ScaleImGui_Impl();
+    ScaleImGui_Impl(systemScale);
 
     ImGui::GetIO().Fonts->Build();
 
@@ -1130,6 +1123,12 @@ static void ProccessKeyboardMessage(unsigned int vkCode, bool down)
     }
 }
 
+static inline float Win32GetSystemScale(HWND hwnd)
+{
+    UINT uDpi = ::GetDpiForWindow(hwnd);
+    return float(uDpi) / 96.f;
+}
+
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 #endif
@@ -1191,13 +1190,16 @@ DWORD WINAPI Win32WindowProcImpl(_In_ LPVOID lpParameter)
             g_currModalLoopKind.store(WIN32_MODAL_LOOP_KIND_NONE);// = ;
         } break;
         case WM_DPICHANGED: {
+
+            float systemScale = Win32GetSystemScale(g_hwnd);
+
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
 #if defined(AUTOMATA_ENGINE_GL_BACKEND)
-            ScaleImGuiForGL();
+            ScaleImGuiForGL(systemScale);
 #endif
 // TODO: for the VK case, this is kind of a concern.
 // when we look at updating the imgui font, it means that we need to stall the entire device.
-// but, couldn't we keep the current frame in flight any only stall the future frames?
+// but, couldn't we keep the current frame in flight and only stall the future frames?
 #endif
             RECT *const prcNewWindow = (RECT *)lParam;
             SetWindowPos(window,
@@ -2197,7 +2199,7 @@ DWORD WINAPI Win32InputHandlingLoop(_In_ LPVOID lpParameter) {
     ae::user_input_t &userInput     = g_engineMemory.userInput;
 
     // TODO: expose that the game can modify the poll rate.
-    constexpr uint32_t inputPollRate = 500;
+    constexpr uint32_t inputPollRate = 1000;
     constexpr float endFrameTarget = 1.f / float(inputPollRate);
 
     // NOTE: the idea behind using the std::atomic<T> data type is to ensure that we have atomic loads and stores to
@@ -2729,11 +2731,13 @@ int CALLBACK WinMain(HINSTANCE instance,
 
         g_isImGuiInitialized = true;
 
+        float initSystemScale = Win32GetSystemScale(g_hwnd);
+
 #if defined(AUTOMATA_ENGINE_GL_BACKEND)
-        ScaleImGuiForGL();
+        ScaleImGuiForGL(initSystemScale);
 #endif
 #if defined(AUTOMATA_ENGINE_VK_BACKEND)
-        ScaleImGuiForVK(vkImguiCommandBuffer, vkImguiCommandPool);
+        ScaleImGuiForVK(vkImguiCommandBuffer, vkImguiCommandPool, initSystemScale);
 #endif
 #endif
         // TODO(Noah): Look into what the imGUI functions are going to return on failure!
