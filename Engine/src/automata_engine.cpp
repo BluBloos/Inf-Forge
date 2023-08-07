@@ -226,9 +226,12 @@ namespace automata_engine {
                 }
 
                 ImGui::TextWrapped(
-                    "The following is a listing of Inf-Forge engine facts:\n"
+                    "The following is a listing of " AUTOMATA_ENGINE_NAME_STRING " engine facts:\n"
                     "- Minimum supported OS: Windows Vista\n" // the reasoning here is that we put PNG in the .ICO for .EXE icon. windows vista added support for PNG in the icons.
-                    "- Frames are paced to be rendered just before each monitor vertical refresh"
+                    "- Frames are paced to be rendered just before each monitor vertical refresh\n"
+                    "\n"
+                    "The following is a listing of " AUTOMATA_ENGINE_NAME_STRING " engine limitations:\n"
+                    "- The system cannot deal with monitor hot-swapping"
                 );
 
                 ImGui::End();
