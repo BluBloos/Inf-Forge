@@ -142,6 +142,9 @@ namespace automata_engine {
     void super::updateAndRender(game_memory_t * gameMemory) {
         engine_memory_t *EM = gameMemory->pEngineMemory;
         auto &bifrost = gameMemory->bifrost;
+
+        auto winInfo = EM->pfn.getWindowInfo(false);
+
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
         // Present the ImGui stuff to allow user to switch apps.
         if (EM->bCanRenderImGui) {
@@ -160,7 +163,7 @@ namespace automata_engine {
 
             if (ImGui::IsItemHovered())
                 ImGui::SetTooltip(
-                    "the amount of time the CPU portion of the frame took.");
+                    "the amount of time the CPU logic update portion of the frame took.");
 
             ImGui::Text("CPU + GPU frame time: %.3f ms",
                 1000.0f * timing::getTimeElapsed(EM->timing.lastFrameBeginTime, EM->timing.lastFrameGpuEndTime));
@@ -168,7 +171,7 @@ namespace automata_engine {
             if (ImGui::IsItemHovered())
                 ImGui::SetTooltip(
                     "the total time to render the frame.\n"
-                    "this is the CPU portion plus the GPU render time.");
+                    "this is the CPU logic update portion plus the GPU render time.");
 
         /*    float collectPeriod = EM->timing.lastFrameVisibleTime / 2.0f;
             
@@ -187,10 +190,7 @@ namespace automata_engine {
                     "the phase shift of the game signal to the vertical blank signal.\n"
                     "if this is negative, that implies the vblank leads the game signal.");*/
 
-            ImGui::Text("frames per second: %.3f FPS", 1.f / EM->timing.lastFrameVisibleTime);
-            // ImGui::Text("update model: %s", updateModelToString(EM->g_updateModel));           
-            // TODO: for now VSYNC is always on.
-            ImGui::Text("VSync: ON");
+            ImGui::Text("frames displayed per second: %.3f FPS", 1.f / EM->timing.lastFrameVisibleTime);
 
             ImGui::Text("GPU in use: %s", userGpuInfo.description);
             
@@ -198,11 +198,14 @@ namespace automata_engine {
                 ImGui::SetTooltip(
                     "this info is only valid so long as there is just one GPU in the system.");
 
-            ImGui::Text("total GPU memory: %llu KB", userGpuInfo.dedicatedVideoMemory >> 10 );
+            ImGui::Text("render resolution: %u x %u", winInfo.width, winInfo.height);
+            ImGui::Text("display resolution: %u x %u", winInfo.width, winInfo.height);
 
             ImGui::Checkbox("show ImGui demo window", &bifrost.bShowDemoWindow);
 
-            ImGui::Checkbox("show Inf-Forge engine README.txt", &bifrost.bShowEngineReadme);
+#define README_WINDOW_TITLE AUTOMATA_ENGINE_NAME_STRING " engine README.txt"
+
+            ImGui::Checkbox("show " README_WINDOW_TITLE, &bifrost.bShowEngineReadme);
 
             ImGui::End();
 
@@ -215,7 +218,7 @@ namespace automata_engine {
                 ImGui::SetNextWindowSize(ImVec2(520, 600), ImGuiCond_FirstUseEver);
 
                 // Main body of the Demo window starts here.
-                if (!ImGui::Begin("Inf-Forge README"))
+                if (!ImGui::Begin(README_WINDOW_TITLE))
                 {
                     // Early out if the window is collapsed, as an optimization.
                     ImGui::End();
@@ -224,11 +227,14 @@ namespace automata_engine {
 
                 ImGui::TextWrapped(
                     "The following is a listing of Inf-Forge engine facts:\n"
-                    "- Minimum supported OS: Windows Vista" // the reasoning here is that we put PNG in the .ICO for .EXE icon. windows vista added support for PNG in the icons.
+                    "- Minimum supported OS: Windows Vista\n" // the reasoning here is that we put PNG in the .ICO for .EXE icon. windows vista added support for PNG in the icons.
+                    "- Frames are paced to be rendered just before each monitor vertical refresh"
                 );
 
                 ImGui::End();
             }
+
+#undef README_WINDOW_TITLE
         }
 #endif
     }

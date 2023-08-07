@@ -287,12 +287,12 @@ static void MonkeyDemoUpdate(ae::game_memory_t *gameMemory)
 
         ImGui::Text(
             "---CONTROLS---\n"
-            "F5 to toggle the GUI\n"
-            "WASD to move\n"
+            "F5 to toggle the GUI.\n"
+            "WASD to move.\n"
             "Right click to enter first person cam.\n"
             "ESC to exit first person cam.\n"
-            "SPACE to fly up\n"
-            "SHIFT to fly down\n\n");
+            "SPACE to fly up.\n"
+            "SHIFT to fly down.\n\n");
 
         // inputs.
 #if !defined(AUTOMATA_ENGINE_VK_BACKEND)

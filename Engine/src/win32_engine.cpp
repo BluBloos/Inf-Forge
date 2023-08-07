@@ -1123,6 +1123,8 @@ static void ProccessKeyboardMessage(unsigned int vkCode, bool down)
     }
 }
 
+static UINT g_msgForMessageBox;
+
 static inline float Win32GetSystemScale(HWND hwnd)
 {
     UINT uDpi = ::GetDpiForWindow(hwnd);
@@ -1146,6 +1148,18 @@ enum Win32ModalLoopKind {
     WIN32_MODAL_LOOP_KIND_NONE = 0,
     WIN32_MODAL_LOOP_KIND_DRAGWINDOW
 };
+
+static inline void Win32MessageBox(HWND hwnd, LPCSTR message,  UINT styles)
+{
+    // TODO: support more icon kinds
+    UINT iconKind = (styles & MB_ICONEXCLAMATION) ? MB_ICONEXCLAMATION : MB_OK;
+    MessageBeep(
+        iconKind
+    );
+    ::MessageBoxA(hwnd,
+        message,
+        "Notice from " AUTOMATA_ENGINE_PROJECT_NAME, styles);
+}
 
 //static std::atomic<BOOL> g_bModalRunning = FALSE;
 static std::atomic<Win32ModalLoopKind> g_currModalLoopKind = WIN32_MODAL_LOOP_KIND_NONE;
@@ -1172,6 +1186,13 @@ DWORD WINAPI Win32WindowProcImpl(_In_ LPVOID lpParameter)
         goto Win32WindowProcImpl_exit;
     }
 #endif
+
+    if (message == g_msgForMessageBox)
+    {
+        UINT styles = (UINT)lParam;
+        Win32MessageBox(g_hwnd, (LPCSTR)wParam, styles);
+        return 0;
+    }
 
     switch(message) {
         case WM_SETCURSOR:
@@ -1881,29 +1902,42 @@ FILETIME     g_gameCodeLastWriteTime = {};
 bool         g_SleepGranular         = false;
 
 
+IDXGIOutput   *g_primaryDisplay        = nullptr;
+IDXGIAdapter1 *g_primaryDisplayAdapter = nullptr;
+
+struct Win32CachedMonitorData
+{
+    HMONITOR hmon;
+    RECT rect;
+};
+
+unsigned int g_monitorCount = 0;
+
+Win32CachedMonitorData *g_cachedMonitorData = nullptr; // stretchy buffer.
+
+static BOOL CALLBACK Win32MonitorEnumProc(HMONITOR hMon, HDC hdc, LPRECT lprcMonitor, LPARAM pData)
+{
+    auto monData = Win32CachedMonitorData {
+        .hmon = hMon, .rect = *lprcMonitor
+    };
+
+    StretchyBufferPush(g_cachedMonitorData, monData);
+
+    g_monitorCount++;
+
+    return TRUE;// continue enumeration.
+}
+
 DWORD WINAPI Win32GameUpdateAndRenderHandlingLoop(_In_ LPVOID lpParameter) {
-    IDXGIOutput   *gameMonitor = nullptr;
-    IDXGIAdapter1 *gameAdapter   = nullptr;
-
-    defer(gameMonitor ? (void)gameMonitor->Release() : (void)0);
-    defer(gameAdapter ? (void)gameAdapter->Release() : (void)0);
-
+    
     // TODO: consider multiple monitor setups.
     // TODO: consdier multiple GPU(adapter) setups.
-    // get information about the monitor connected.
+    if (g_monitorCount > 1)
     {
-        IDXGIFactory4 *dxgiFactory = nullptr;
-        if (S_OK != CreateDXGIFactory1(IID_PPV_ARGS(&dxgiFactory))) {
-            AELoggerError("could not create factory");
-            ExitThread(-1);
-        }
-        defer(dxgiFactory->Release());
-        dxgiFactory->EnumAdapters1(0, &gameAdapter);
-        HRESULT result = gameAdapter->EnumOutputs(0, &gameMonitor);
-        if (result != S_OK) {
-            AELoggerError("could not enumerate DXGI output 0");
-            ExitThread(-1);
-        }
+        UINT styles = MB_ICONEXCLAMATION | MB_OK;
+        LPCSTR message = "Multiple monitors detected.\n\n"
+            "Dragging the application window between monitors will result in total application failure.";
+        PostMessageA(g_hwnd, g_msgForMessageBox, (WPARAM)message, (LPARAM)styles);
     }
 
     // get the monitor refresh rate
@@ -2068,7 +2102,7 @@ DWORD WINAPI Win32GameUpdateAndRenderHandlingLoop(_In_ LPVOID lpParameter) {
             // its also the case that we generally need to handle multiple monitor setups. there can be two monitors that
             // have different refresh rates and our window is spanning across both of them.
             // in such a case, our app should wait on the vblank of the monitor with the lower refresh rate.
-            gameMonitor->WaitForVBlank();
+            g_primaryDisplay->WaitForVBlank();
 
             LARGE_INTEGER after  = Win32GetWallClock();
             LARGE_INTEGER before = {.QuadPart = LONGLONG(EM->timing.lastFrameMaybeVblankTime)};
@@ -2435,10 +2469,12 @@ int CALLBACK WinMain(HINSTANCE instance,
 
         g_consoleHwnd = ::GetConsoleWindow();
 
+#if defined(_DEBUG)
         AELoggerLog("stdout initialized");
         // TODO(Noah): Would be nice to have unicode support with our platform logger. Emojis are awesome!
         AELoggerWarn("Please note that the below error is expected and is NOT an error");
         AELoggerError("testing stderr out");
+#endif
         // TODO(Noah): Make this print version from a manifest or something...
         AELoggerLog("\"Hello, World!\" from " AUTOMATA_ENGINE_NAME_STRING " %s", AUTOMATA_ENGINE_VERSION_STRING);
 
@@ -2456,6 +2492,25 @@ int CALLBACK WinMain(HINSTANCE instance,
         LARGE_INTEGER PerfCountFrequency;
         QueryPerformanceFrequency(&PerfCountFrequency);
         g_PerfCountFrequency64 = PerfCountFrequency.QuadPart;
+    }
+
+    defer(g_primaryDisplay ? (void)g_primaryDisplay->Release() : (void)0);
+    defer(g_primaryDisplayAdapter ? (void)g_primaryDisplayAdapter->Release() : (void)0);
+
+    // get the desktop primary.
+    {
+        IDXGIFactory4 *dxgiFactory = nullptr;
+        if (S_OK != CreateDXGIFactory1(IID_PPV_ARGS(&dxgiFactory))) {
+            AELoggerError("could not create factory");
+            ExitThread(-1);
+        }
+        defer(dxgiFactory->Release());
+        dxgiFactory->EnumAdapters1(0, &g_primaryDisplayAdapter);
+        HRESULT result = g_primaryDisplayAdapter->EnumOutputs(0, &g_primaryDisplay);
+        if (result != S_OK) {
+            AELoggerError("could not enumerate DXGI output 0");
+            ExitThread(-1);
+        }
     }
 
     windowClass.style         = CS_VREDRAW | CS_HREDRAW;  // Set window to redraw after being resized
@@ -2522,15 +2577,50 @@ int CALLBACK WinMain(HINSTANCE instance,
         // dragged. this conflict with WINPROFILE_NORESIZE. so, we won't be using this for now.
         const bool beginMaximized = g_engineMemory.requestMaximize;
 
+        int windowCreateX      = CW_USEDEFAULT;
+        int windowCreateY      = CW_USEDEFAULT;
+        int windowCreateWidth  = CW_USEDEFAULT;
+        int windowCreateHeight = CW_USEDEFAULT;
+
+        // enumerate all monitors to determine how many displays are connected.
+        ::EnumDisplayMonitors(
+            NULL,  // hdc is null and region of interest for enumeration is the virtual region that encompass all desktop displays.
+            NULL,  //no clipping rect.
+            Win32MonitorEnumProc,
+            NULL);
+
+        // code below is to compute the initial window rect such that we spawn on the primary display monitor.
+        {
+            HMONITOR         primaryMon;
+            DXGI_OUTPUT_DESC desc;
+            g_primaryDisplay->GetDesc(&desc);
+            primaryMon = desc.Monitor;
+
+            for (uint32_t i = 0; i < g_monitorCount; i++) {
+                HMONITOR hmon = g_cachedMonitorData[i].hmon;
+                auto    &r    = g_cachedMonitorData[i].rect;
+                if (hmon == primaryMon) {
+                    // use the rect to set the window create params.
+                    int fullWidth      = r.right - r.left;
+                    int fullHeight     = r.bottom - r.top;
+                    windowCreateWidth  = fullWidth * 0.8f;
+                    windowCreateHeight = fullHeight * 0.8f;
+                    windowCreateX      = r.left + (fullWidth - windowCreateWidth) >> 1;
+                    windowCreateY      = r.top + (fullHeight - windowCreateHeight) >> 1;
+                    break;
+                }
+            }
+        }
+
         windowHandle = CreateWindowExA(
             0, // dwExStyle
             windowClass.lpszClassName,
             g_engineMemory.defaultWindowName,
             windowStyle,
-            CW_USEDEFAULT, // init X
-            CW_USEDEFAULT, // init Y
-            (g_engineMemory.defaultWidth == UINT32_MAX) ? CW_USEDEFAULT : g_engineMemory.defaultWidth,
-            (g_engineMemory.defaultHeight == UINT32_MAX) ? CW_USEDEFAULT : g_engineMemory.defaultHeight,
+            windowCreateX,
+            windowCreateY,
+            (g_engineMemory.defaultWidth == UINT32_MAX) ? windowCreateWidth : g_engineMemory.defaultWidth,
+            (g_engineMemory.defaultHeight == UINT32_MAX) ? windowCreateHeight : g_engineMemory.defaultHeight,
             NULL, // parent handle
             NULL, // menu
             instance,
@@ -2545,8 +2635,9 @@ int CALLBACK WinMain(HINSTANCE instance,
             break;
         }
 
-        g_hwnd        = windowHandle;
-        g_hInstance   = instance;
+        g_hwnd             = windowHandle;
+        g_hInstance        = instance;
+        g_msgForMessageBox = RegisterWindowMessageA("MyShowMessageBoxMessage");
 
         if (!beginMaximized && GameHandleWindowResize) {
             // get height and width of window
@@ -2814,6 +2905,9 @@ int CALLBACK WinMain(HINSTANCE instance,
                 delete g_ppSourceVoices[i].xapo;
             }
         }
+
+        // destory the cached monitor data.
+        StretchyBufferFree(g_cachedMonitorData);
 
         // Free XAudio2 resources.
         if (g_pXAudio2 != nullptr) { g_pXAudio2->Release(); }
