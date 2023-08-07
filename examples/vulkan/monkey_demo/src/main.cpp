@@ -497,7 +497,7 @@ void MonkeyDemoRender(ae::game_memory_t *gameMemory)
     ae::VK_CHECK(vkResetCommandBuffer(gd->commandBuffer, 0));
     ae::VK_CHECK(vkResetCommandPool(gd->vkDevice, gd->commandPool, 0));
 
-    ae::math::camera_t cam_Snapshot   = gd->cam.load();
+    ae::math::camera_t cam_Snapshot = gd->cam;
 
     bool bRenderImGui = EM->bCanRenderImGui;
 

@@ -1923,6 +1923,8 @@ DWORD WINAPI Win32GameUpdateAndRenderHandlingLoop(_In_ LPVOID lpParameter) {
     std::atomic<bool> &globalRunning = g_engineMemory.globalRunning;
 
     LARGE_INTEGER LastCounter = Win32GetWallClock();
+
+    uint64_t frameCounter = 0;
     
     while (globalRunning.load()) {
 
@@ -1936,6 +1938,8 @@ DWORD WINAPI Win32GameUpdateAndRenderHandlingLoop(_In_ LPVOID lpParameter) {
             if (GameOnHotload) GameOnHotload(&g_gameMemory);
             AELoggerLog("did the hotload.");
         }
+
+        frameCounter++;
 
         bool bRenderFallback = !g_gameMemory.getInitialized();
 

@@ -6,6 +6,8 @@ void MonkeyDemoHotload(ae::game_memory_t *gameMemory);
 
 static game_state_t *getGameState(ae::game_memory_t *gameMemory) { return (game_state_t *)gameMemory->data; }
 
+typedef unsigned int u32;
+
 // NOTE: this is called every time that the game DLL is hot-loaded.
 DllExport void GameOnHotload(ae::game_memory_t *gameMemory)
 {
@@ -70,7 +72,8 @@ static void MonkeyDemoInit(ae::game_memory_t *gameMemory)
     initCamData.width              = winInfo.width;
     initCamData.height             = winInfo.height;
 
-    gd->cam.store(initCamData);
+    gd->cam     = (initCamData);
+    gd->trueCam = initCamData;
 
     gd->suzanneTransform.scale       = ae::math::vec3_t(1.0f, 1.0f, 1.0f);
     gd->suzanneTransform.pos         = ae::math::vec3_t(0.0f, 0.0f, -3.0f);
@@ -103,10 +106,10 @@ DllExport void GameHandleInput(ae::game_memory_t *gameMemory)
     const float cameraSensitivity = gd->cameraSensitivity.load();
 
     std::atomic<bool>               &optInFirstPersonCam = gd->optInFirstPersonCam;
-    std::atomic<ae::math::camera_t> &cam                 = gd->cam;
+    std::atomic<ae::math::camera_t> &trueCam             = gd->trueCam;
 
     bool               local_optInFirstPersonCam = optInFirstPersonCam.load();
-    ae::math::camera_t local_cam                 = cam.load();
+    ae::math::camera_t local_cam                 = trueCam.load();
 
     // modified by only this thread.
     bool &bFocusedLastFrame = gd->bFocusedLastFrame;
@@ -158,8 +161,6 @@ DllExport void GameHandleInput(ae::game_memory_t *gameMemory)
         lastFrameF5 = userInput.keyDown[ae::GAME_KEY_F5];
     }
 
-    auto beginEulerAngles = local_cam.trans.eulerAngles;
-
     float yaw = 0.f;
     if (local_optInFirstPersonCam) {
         // we'll assume that this is in pixels.
@@ -178,10 +179,10 @@ DllExport void GameHandleInput(ae::game_memory_t *gameMemory)
         yaw         = ae::math::atan2(deltaX, local_cam.nearPlane);
         float pitch = ae::math::atan2(deltaY, local_cam.nearPlane);
 
-        float lerpT = 0.9f;
-        local_cam.angularVelocity =
-            ae::math::vec3_t(-pitch, yaw, 0.0f) * cameraSensitivity * (1 - lerpT) + local_cam.angularVelocity * (lerpT);
-        local_cam.trans.eulerAngles += local_cam.angularVelocity;
+        //float lerpT = 0.9f;
+        // local_cam.angularVelocity =  ae::math::vec3_t(-pitch, yaw, 0.0f) * cameraSensitivity * (1 - lerpT) + local_cam.angularVelocity * (lerpT);
+        // local_cam.trans.eulerAngles += local_cam.angularVelocity;
+        local_cam.trans.eulerAngles += ae::math::vec3_t(-pitch, yaw, 0.0f) * cameraSensitivity;
     }
 
     // clamp camera pitch
@@ -189,40 +190,64 @@ DllExport void GameHandleInput(ae::game_memory_t *gameMemory)
     if (local_cam.trans.eulerAngles.x < -pitchClamp) local_cam.trans.eulerAngles.x = -pitchClamp;
     if (local_cam.trans.eulerAngles.x > pitchClamp) local_cam.trans.eulerAngles.x = pitchClamp;
 
-    float movementSpeed = 5.f;
-    float linearStep    = movementSpeed;
 
-    // NOTE: so there is this idea where if we consider the exact motion that the player would
-    // take as the camera rotates, we realize that it's not a straight line. its instead an arc.
-    // however, since this update is called quite a bit, we can safely approximate that arc with
-    // a set of straight lines.
-    ae::math::mat3_t camBasisBegin =
-        ae::math::mat3_t(ae::math::buildRotMat4(ae::math::vec3_t(0.0f, beginEulerAngles.y, 0.0f)));
-
+    //NOTE: there would be a concern where requestClearTransitionCounts will be set to false,
+    //causing us to miss a reset. but that case is silly. this thread is going very fast,
+    //while the other thread is going much slower in comparison. therefore, we'll handle
+    //the reset faster than the reset requests can come in. 
+    if (gd->requestClearTransitionCounts)
     {
-        ae::math::vec3_t movDir = ae::math::vec3_t();
+        gd->halfTransitionCount_W = 0;
+        gd->halfTransitionCount_A = 0;
+        gd->halfTransitionCount_S = 0;
+        gd->halfTransitionCount_D = 0;
+        gd->halfTransitionCount_shift = 0;
+        gd->halfTransitionCount_space = 0;
 
-        if (userInput.keyDown[ae::GAME_KEY_W]) { movDir += camBasisBegin * ae::math::vec3_t(0.0f, 0.0f, -1); }
+        gd->requestClearTransitionCounts = false;
+    }
 
-        if (userInput.keyDown[ae::GAME_KEY_S]) { movDir += camBasisBegin * ae::math::vec3_t(0.0f, 0.0f, 1); }
+    // TODO: maybe many games want to do this so we can move this to the Inf-Forge side.
+    // check for the user input keys.
+    if ( gd->state_W != userInput.keyDown[ae::GAME_KEY_W] ) 
+    {
+        gd->halfTransitionCount_W++;
+        gd->state_W = userInput.keyDown[ae::GAME_KEY_W];
+    }
 
-        if (userInput.keyDown[ae::GAME_KEY_A]) { movDir += camBasisBegin * ae::math::vec3_t(-1, 0.0f, 0.0f); }
+    if ( gd->state_A != userInput.keyDown[ae::GAME_KEY_A] ) 
+    {
+        gd->halfTransitionCount_A++;
+        gd->state_A = userInput.keyDown[ae::GAME_KEY_A];
+    }
 
-        if (userInput.keyDown[ae::GAME_KEY_D]) { movDir += camBasisBegin * ae::math::vec3_t(1, 0.0f, 0.0f); }
+    if ( gd->state_S != userInput.keyDown[ae::GAME_KEY_S] ) 
+    {
+        gd->halfTransitionCount_S++;
+        gd->state_S = userInput.keyDown[ae::GAME_KEY_S];
+    }
 
-        if (userInput.keyDown[ae::GAME_KEY_SHIFT]) { movDir += ae::math::vec3_t(0.0f, -1, 0.0f); }
+    if ( gd->state_D != userInput.keyDown[ae::GAME_KEY_D] ) 
+    {
+        gd->halfTransitionCount_D++;
+        gd->state_D = userInput.keyDown[ae::GAME_KEY_D];
+    }
 
-        if (userInput.keyDown[ae::GAME_KEY_SPACE]) { movDir += ae::math::vec3_t(0.0f, 1, 0.0f); }
+    if ( gd->state_shift != userInput.keyDown[ae::GAME_KEY_SHIFT] ) 
+    {
+        gd->halfTransitionCount_shift++;
+        gd->state_shift = userInput.keyDown[ae::GAME_KEY_SHIFT];
+    }
 
-        auto movDirNorm = ae::math::normalize(movDir);
-
-        float lerpT        = 0.9f;
-        local_cam.velocity = movDirNorm * linearStep * (1 - lerpT) + local_cam.velocity * lerpT;
-        local_cam.trans.pos += local_cam.velocity * userInput.packetLiveTime;
+    if ( gd->state_space != userInput.keyDown[ae::GAME_KEY_SPACE] ) 
+    {
+        gd->halfTransitionCount_space++;
+        gd->state_space = userInput.keyDown[ae::GAME_KEY_SPACE];
     }
 
     optInFirstPersonCam.store(local_optInFirstPersonCam);
-    cam.store(local_cam);
+
+    trueCam.store(local_cam);
 }
 
 static void MonkeyDemoUpdate(ae::game_memory_t *gameMemory)
@@ -304,6 +329,80 @@ static void MonkeyDemoUpdate(ae::game_memory_t *gameMemory)
     // NOTE: the monkey spinning is not game state that needs to be updated at a high granularity. therefore we can update it here
     // in the main update loop. and indeed, it's correct here to use lastFrameVisibleTime for the timing.
     if (bSpin) gd->suzanneTransform.eulerAngles += ae::math::vec3_t(0.0f, 2.0f * EM->timing.lastFrameVisibleTime, 0.0f);
+
+    // update the player camera.
+    {
+        auto beginEulerAngles = gd->cam.trans.eulerAngles;
+
+        // TODO: consider once again updating the path of the camera to be smooth when there is also a
+        // rotation of the camera occur?
+        
+        // update euler angles of the camera.
+        {
+            ae::math::camera_t trueCam = gd->trueCam.load();
+
+            float lerpT = 0.9f;
+            gd->cam.angularVelocity = (trueCam.trans.eulerAngles - gd->cam.trans.eulerAngles) * (1 - lerpT) + gd->cam.angularVelocity * (lerpT);
+            gd->cam.trans.eulerAngles += gd->cam.angularVelocity;
+        }
+
+        float movementSpeed = 5.f;
+        float linearStep    = movementSpeed;
+
+        u32 hw = gd->halfTransitionCount_W;
+        u32 ha = gd->halfTransitionCount_A;
+        u32 hs = gd->halfTransitionCount_S;
+        u32 hd = gd->halfTransitionCount_D;
+        u32 h_space = gd->halfTransitionCount_space;
+        u32 h_shift = gd->halfTransitionCount_shift;
+
+        gd->requestClearTransitionCounts = true;
+
+        bool sw = gd->state_W;
+        bool sa = gd->state_A;
+        bool ss = gd->state_S;
+        bool sd = gd->state_D;
+        bool s_space = gd->state_space;
+        bool s_shift = gd->state_shift;
+
+        ae::math::mat3_t camBasisBegin =
+            ae::math::mat3_t(ae::math::buildRotMat4(ae::math::vec3_t(0.0f, beginEulerAngles.y, 0.0f)));
+
+        {
+            ae::math::vec3_t movDir = ae::math::vec3_t();
+
+            auto ratio_for_even_half_count = [](u32 h, u32 s) -> float {
+                u32 top=h>>1;
+                u32 bottom=h+1;
+                if (s) top = bottom - top;
+                return float(top)/float(bottom);
+            };
+
+            float w_factor = -1.f * ((hw % 2 != 0) ? 0.5f : ratio_for_even_half_count(hw, sw) );
+            movDir += camBasisBegin * ae::math::vec3_t(0.0f, 0.0f, w_factor );
+
+            float s_factor = 1.f * ((hs % 2 != 0) ? 0.5f : ratio_for_even_half_count(hs, ss) );
+            movDir += camBasisBegin * ae::math::vec3_t(0.0f, 0.0f, s_factor);
+
+            float a_factor = -1.f * ((ha % 2 != 0) ? 0.5f : ratio_for_even_half_count(ha, sa) );
+            movDir += camBasisBegin * ae::math::vec3_t(a_factor, 0.0f, 0.f);
+
+            float d_factor = 1.f * ((hd % 2 != 0) ? 0.5f : ratio_for_even_half_count(hd, sd) );
+            movDir += camBasisBegin * ae::math::vec3_t(d_factor, 0.0f, 0.f);
+
+            float shift_factor = -1.f * ((h_shift % 2 != 0) ? 0.5f : ratio_for_even_half_count(h_shift, s_shift) );
+            movDir += camBasisBegin * ae::math::vec3_t(0.f, shift_factor, 0.f);
+
+            float space_factor = 1.f * ((h_space % 2 != 0) ? 0.5f : ratio_for_even_half_count(h_space, s_space) );
+            movDir += camBasisBegin * ae::math::vec3_t(0.f, space_factor, 0.f);
+
+            auto movDirNorm = ae::math::normalize(movDir);
+
+            gd->cam.trans.pos += movDirNorm *linearStep * EM->timing.lastFrameVisibleTime;
+        }
+
+    }
+
 
     // TODO: look into the depth testing stuff more deeply on the hardware side of things.
     // what is something that we can only do because we really get it?

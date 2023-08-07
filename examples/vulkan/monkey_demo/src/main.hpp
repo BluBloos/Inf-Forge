@@ -68,7 +68,27 @@ typedef struct game_state {
     ae::math::vec3_t lightPos;
 
     std::atomic<bool>               optInFirstPersonCam;
-    std::atomic<ae::math::camera_t> cam;
+
+    ae::math::camera_t cam;
+
+    std::atomic<ae::math::camera_t> trueCam; // written to by input thread.
+
+    // NOTE: these variables are not stored as atomic since they are stored as bytes.
+    // on x86 platforms, access to byte is atomic.
+    volatile unsigned char halfTransitionCount_W;
+    volatile unsigned char halfTransitionCount_A;
+    volatile unsigned char halfTransitionCount_S;
+    volatile unsigned char halfTransitionCount_D;
+    volatile unsigned char halfTransitionCount_shift;
+    volatile unsigned char halfTransitionCount_space;
+    volatile bool requestClearTransitionCounts = false;
+    //
+    volatile unsigned char state_W;
+    volatile unsigned char state_A;
+    volatile unsigned char state_S;
+    volatile unsigned char state_D;
+    volatile unsigned char state_shift;
+    volatile unsigned char state_space;
 
     bool  bFocusedLastFrame;
     bool  lastFrameF5;
