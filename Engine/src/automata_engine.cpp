@@ -226,12 +226,14 @@ namespace automata_engine {
                 }
 
                 ImGui::TextWrapped(
+                    "Thanks for playing!\n\n"
+                    "If you encounter any issues at all, please read the listing of engine limitations before making a bug report.\n\n"
                     "The following is a listing of " AUTOMATA_ENGINE_NAME_STRING " engine facts:\n"
                     "- Minimum supported OS: Windows Vista\n" // the reasoning here is that we put PNG in the .ICO for .EXE icon. windows vista added support for PNG in the icons.
                     "- Frames are paced to be rendered just before each monitor vertical refresh\n"
                     "\n"
                     "The following is a listing of " AUTOMATA_ENGINE_NAME_STRING " engine limitations:\n"
-                    "- The system cannot deal with monitor hot-swapping"
+                    "- The system is not designed to handle when monitors are hot-swapped"
                 );
 
                 ImGui::End();
