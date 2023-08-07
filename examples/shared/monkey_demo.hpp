@@ -341,8 +341,11 @@ static void MonkeyDemoUpdate(ae::game_memory_t *gameMemory)
         {
             ae::math::camera_t trueCam = gd->trueCam.load();
 
-            float lerpT = 0.9f;
-            gd->cam.angularVelocity = (trueCam.trans.eulerAngles - gd->cam.trans.eulerAngles) * (1 - lerpT) + gd->cam.angularVelocity * (lerpT);
+            
+            constexpr u32 frameLatentCount = 3;
+
+            auto diffToDst = (trueCam.trans.eulerAngles - gd->cam.trans.eulerAngles);
+            gd->cam.angularVelocity = diffToDst * (1.f / frameLatentCount);
             gd->cam.trans.eulerAngles += gd->cam.angularVelocity;
         }
 
