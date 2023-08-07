@@ -1312,10 +1312,10 @@ namespace automata_engine {
             /// we might expect/want it to be consistently 16.66 ms.
             uint64_t lastFrameMaybeVblankTime;
 
-            /// @brief the timestamp taken right before the input message loop. for the last frame.
+            /// @brief the timestamp taken right before the game update and render loop is called.
             uint64_t lastFrameBeginTime;
 
-            /// @brief the timestamp taken right before the input message loop. for this frame.
+            /// @brief the timestamp taken right before the game update and render loop is called. for this frame.
             uint64_t thisFrameBeginTime = 0;
 
             /// @brief the timestamp taken right after the game update function completes.

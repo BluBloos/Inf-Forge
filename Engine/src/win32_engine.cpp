@@ -2047,7 +2047,7 @@ DWORD WINAPI Win32GameUpdateAndRenderHandlingLoop(_In_ LPVOID lpParameter) {
         //
         // TODO: both these constants are adhoc. what if the monitor has a different refresh rate?
         // what if the round trip frame time is different?
-        static constexpr float GuaranteedFrameTime          = 0.013f;
+        static constexpr float GuaranteedFrameTime          = 0.008f;
         const float TargetSecondsElapsedPerFrame = 1.f / float(MonitorRefreshRateHz);
 
         float endFrameTarget         = TargetSecondsElapsedPerFrame;

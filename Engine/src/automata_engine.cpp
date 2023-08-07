@@ -192,6 +192,14 @@ namespace automata_engine {
 
             ImGui::Text("frames displayed per second: %.3f FPS", 1.f / EM->timing.lastFrameVisibleTime);
 
+            float presentLatency = timing::getTimeElapsed(EM->timing.lastFrameBeginTime, EM->timing.lastFrameMaybeVblankTime); // - ;
+            
+            ImGui::Text("input latency: %.4f s", presentLatency);
+
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip(
+                    "the time it takes for the result of user input to be displayed on the screen.");
+
             ImGui::Text("GPU in use: %s", userGpuInfo.description);
             
             if (ImGui::IsItemHovered())
@@ -233,7 +241,10 @@ namespace automata_engine {
                     "- Frames are paced to be rendered just before each monitor vertical refresh\n"
                     "\n"
                     "The following is a listing of " AUTOMATA_ENGINE_NAME_STRING " engine limitations:\n"
-                    "- The system is not designed to handle when monitors are hot-swapped"
+                    "- The system is not designed to handle when monitors are hot-swapped\n"
+                    "- The system is not designed to handle when multiple GPUs are present\n"
+                    "- Due to the windows compositor, the reported input latency is likely inaccurate"
+
                 );
 
                 ImGui::End();
