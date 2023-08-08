@@ -1961,6 +1961,7 @@ DWORD WINAPI Win32GameUpdateAndRenderHandlingLoop(_In_ LPVOID lpParameter) {
     std::atomic<bool> &globalRunning = g_engineMemory.globalRunning;
 
     LARGE_INTEGER LastCounter = Win32GetWallClock();
+    g_engineMemory.timing.lastFrameMaybeVblankTime = LastCounter.QuadPart;
 
     uint64_t frameCounter = 0;
     
@@ -2130,9 +2131,7 @@ DWORD WINAPI Win32GameUpdateAndRenderHandlingLoop(_In_ LPVOID lpParameter) {
 #else
                 AELoggerWarn("missed the vertical blank");                
 #endif
-                // TODO: putting this line here seems to cause the monkey to stop spinning entirely. what the fuck is going on?
-                // is this a compiler bug? this value is read correctly during the ImGui update. so what gives?
-                //EM->timing.lastFrameVisibleTime = fromLastVblank;
+                EM->timing.lastFrameVisibleTime = fromLastVblank;
             }
 
             EM->timing.lastFrameMaybeVblankTime = after.QuadPart;
