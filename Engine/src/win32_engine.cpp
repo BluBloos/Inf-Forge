@@ -2649,6 +2649,17 @@ int CALLBACK WinMain(HINSTANCE instance,
             GameHandleWindowResize(&g_gameMemory, rect.right - rect.left, rect.bottom - rect.top);
         }
 
+        constexpr UINT_PTR timerID = 0;
+
+        // NOTE: here we set a timer so that our main message processing loop never stalls.
+        // there are some deferred kinds of requests that the game can make for the platform layer
+        // to handle. an example of this is to request that the mouse should not show.
+        // we need the platform layer to handle these requests eventually.
+        ::SetTimer(g_hwnd,
+            timerID,
+            100,  // 100 ms.
+            (TIMERPROC)NULL);
+
         ShowWindow(windowHandle, (beginMaximized) ? SW_MAXIMIZE : showCode);
         UpdateWindow(windowHandle);
 
@@ -2888,6 +2899,9 @@ int CALLBACK WinMain(HINSTANCE instance,
         if (currValue != request) {
             Platform_showMouse_deferred(request);
             g_showMouseCurrentValue = request;
+
+            // NOTE: this is atomic since here we write from main thread, but this is read from the render thread.
+            g_engineMemory.bMouseVisible.store(g_showMouseCurrentValue);
         }
     }
 

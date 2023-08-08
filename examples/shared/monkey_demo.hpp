@@ -79,7 +79,7 @@ static void MonkeyDemoInit(ae::game_memory_t *gameMemory)
     gd->suzanneTransform.eulerAngles = {};
 
     // init default settings in ImGui panel.
-    gd->bSpin               = true;
+    gd->bSpin               = false;
     gd->lockCamYaw          = false;
     gd->lockCamPitch        = false;
     gd->ambientStrength     = 0.1f;
@@ -253,6 +253,8 @@ static void MonkeyDemoUpdate(ae::game_memory_t *gameMemory)
 
     bool bRenderImGui = EM->bCanRenderImGui;
 
+    bool bMouseNotVisible = !EM->bMouseVisible.load();
+
     constexpr float drag = 10.f;
     constexpr float movementSpeed = 80.f;
 
@@ -304,9 +306,13 @@ static void MonkeyDemoUpdate(ae::game_memory_t *gameMemory)
     }
 #endif
 
-    if (optInFirstPersonCam_Snapshot) {
+    // NOTE: only clamp mouse if the user cannot see it.
+    // it looks really odd if the user sees the mouse teleport to the middle of the screen on entering the first person camera mode.
+    if (optInFirstPersonCam_Snapshot && bMouseNotVisible) {
+
         // clamp mouse cursor.
         EM->pfn.setMousePos((int)(winInfo.width / 2.0f), (int)(winInfo.height / 2.0f));
+
     }
 
     float dt = EM->timing.lastFrameVisibleTime;

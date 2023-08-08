@@ -1345,6 +1345,8 @@ namespace automata_engine {
 
         bool bCanRenderImGui = true;
 
+        std::atomic<bool> bMouseVisible = true;
+
         // TODO: for now, the only supported update model is "ATOMIC".
         //
         /// @brief the current update model.
