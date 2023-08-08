@@ -291,6 +291,7 @@ static void MonkeyDemoUpdate(ae::game_memory_t *gameMemory)
         ImGui::SliderFloat("ambient light", &ambientStrength, 0.0f, 1.0f, "%.3f");
 
         ImGui::Text("\n---MONKEY---\n");
+        ImGui::Text("model name: %s", gd->suzanne.modelName);
         ImGui::Checkbox("make it spin", &bSpin);
         ImGui::SliderFloat("make it shiny", &specularStrength, 0.0f, 1.0f, "%.3f");
 

@@ -342,7 +342,7 @@ DllExport void GameInit(ae::game_memory_t *gameMemory)
 
     // load the vertex and index buffers to the GPU.
     {
-        gd->suzanne = ae::io::loadObj("res\\monke.obj");
+        gd->suzanne = ae::io::loadObj("res\\monke2.obj");
         if (gd->suzanne.vertexData == nullptr) {
             EM->setFatalExit();
             return;
