@@ -1334,8 +1334,8 @@ LRESULT CALLBACK Win32WindowProc_UserInput(HWND window,
 
                 if (!!(mouseData.usFlags & MOUSE_MOVE_ABSOLUTE)) {
                 } else if ((mouseData.lLastX != 0) || (mouseData.lLastY != 0)) {
-                                        userInput.deltaMouseX += mouseData.lLastX;
-                                        userInput.deltaMouseY += mouseData.lLastY;
+                                        userInput.rawDeltaMouseX += mouseData.lLastX;
+                                        userInput.rawDeltaMouseY += mouseData.lLastY;
                 }
             }
             // TODO: I don't think that this check actually matters, since we register with RIM_INPUTSINK.
@@ -1344,6 +1344,8 @@ LRESULT CALLBACK Win32WindowProc_UserInput(HWND window,
         case WM_MOUSEMOVE: {
             int x            = (int)lParam & 0x0000FFFF;
             int y            = ((int)lParam & 0xFFFF0000) >> 16;
+            userInput.deltaMouseX = x - userInput.mouseX;
+            userInput.deltaMouseY = y - userInput.mouseY;
             userInput.mouseX = x;
             userInput.mouseY = y;
         } break;
@@ -2246,6 +2248,8 @@ DWORD WINAPI Win32InputHandlingLoop(_In_ LPVOID lpParameter) {
         // reset accumulation state.
         userInput.deltaMouseX = 0;
         userInput.deltaMouseY = 0;
+        userInput.rawDeltaMouseX = 0;
+        userInput.rawDeltaMouseY = 0;
 
         // NOTE: this means there may have been more messages to Peek. yet, we did no such peeking and exited early
         // because or "time was up".

@@ -73,7 +73,6 @@ static void MonkeyDemoInit(ae::game_memory_t *gameMemory)
     initCamData.height             = winInfo.height;
 
     gd->cam     = (initCamData);
-    gd->trueCam = initCamData;
 
     gd->suzanneTransform.scale       = ae::math::vec3_t(1.0f, 1.0f, 1.0f);
     gd->suzanneTransform.pos         = ae::math::vec3_t(0.0f, 0.0f, -3.0f);
@@ -87,7 +86,7 @@ static void MonkeyDemoInit(ae::game_memory_t *gameMemory)
     gd->specularStrength    = 0.5f;
     gd->lightColor          = {1, 1, 1, 1};
     gd->lightPos            = {0, 1, 0};
-    gd->cameraSensitivity   = 2.5f;
+    gd->cameraSensitivity   = 1.f;
     gd->optInFirstPersonCam = false;
     gd->bFocusedLastFrame   = true;  // assume for first frame.
 }
@@ -106,10 +105,8 @@ DllExport void GameHandleInput(ae::game_memory_t *gameMemory)
     const float cameraSensitivity = gd->cameraSensitivity.load();
 
     std::atomic<bool>               &optInFirstPersonCam = gd->optInFirstPersonCam;
-    std::atomic<ae::math::camera_t> &trueCam             = gd->trueCam;
 
     bool               local_optInFirstPersonCam = optInFirstPersonCam.load();
-    ae::math::camera_t local_cam                 = trueCam.load();
 
     // modified by only this thread.
     bool &bFocusedLastFrame = gd->bFocusedLastFrame;
@@ -161,36 +158,6 @@ DllExport void GameHandleInput(ae::game_memory_t *gameMemory)
         lastFrameF5 = userInput.keyDown[ae::GAME_KEY_F5];
     }
 
-    float yaw = 0.f;
-    if (local_optInFirstPersonCam) {
-        // we'll assume that this is in pixels.
-        float deltaX = userInput.deltaMouseX;
-        float deltaY = userInput.deltaMouseY;
-
-        if (lockCamYaw) deltaX = 0.f;
-        if (lockCamPitch) deltaY = 0.f;
-
-        float r = ae::math::tan(local_cam.fov * DEGREES_TO_RADIANS / 2.0f) * local_cam.nearPlane;
-        float t = r * (float(local_cam.height) / local_cam.width);
-
-        deltaX *= r / (local_cam.width * 0.5f);
-        deltaY *= t / (local_cam.height * 0.5f);
-
-        yaw         = ae::math::atan2(deltaX, local_cam.nearPlane);
-        float pitch = ae::math::atan2(deltaY, local_cam.nearPlane);
-
-        //float lerpT = 0.9f;
-        // local_cam.angularVelocity =  ae::math::vec3_t(-pitch, yaw, 0.0f) * cameraSensitivity * (1 - lerpT) + local_cam.angularVelocity * (lerpT);
-        // local_cam.trans.eulerAngles += local_cam.angularVelocity;
-        local_cam.trans.eulerAngles += ae::math::vec3_t(-pitch, yaw, 0.0f) * cameraSensitivity;
-    }
-
-    // clamp camera pitch
-    float pitchClamp = PI / 2.0f - 0.01f;
-    if (local_cam.trans.eulerAngles.x < -pitchClamp) local_cam.trans.eulerAngles.x = -pitchClamp;
-    if (local_cam.trans.eulerAngles.x > pitchClamp) local_cam.trans.eulerAngles.x = pitchClamp;
-
-
     //NOTE: there would be a concern where requestClearTransitionCounts will be set to false,
     //causing us to miss a reset. but that case is silly. this thread is going very fast,
     //while the other thread is going much slower in comparison. therefore, we'll handle
@@ -205,7 +172,17 @@ DllExport void GameHandleInput(ae::game_memory_t *gameMemory)
         gd->halfTransitionCount_space = 0;
 
         gd->requestClearTransitionCounts = false;
+
+        gd->deltaMouseX.store(0.f);
+        gd->deltaMouseY.store(0.f);
     }
+
+    // accumulate the raw mouse input.
+    float deltaX = userInput.rawDeltaMouseX + gd->deltaMouseX.load();
+    float deltaY = userInput.rawDeltaMouseY + gd->deltaMouseY.load();
+
+    gd->deltaMouseX.store(deltaX);
+    gd->deltaMouseY.store(deltaY);
 
     // TODO: maybe many games want to do this so we can move this to the Inf-Forge side.
     // check for the user input keys.
@@ -246,8 +223,6 @@ DllExport void GameHandleInput(ae::game_memory_t *gameMemory)
     }
 
     optInFirstPersonCam.store(local_optInFirstPersonCam);
-
-    trueCam.store(local_cam);
 }
 
 static void MonkeyDemoUpdate(ae::game_memory_t *gameMemory)
@@ -278,6 +253,9 @@ static void MonkeyDemoUpdate(ae::game_memory_t *gameMemory)
 
     constexpr float drag = 10.f;
     constexpr float movementSpeed = 80.f;
+
+    constexpr float angularDrag = 0.5f;
+    constexpr float angularSpeed = 0.05f;
 
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
 
@@ -340,16 +318,31 @@ static void MonkeyDemoUpdate(ae::game_memory_t *gameMemory)
         // TODO: consider once again updating the path of the camera to be smooth when there is also a
         // rotation of the camera occur?
         
-        // update euler angles of the camera.
+        // update camera rotation.
         {
-            ae::math::camera_t trueCam = gd->trueCam.load();
-
-            
-            constexpr u32 frameLatentCount = 3;
-
-            auto diffToDst = (trueCam.trans.eulerAngles - gd->cam.trans.eulerAngles);
-            gd->cam.angularVelocity = diffToDst * (1.f / frameLatentCount);
+            // update position based on velocity.
             gd->cam.trans.eulerAngles += gd->cam.angularVelocity;
+
+            // clamp camera pitch
+            float pitchClamp = PI / 2.0f - 0.01f;
+            if (gd->cam.trans.eulerAngles.x < -pitchClamp) gd->cam.trans.eulerAngles.x = -pitchClamp;
+            if (gd->cam.trans.eulerAngles.x > pitchClamp) gd->cam.trans.eulerAngles.x = pitchClamp;
+
+            // update velocity.
+            // gd->cam.velocity += (movDirNorm * linearStep - gd->cam.velocity * drag) * dt;
+
+            float deltaX = (optInFirstPersonCam_Snapshot) ? gd->deltaMouseX.load() : 0.f;
+            float deltaY = (optInFirstPersonCam_Snapshot) ? gd->deltaMouseY.load() : 0.f;
+
+            float rotationSpeed = cameraSensitivity * angularSpeed * DEGREES_TO_RADIANS;
+
+            if (lockCamYaw) deltaX = 0.f;
+            if (lockCamPitch) deltaY = 0.f;
+
+            float yaw   = deltaX * rotationSpeed;
+            float pitch = deltaY * rotationSpeed;
+
+            gd->cam.angularVelocity += ae::math::vec3_t(-pitch, yaw, 0.0f) - gd->cam.angularVelocity * angularDrag;
         }
 
         float linearStep    = movementSpeed;

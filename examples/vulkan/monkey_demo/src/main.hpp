@@ -71,7 +71,9 @@ typedef struct game_state {
 
     ae::math::camera_t cam;
 
-    std::atomic<ae::math::camera_t> trueCam; // written to by input thread.
+    std::atomic<float> deltaMouseX;
+    std::atomic<float> deltaMouseY;
+
 
     // NOTE: these variables are not stored as atomic since they are stored as bytes.
     // on x86 platforms, access to byte is atomic.

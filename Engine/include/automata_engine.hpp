@@ -1101,8 +1101,17 @@ namespace automata_engine {
     struct user_input_t {
         int mouseX = 0;
         int mouseY = 0;
+
+// NOTE: the difference between the raw and non-raw version is that the non-raw version is after
+// windows has done whatever processing to the mouse. this is the one that exhibits the acceleration
+// behavior that windows applies when the user moves the mouse really fast.
+// ===============================
         int deltaMouseX = 0;
         int deltaMouseY = 0;
+        int rawDeltaMouseX = 0;
+        int rawDeltaMouseY = 0;
+// ===============================
+
         bool mouseLBttnDown = false;
         bool mouseRBttnDown = false;
         // TODO(Noah): We will prolly want to change how we represent keys.
