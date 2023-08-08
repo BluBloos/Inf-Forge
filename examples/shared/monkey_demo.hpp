@@ -108,6 +108,8 @@ DllExport void GameHandleInput(ae::game_memory_t *gameMemory)
 
     bool               local_optInFirstPersonCam = optInFirstPersonCam.load();
 
+    bool local_renderImGui = EM->g_renderImGui.load();
+
     // modified by only this thread.
     bool &bFocusedLastFrame = gd->bFocusedLastFrame;
 
@@ -123,11 +125,13 @@ DllExport void GameHandleInput(ae::game_memory_t *gameMemory)
     auto enterGui = [&]() {
         EM->pfn.showMouse(true);
         local_optInFirstPersonCam = false;
+        local_renderImGui = true;
     };
 
     auto exitGui = [&]() {
         EM->pfn.showMouse(false);
         local_optInFirstPersonCam = true;
+        local_renderImGui = false;
     };
 
     // check if opt in.
@@ -150,10 +154,7 @@ DllExport void GameHandleInput(ae::game_memory_t *gameMemory)
     {
         bool &lastFrameF5 = gd->lastFrameF5;
         if (userInput.keyDown[ae::GAME_KEY_F5] && !lastFrameF5) {
-            bool prevVal = EM->g_renderImGui.load();
-            EM->g_renderImGui.store(!prevVal);  // = !;
-
-            (!prevVal) ? enterGui() : exitGui();
+            (local_renderImGui) ? exitGui() : enterGui();
         }
         lastFrameF5 = userInput.keyDown[ae::GAME_KEY_F5];
     }
@@ -223,6 +224,7 @@ DllExport void GameHandleInput(ae::game_memory_t *gameMemory)
     }
 
     optInFirstPersonCam.store(local_optInFirstPersonCam);
+    EM->g_renderImGui.store(local_renderImGui);
 }
 
 static void MonkeyDemoUpdate(ae::game_memory_t *gameMemory)
@@ -268,9 +270,8 @@ static void MonkeyDemoUpdate(ae::game_memory_t *gameMemory)
 
         ImGui::Text(
             "---CONTROLS---\n"
-            "F5 to toggle the GUI.\n"
             "WASD to move.\n"
-            "Right click to enter first person cam.\n"
+            "Right click or F5 to enter first person cam.\n"
             "ESC to exit first person cam.\n"
             "SPACE to fly up.\n"
             "SHIFT to fly down.\n\n");
@@ -283,7 +284,7 @@ static void MonkeyDemoUpdate(ae::game_memory_t *gameMemory)
         ImGui::Text("---CAMERA---\n");
         ImGui::Checkbox("lock yaw", &local_lockCamYaw);
         ImGui::Checkbox("lock pitch", &local_lockCamPitch);
-        ImGui::SliderFloat("camera sensitivity", &local_cameraSensitivity, 1, 10);
+        // ImGui::SliderFloat("camera sensitivity", &local_cameraSensitivity, 1, 10);
 
         ImGui::Text("\n---SCENE---\n");
         ImGui::InputFloat3("sun position", &lightPos[0]);
@@ -308,9 +309,16 @@ static void MonkeyDemoUpdate(ae::game_memory_t *gameMemory)
         EM->pfn.setMousePos((int)(winInfo.width / 2.0f), (int)(winInfo.height / 2.0f));
     }
 
+    float dt = EM->timing.lastFrameVisibleTime;
+
     // NOTE: the monkey spinning is not game state that needs to be updated at a high granularity. therefore we can update it here
     // in the main update loop. and indeed, it's correct here to use lastFrameVisibleTime for the timing.
-    if (bSpin) gd->suzanneTransform.eulerAngles += ae::math::vec3_t(0.0f, 2.0f * EM->timing.lastFrameVisibleTime, 0.0f);
+
+    if (bSpin)
+    {
+        float monkeyRotation = dt * 2.f;
+        gd->suzanneTransform.eulerAngles += ae::math::vec3_t(0.0f, monkeyRotation, 0.0f);
+    }
 
     // update the player camera.
     {
@@ -396,8 +404,6 @@ static void MonkeyDemoUpdate(ae::game_memory_t *gameMemory)
             movDir += camBasisBegin * ae::math::vec3_t(0.f, space_factor, 0.f);
 
             auto movDirNorm = ae::math::normalize(movDir);
-
-            float dt = EM->timing.lastFrameVisibleTime;
 
             // update position based on velocity.
             gd->cam.trans.pos += gd->cam.velocity * dt;
