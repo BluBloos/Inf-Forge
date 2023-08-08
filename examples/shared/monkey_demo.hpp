@@ -276,6 +276,9 @@ static void MonkeyDemoUpdate(ae::game_memory_t *gameMemory)
 
     bool bRenderImGui = EM->bCanRenderImGui;
 
+    constexpr float drag = 10.f;
+    constexpr float movementSpeed = 80.f;
+
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
 
     if (bRenderImGui) {
@@ -349,7 +352,6 @@ static void MonkeyDemoUpdate(ae::game_memory_t *gameMemory)
             gd->cam.trans.eulerAngles += gd->cam.angularVelocity;
         }
 
-        float movementSpeed = 5.f;
         float linearStep    = movementSpeed;
 
         u32 hw = gd->halfTransitionCount_W;
@@ -401,7 +403,13 @@ static void MonkeyDemoUpdate(ae::game_memory_t *gameMemory)
 
             auto movDirNorm = ae::math::normalize(movDir);
 
-            gd->cam.trans.pos += movDirNorm *linearStep * EM->timing.lastFrameVisibleTime;
+            float dt = EM->timing.lastFrameVisibleTime;
+
+            // update position based on velocity.
+            gd->cam.trans.pos += gd->cam.velocity * dt;
+
+            // update velocity.
+            gd->cam.velocity += (movDirNorm * linearStep - gd->cam.velocity * drag) * dt;
         }
 
     }

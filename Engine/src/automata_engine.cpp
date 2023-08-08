@@ -243,7 +243,8 @@ namespace automata_engine {
                     "The following is a listing of " AUTOMATA_ENGINE_NAME_STRING " engine limitations:\n"
                     "- The system is not designed to handle when monitors are hot-swapped\n"
                     "- The system is not designed to handle when multiple GPUs are present\n"
-                    "- Due to the windows compositor, the reported input latency is likely inaccurate"
+                    "- Due to the windows compositor, the reported input latency is likely inaccurate\n"
+                    "- Frame pacing is accomplished via a fixed upper-bound frame time estimate and therefore may not function correctly on all systems"
 
                 );
 
