@@ -4,5 +4,8 @@
 // generally, the resource script language supports comments.
 // so, that's what these lines are of course.
 
-MonkeyDemoIcon                     ICON                    "monkey_demo2.ico"
-MonkeyDemoIconCursor               CURSOR                  "cross.cur"
+MonkeyDemoIcon                           ICON                    "theicon.ico"
+
+MonkeyDemoIcon_CursorArrow               CURSOR                  "arrow.cur"
+MonkeyDemoIcon_CursorHand                CURSOR                  "move.cur"
+MonkeyDemoIcon_CursorSize_ns             CURSOR                  "resize_vertical.cur"

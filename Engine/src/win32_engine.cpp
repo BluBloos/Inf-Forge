@@ -1200,7 +1200,31 @@ DWORD WINAPI Win32WindowProcImpl(_In_ LPVOID lpParameter)
         case WM_SETCURSOR:
         if (LOWORD(lParam) == HTCLIENT)
         {
-            SetCursor(::LoadCursorA(g_hInstance, "MonkeyDemoIconCursor"));
+            ImGuiIO& io = ImGui::GetIO();
+            ImGuiMouseCursor imgui_cursor = ImGui::GetMouseCursor();
+            if (imgui_cursor == ImGuiMouseCursor_None || io.MouseDrawCursor)
+            {
+                // Hide OS mouse cursor if imgui is drawing it or if it wants no cursor
+                ::SetCursor(NULL);
+            }
+            else
+            {
+                // Show OS mouse cursor
+                LPCSTR win32_cursor = IDC_ARROW;
+                switch (imgui_cursor)
+                {
+                case ImGuiMouseCursor_Arrow:        win32_cursor = "MonkeyDemoIcon_CursorArrow"; break;
+                case ImGuiMouseCursor_TextInput:    win32_cursor = "MonkeyDemoIcon_CursorIbeam"; break;
+                case ImGuiMouseCursor_ResizeAll:    win32_cursor = "MonkeyDemoIcon_CursorSize_all"; break;
+                case ImGuiMouseCursor_ResizeEW:     win32_cursor = "MonkeyDemoIcon_CursorSize_we"; break;
+                case ImGuiMouseCursor_ResizeNS:     win32_cursor = "MonkeyDemoIcon_CursorSize_ns"; break;
+                case ImGuiMouseCursor_ResizeNESW:   win32_cursor = "MonkeyDemoIcon_CursorSize_nesw"; break;
+                case ImGuiMouseCursor_ResizeNWSE:   win32_cursor = "MonkeyDemoIcon_CursorSize_nwse"; break;
+                case ImGuiMouseCursor_Hand:         win32_cursor = "MonkeyDemoIcon_CursorHand"; break;
+                case ImGuiMouseCursor_NotAllowed:   win32_cursor = "MonkeyDemoIcon_CursorNotAllowed"; break;
+                }
+                ::SetCursor(::LoadCursor(g_hInstance, win32_cursor));
+            }
             return TRUE;
         }
         break;
