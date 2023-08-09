@@ -1054,10 +1054,13 @@ namespace automata_engine {
     /// @param height       height of the window client rect in pixels.
     /// @param isFocused    TODO: I don't really know what this actually means, but it's something like
     ///                     that the window is in the foreground.
+    /// @param systemScale  float value for the scale as found in the windows OS settings. this is a scale
+    ///                     factor like 1.f, 1.5f, etc.
     struct game_window_info_t {
         uint32_t width;
         uint32_t height;
         bool isFocused;
+        float systemScale;
         // TODO: why would the game ever need the OS handles? there shouldn't be OS specific code
         // in the game.
         intptr_t hWnd;
@@ -1283,8 +1286,6 @@ namespace automata_engine {
         } vk_pfn;
 #endif
 
-        user_input_t userInput;
-
         // ----------- [SECTION] PreInit settings -----------
         // These values are meant to be set by the game during its PreInit() function.
         // Otherwise, they are initialized to default values by the engine source.
@@ -1312,8 +1313,16 @@ namespace automata_engine {
 
         /// @brief set to true to request fallback rendering.
         bool requestFallbackRendering = false;
+
+#if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
+        /// @brief  the game should set this to indicate the default style settings.
+        ///         if the engine needs to reset imgui style state, it can use these values
+        ///         to restore to some default.
+        ImGuiStyle imguiStyle = ImGuiStyle();
+#endif
         // ----------- [END SECTION] PreInit settings -----------
 
+        // ----------- [SECTION] Engine readback state -----------
         struct {
             /// @brief the timestamp measured by the engine for right after the vblank.
             /// this is based on blocking the thread to wait for the vblank. this is an imprecise
@@ -1338,14 +1347,23 @@ namespace automata_engine {
 
         } timing;
 
+        user_input_t userInput;
+
+        bool              bCanRenderImGui = true;
+        std::atomic<bool> bMouseVisible   = true;
+
+#if defined(AUTOMATA_ENGINE_GL_BACKEND)
+        bool bOpenGLInitialized = false;
+#endif
+        // ----------- [END SECTION] Engine readback state -----------
+
+        
+        // ----------- [SECTION] Engine control state -----------
+
         /// @brief a bool to control ALL ImGui rendering. this is modified by at least two threads. it is read once per frame
         /// to ensure that a change midway through the frame doesn't result in partial ImGui code execution (which would
         /// obviously result in errors). as such, there is a bCanRenderImGui just for this update.
         std::atomic<bool> g_renderImGui = true;
-
-        bool bCanRenderImGui = true;
-
-        std::atomic<bool> bMouseVisible = true;
 
         // TODO: for now, the only supported update model is "ATOMIC".
         //
@@ -1359,14 +1377,13 @@ namespace automata_engine {
         /// by the engine.
         ///
         /// the game should NEVER set globalRunning to true.
+        ///
+        /// this variable may be modified by the engine, and this may occur
+        /// at the same time as the game update loops.
         std::atomic<bool> globalRunning = true;
 
         /// @brief the result that the program will exit with.
         int globalProgramResult = 0;
-
-#if defined(AUTOMATA_ENGINE_GL_BACKEND)
-        bool bOpenGLInitialized = false;
-#endif
 
         /// @brief Signals to the engine that the game is ready to exit and sets an error exit code.
         ///
@@ -1376,6 +1393,8 @@ namespace automata_engine {
             globalRunning       = false;
             globalProgramResult = -1;
         }
+
+        // ----------- [END SECTION] Engine control state -----------
     };
 
     namespace math {

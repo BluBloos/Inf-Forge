@@ -146,7 +146,6 @@ namespace automata_engine {
         auto winInfo = EM->pfn.getWindowInfo(false);
 
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
-        // Present the ImGui stuff to allow user to switch apps.
         if (EM->bCanRenderImGui) {
             ImGui::Begin(AUTOMATA_ENGINE_NAME_STRING);
 
@@ -172,23 +171,6 @@ namespace automata_engine {
                 ImGui::SetTooltip(
                     "the total time to render the frame.\n"
                     "this is the CPU logic update portion plus the GPU render time.");
-
-        /*    float collectPeriod = EM->timing.lastFrameVisibleTime / 2.0f;
-            
-            // TODO:
-            //ImGui::Text("input latency: %.3f s", collectPeriod);
-            //if (ImGui::IsItemHovered()) ImGui::SetTooltip("the phase shift of the input signal to the game signal.");
-
-            float gameSimulateFrameTime;  // time of second poll + 1/2 poll period.
-            ImGui::Text("present latency: %.3f s",
-                timing::getTimeElapsed(EM->timing.lastFrameBeginTime, EM->timing.lastFrameMaybeVblankTime) -
-                    collectPeriod / 2.f);
-                    
-            
-            if (ImGui::IsItemHovered())
-                ImGui::SetTooltip(
-                    "the phase shift of the game signal to the vertical blank signal.\n"
-                    "if this is negative, that implies the vblank leads the game signal.");*/
 
             ImGui::Text("frames displayed per second: %.3f FPS", 1.f / EM->timing.lastFrameVisibleTime);
 
@@ -221,32 +203,42 @@ namespace automata_engine {
 
             if (bifrost.bShowEngineReadme) {
 
-                ImGuiWindowFlags window_flags = 0;
+                ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoResize;
 
-                ImGui::SetNextWindowSize(ImVec2(520, 600), ImGuiCond_FirstUseEver);
+                // NOTE: we ignore the .ini since if the system scale changes between app launch,
+                // we're gonna spawn this window with the wrong size.
+                ImGui::SetNextWindowSize(ImVec2(667 * winInfo.systemScale, 600), ImGuiCond_Always);
 
                 // Main body of the Demo window starts here.
-                if (!ImGui::Begin(README_WINDOW_TITLE))
+                if (!ImGui::Begin(README_WINDOW_TITLE, nullptr, window_flags))
                 {
                     // Early out if the window is collapsed, as an optimization.
                     ImGui::End();
                     // return;
                 }
 
+                // clang-format off
                 ImGui::TextWrapped(
-                    "Thanks for playing!\n\n"
-                    "If you encounter any issues at all, please read the listing of engine limitations before making a bug report.\n\n"
-                    "The following is a listing of " AUTOMATA_ENGINE_NAME_STRING " engine facts:\n"
-                    "- Minimum supported OS: Windows Vista\n" // the reasoning here is that we put PNG in the .ICO for .EXE icon. windows vista added support for PNG in the icons.
-                    "- Frames are paced to be rendered just before each monitor vertical refresh\n"
-                    "\n"
-                    "The following is a listing of " AUTOMATA_ENGINE_NAME_STRING " engine limitations:\n"
-                    "- The system is not designed to handle when monitors are hot-swapped\n"
-                    "- The system is not designed to handle when multiple GPUs are present\n"
-                    "- Due to the windows compositor, the reported input latency is likely inaccurate\n"
-                    "- Frame pacing is accomplished via a fixed upper-bound frame time estimate and therefore may not function correctly on all systems"
-
+"Thanks for playing!\n"
+"\n"
+"If you encounter any issues at all, please read the listing of engine\n"
+"limitations before making a bug report.\n"
+"\n"
+"The following is a listing of " AUTOMATA_ENGINE_NAME_STRING " engine facts:\n"
+"- Minimum supported OS: Windows Vista\n" // the reasoning here is that we put PNG in the .ICO for .EXE icon. windows vista added support for PNG in the icons.
+"- Frames are paced to be rendered just before each monitor vertical refresh\n"
+"\n"
+"The following is a listing of " AUTOMATA_ENGINE_NAME_STRING " engine limitations:\n"
+"- The system is not designed to handle:\n"
+"    - when monitors are hot-swapped\n"
+"    - when multiple GPUs are present\n"
+"    - when the system text/app scale setting is changed at runtime\n"
+"- Due to the windows compositor, the reported input latency is likely\n"
+"  inaccurate\n"
+"- Frame pacing is accomplished via a fixed upper-bound frame time estimate\n"
+"  and therefore may not function correctly on all systems"
                 );
+                // clang-format on
 
                 ImGui::End();
             }

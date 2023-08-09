@@ -268,10 +268,16 @@ static inline int sign(int x)
     return (x > 0) - (x < 0);
 }
 
+static inline float Win32GetSystemScale(HWND hwnd)
+{
+    UINT uDpi = ::GetDpiForWindow(hwnd);
+    return float(uDpi) / 96.f;
+}
+
 ae::game_window_info_t Platform_getWindowInfo(bool useCache)
 {
     static ae::game_window_info_t winInfo;
-    winInfo.hWnd      = (intptr_t)g_hwnd;
+    winInfo.hWnd      = (intptr_t)g_hwnd; // TODO: game has no need for HWND. that's the whole point of the abstraction layer.
     winInfo.hInstance = (intptr_t)g_hInstance;
     if (g_hwnd == NULL) { AELoggerError("g_hwnd == NULL"); }
     RECT rect;
@@ -281,6 +287,7 @@ ae::game_window_info_t Platform_getWindowInfo(bool useCache)
         winInfo.height   = sign(signedHeight) * signedHeight;
     }
     winInfo.isFocused = g_bIsWindowFocused;
+    winInfo.systemScale = Win32GetSystemScale(g_hwnd);
     return winInfo;
 }
 
@@ -948,7 +955,8 @@ void ScaleImGui_Impl(float systemScale)
         float size_in_pixels = float(uint32_t(16 * systemScale));
 
         ImGui::GetIO().Fonts->Clear();
-        ImGui::GetStyle() = ImGuiStyle();  // reset
+        auto &style = ImGui::GetStyle();
+        style = g_engineMemory.imguiStyle; // reset and use game preferred.
         ImGui::GetIO().Fonts->AddFontFromFileTTF("ProggyVector Regular.ttf", size_in_pixels);
 
         if (systemScale >= 1.f)
@@ -1124,12 +1132,6 @@ static void ProccessKeyboardMessage(unsigned int vkCode, bool down)
 }
 
 static UINT g_msgForMessageBox;
-
-static inline float Win32GetSystemScale(HWND hwnd)
-{
-    UINT uDpi = ::GetDpiForWindow(hwnd);
-    return float(uDpi) / 96.f;
-}
 
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
