@@ -183,10 +183,6 @@ namespace automata_engine {
                     "the time it takes for the result of user input to be displayed on the screen.");
 
             ImGui::Text("GPU in use: %s", userGpuInfo.description);
-            
-            if (ImGui::IsItemHovered())
-                ImGui::SetTooltip(
-                    "this info is only valid so long as there is just one GPU in the system.");
 
             ImGui::Text("render resolution: %u x %u", winInfo.width, winInfo.height);
             ImGui::Text("display resolution: %u x %u", winInfo.width, winInfo.height);

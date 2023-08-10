@@ -295,6 +295,7 @@ static void MonkeyDemoUpdate(ae::game_memory_t *gameMemory)
     auto                 winInfo = EM->pfn.getWindowInfo(false);
 
     // NOTE: these are thread local variables.
+    bool             &bShowReadme      = gd->bShowReadme;
     bool             &bSpin            = gd->bSpin;
     float            &ambientStrength  = gd->ambientStrength;
     float            &specularStrength = gd->specularStrength;
@@ -325,8 +326,12 @@ static void MonkeyDemoUpdate(ae::game_memory_t *gameMemory)
 
         ImGui::Begin(AUTOMATA_ENGINE_PROJECT_NAME);
 
+        #define README_WINDOW_TITLE AUTOMATA_ENGINE_PROJECT_NAME " README.txt"
+
+        ImGui::Checkbox("show " README_WINDOW_TITLE, &bShowReadme);
+
         ImGui::Text(
-            "---CONTROLS---\n"
+            "\n---CONTROLS---\n"
             "WASD to move.\n"
             "Right click or F5 to enter first person cam.\n"
             "ESC to exit first person cam.\n"
@@ -344,14 +349,48 @@ static void MonkeyDemoUpdate(ae::game_memory_t *gameMemory)
         // ImGui::SliderFloat("camera sensitivity", &local_cameraSensitivity, 1, 10);
 
         ImGui::Text("\n---SCENE---\n");
-        ImGui::InputFloat3("sun position", &lightPos[0]);
-        ImGui::ColorPicker4("sun color", &lightColor[0]);
         ImGui::SliderFloat("ambient light", &ambientStrength, 0.0f, 1.0f, "%.3f");
+        ImGui::InputFloat3("sun position", &lightPos[0]);
+
+        ImGuiColorEditFlags pickerFlags = {};
+        pickerFlags |= ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoSidePreview;
+
+        ImGui::ColorPicker4("sun color", &lightColor[0], pickerFlags);
 
         ImGui::Text("\n---MONKEY---\n");
         ImGui::Text("model name: %s", gd->suzanne.modelName);
         ImGui::Checkbox("make it spin", &bSpin);
         ImGui::SliderFloat("make it shiny", &specularStrength, 0.0f, 1.0f, "%.3f");
+
+
+        // the readme.
+        if (bShowReadme)
+        {
+            ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoResize;
+
+            // NOTE: we ignore the .ini since if the system scale changes between app launch,
+            // we're gonna spawn this window with the wrong size.
+            ImGui::SetNextWindowSize(ImVec2(667 * winInfo.systemScale, 600), ImGuiCond_Always);
+
+            // Main body of the Demo window starts here.
+            if (!ImGui::Begin(README_WINDOW_TITLE, nullptr, window_flags))
+            {
+                // Early out if the window is collapsed, as an optimization.
+                ImGui::End();
+                // return;
+            }
+
+            // clang-format off
+            ImGui::TextWrapped(
+"The following is a listing of " AUTOMATA_ENGINE_PROJECT_NAME " limitations:\n"
+"- Mouse cursors will not look good at all system scale settings since they\n"
+"  are only 32x32."
+            );
+            // clang-format on
+
+            ImGui::End();
+        }
+#undef README_WINDOW_TITLE
 
         ImGui::End();
 

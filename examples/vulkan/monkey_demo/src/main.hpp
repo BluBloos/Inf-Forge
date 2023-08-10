@@ -61,6 +61,7 @@ typedef struct game_state {
     std::atomic<bool>             lockCamYaw;
     std::atomic<bool>             lockCamPitch;
 
+    bool             bShowReadme;
     bool             bSpin;
     float            ambientStrength;
     float            specularStrength;
