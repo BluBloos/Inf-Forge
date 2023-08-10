@@ -7,5 +7,11 @@
 MonkeyDemoIcon                           ICON                    "theicon.ico"
 
 MonkeyDemoIcon_CursorArrow               CURSOR                  "arrow.cur"
-MonkeyDemoIcon_CursorHand                CURSOR                  "move.cur"
+MonkeyDemoIcon_CursorIbeam               CURSOR                  "ibeam.cur"
+MonkeyDemoIcon_CursorSize_all            CURSOR                  "move.cur"
 MonkeyDemoIcon_CursorSize_ns             CURSOR                  "resize_vertical.cur"
+MonkeyDemoIcon_CursorSize_we             CURSOR                  "resize_horizontal.cur"
+MonkeyDemoIcon_CursorSize_nesw           CURSOR                  "diag_up.cur"
+MonkeyDemoIcon_CursorSize_nwse           CURSOR                  "diag_down.cur"
+MonkeyDemoIcon_CursorHand                CURSOR                  "pointing_hand.cur"
+MonkeyDemoIcon_CursorNotAllowed          CURSOR                  "denied.cur"
