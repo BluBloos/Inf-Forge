@@ -58,6 +58,8 @@ static HWND g_hwnd             = NULL;
 static HWND g_consoleHwnd      = NULL;
 static HWND g_userInputHwnd    = NULL;
 
+static HFILE g_debugFileLog = NULL;
+
 // the value of the HANDLE is read from two threads, but not modified.
 // of course, the actual handle object itself is very much accessed by
 // multiple threads, but Windows OS handles that sort of sync.
@@ -1870,6 +1872,11 @@ void Platform_fprintf_proxy(int h, const char *fmt, ...)
 
     WriteConsoleA(handle, (void *)_buf, strlen(_buf), NULL, NULL);
 
+    if (g_engineMemory.requestDebugFileLogging)
+    {
+        WriteFile((HANDLE)g_debugFileLog, (void *)_buf, strlen(_buf), NULL, NULL);
+    }
+
     //LARGE_INTEGER after = Win32GetWallClock();
 
     /*float timeElapsed = Win32GetSecondsElapsed(begin, after, g_PerfCountFrequency64);
@@ -2602,6 +2609,13 @@ int CALLBACK WinMain(HINSTANCE instance,
         }
 #endif
 
+        // open file handle to the debug log.
+        if (g_engineMemory.requestDebugFileLogging)
+        {
+            OFSTRUCT of;
+            g_debugFileLog = OpenFile(AUTOMATA_ENGINE_NAME_STRING "_log.txt", &of, OF_WRITE | OF_SHARE_DENY_WRITE | OF_CREATE);
+        }
+
         const DWORD windowStyle = (WS_OVERLAPPEDWINDOW | WS_VISIBLE) &
             ((g_engineMemory.defaultWinProfile == ae::AUTOMATA_ENGINE_WINPROFILE_NORESIZE)
                 ?
@@ -2991,6 +3005,8 @@ int CALLBACK WinMain(HINSTANCE instance,
 
         if (windowHandle != NULL) { DestroyWindow(windowHandle); }
         if (classAtom != 0) { UnregisterClassA(windowClass.lpszClassName, instance); }
+
+        g_debugFileLog != NULL ? CloseHandle((HANDLE)g_debugFileLog) : true;
 
         // stall program to allow user to see err.
         

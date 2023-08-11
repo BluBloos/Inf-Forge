@@ -55,6 +55,8 @@ DllExport void GamePreInit(ae::game_memory_t *gameMemory)
     ae::engine_memory_t *EM = gameMemory->pEngineMemory;
     EM->defaultWinProfile   = ae::AUTOMATA_ENGINE_WINPROFILE_NORESIZE;
 
+    EM->requestDebugFileLogging = true; // TODO: for now.
+
     // TODO: we might want after-all some sort of on DPI changed callback.
     ImGuiStyle& style = EM->imguiStyle = ImGuiStyle();
 

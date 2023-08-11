@@ -1311,8 +1311,12 @@ namespace automata_engine {
         /// @brief the title used to create the platform window.
         const char *defaultWindowName = AUTOMATA_ENGINE_PROJECT_NAME;
 
+        // TODO: the below is not hooked in.
         /// @brief set to true to request fallback rendering.
         bool requestFallbackRendering = false;
+
+        // NOTE: this exists since we want to enable this even for Release builds.
+        bool requestDebugFileLogging = true;
 
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
         /// @brief  the game should set this to indicate the default style settings.
