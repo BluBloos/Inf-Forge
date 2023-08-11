@@ -1094,6 +1094,7 @@ BOOL Win32CtrlHandler(DWORD ctrlType) {
                 // the challenge with getting this to exit correctly is like,
                 // how do we even know from where and when that this callback is called?
                 // is this called from another thread?
+                AELoggerLog("ExitProcess(0) called from Win32CtrlHandler");
                 ExitProcess(0);
             }
         // Add other cases for other types of Ctrl events if needed.
@@ -1875,6 +1876,7 @@ void Platform_fprintf_proxy(int h, const char *fmt, ...)
     if (g_engineMemory.requestDebugFileLogging)
     {
         WriteFile((HANDLE)g_debugFileLog, (void *)_buf, strlen(_buf), NULL, NULL);
+        FlushFileBuffers((HANDLE)g_debugFileLog); // force this write to not buffer.
     }
 
     //LARGE_INTEGER after = Win32GetWallClock();
@@ -3006,6 +3008,8 @@ int CALLBACK WinMain(HINSTANCE instance,
         if (windowHandle != NULL) { DestroyWindow(windowHandle); }
         if (classAtom != 0) { UnregisterClassA(windowClass.lpszClassName, instance); }
 
+        
+        AELoggerLog("closing debug file log");
         g_debugFileLog != NULL ? CloseHandle((HANDLE)g_debugFileLog) : true;
 
         // stall program to allow user to see err.
