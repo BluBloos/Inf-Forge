@@ -418,18 +418,32 @@ namespace automata_engine {
                 VkPhysicalDevice *gpus      = nullptr;
                 defer(StretchyBufferFree(gpus));
                 VK_CHECK(vkEnumeratePhysicalDevices(*pInstance, &gpu_count, nullptr));
-                if (gpu_count != 1) {
-                    if (gpu_count < 1)
-                        AELoggerError("No physical device found.");
-                    else
-                        AELoggerError("Too many GPUs! " AUTOMATA_ENGINE_NAME_STRING " only supports single adapter systems.");
+
+                if (gpu_count < 1) {
+                    AELoggerError("No physical device found.");
                     return;
                 }
+
                 StretchyBufferInitWithCount(gpus, gpu_count);
                 VK_CHECK(vkEnumeratePhysicalDevices(*pInstance, &gpu_count, gpus));
 
+                // find the desired GPU. we'll simply pick the first dGPU, and if there were none of those, we're fine to fall back to
+                // whatever the first one was.
+                VkPhysicalDevice selectedDevice = gpus[0];
+                for (uint32_t i = 0; i < gpu_count; i++) {
+                    VkPhysicalDevice gpu = gpus[i];
+                    VkPhysicalDeviceProperties gpuProperties;
+                    vkGetPhysicalDeviceProperties(gpu, &gpuProperties);
+
+                    if (gpuProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
+                        // Additional criteria can be added here, such as memory size or other attributes.
+                        selectedDevice = gpu;
+                        break; // Stop after finding the first dGPU.
+                    }
+                }
+
                 // set gpu.
-                *pGpu = gpus[0];
+                *pGpu = selectedDevice;
 
                 // find the graphics queue.
                 uint32_t                 queue_family_count      = 0;

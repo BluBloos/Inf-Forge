@@ -182,8 +182,6 @@ namespace automata_engine {
                 ImGui::SetTooltip(
                     "the time it takes for the result of user input to be displayed on the screen.");
 
-            ImGui::Text("GPU in use: %s", userGpuInfo.description);
-
             ImGui::Text("render resolution: %u x %u", winInfo.width, winInfo.height);
             ImGui::Text("display resolution: %u x %u", winInfo.width, winInfo.height);
 
@@ -227,7 +225,6 @@ namespace automata_engine {
 "The following is a listing of " AUTOMATA_ENGINE_NAME_STRING " engine limitations:\n"
 "- The system is not designed to handle:\n"
 "    - when monitors are hot-swapped\n"
-"    - when multiple GPUs are present\n"
 "    - when the system text/app scale setting is changed at runtime\n"
 "- Due to the windows compositor, the reported input latency is likely\n"
 "  inaccurate\n"
