@@ -2170,6 +2170,11 @@ DWORD WINAPI Win32GameUpdateAndRenderHandlingLoop(_In_ LPVOID lpParameter) {
 
             // wait after vblank for the "frame pacing".
             endFrameTarget = (TargetSecondsElapsedPerFrame - GuaranteedFrameTime);
+            if (endFrameTarget < 0.f)
+            {
+                // no need to wait. user probably has a really fast monitor refresh to hit.
+                doEndFrameWaitToTarget = false;
+            }
         }
 
         if (doEndFrameWaitToTarget) {
