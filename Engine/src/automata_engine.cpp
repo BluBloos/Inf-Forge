@@ -209,10 +209,11 @@ namespace automata_engine {
                     // Early out if the window is collapsed, as an optimization.
                     ImGui::End();
                     // return;
-                }
-
-                // clang-format off
-                ImGui::TextWrapped(
+                } 
+                else
+                {
+                    // clang-format off
+                    ImGui::TextWrapped(
 "Thanks for playing!\n"
 "\n"
 "If you encounter any issues at all, please read the listing of engine\n"
@@ -230,10 +231,11 @@ namespace automata_engine {
 "  inaccurate\n"
 "- Frame pacing is accomplished via a fixed upper-bound frame time estimate\n"
 "  and therefore may not function correctly on all systems"
-                );
-                // clang-format on
+                    );
+                    // clang-format on
 
-                ImGui::End();
+                    ImGui::End();
+                }
             }
 
 #undef README_WINDOW_TITLE
