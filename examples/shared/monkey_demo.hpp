@@ -381,16 +381,18 @@ static void MonkeyDemoUpdate(ae::game_memory_t *gameMemory)
                 ImGui::End();
                 // return;
             }
-
-            // clang-format off
-            ImGui::TextWrapped(
+            else
+            {
+                // clang-format off
+                ImGui::TextWrapped(
 "The following is a listing of " AUTOMATA_ENGINE_PROJECT_NAME " limitations:\n"
 "- Mouse cursors will not look good at all system scale settings since they\n"
 "  are only 32x32."
-            );
-            // clang-format on
+                );
+                // clang-format on
 
-            ImGui::End();
+                ImGui::End();
+            }
         }
 #undef README_WINDOW_TITLE
 
