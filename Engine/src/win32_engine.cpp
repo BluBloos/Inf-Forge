@@ -1,8 +1,13 @@
 
 // TODO: the engine layer should not know about the stb_image. we want this to be a thing that
 // only the game knows how to do.
+// TODO: ^ regarding the above comment, that was written at a time where we weren't using stbimage
+// in the engine. of course, we might want to just get rid of the dependency and still honor the
+// original comment.
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
+
+#include <stb_image.h>
 
 // TODO(Noah): Understand rvalues. Because, I'm a primitive ape, and,
 // they go right over my head, man.
@@ -11,6 +16,7 @@
 #define VOLK_IMPLEMENTATION
 #endif
 
+#define OEMRESOURCE
 #include <automata_engine.hpp>
 #include <win32_engine.h>
 
@@ -39,6 +45,14 @@
 
 #pragma comment(lib, "Winmm.lib")
 
+#include <winuser.h>
+#include <uxtheme.h>
+#include <Vsstyle.h>
+#include <Vssym32.h>
+#include <windowsx.h>
+
+#pragma comment(lib, "UxTheme.lib")
+
 // TODO: there is this idea where the engine is doing some logging.
 // it just seems like that this shouldn't happen?
 // it seems that the game should be responsible for this?
@@ -53,6 +67,11 @@
 // reference to that struct. that's good design :)
 
 #define MAX_CONSOLE_LINES 500
+
+// forward declare the static logo baked data.
+#include "win32_static_logo_data.inl"
+
+static ae::loaded_image_t g_loaded_logo_data_x64 = {};
 
 static HWND g_hwnd             = NULL;
 static HWND g_consoleHwnd      = NULL;
@@ -1008,10 +1027,18 @@ void ScaleImGuiForVK(VkCommandBuffer cmd, VkCommandPool cmdPool, float systemSca
     VK_CHECK(vkDeviceWaitIdle(g_vkDevice));
     ImGui_ImplVulkan_DestroyFontUploadObjects();
 }
-#endif
+#endif  // defined(AUTOMATA_ENGINE_VK_BACKEND)
 
-#endif
+#endif // !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
 
+static void UpdateGlobalEngineFallbackBackbuffer(win32_backbuffer_t *buffer)
+{
+    g_gameMemory.backbufferPixels = (uint32_t *)buffer->memory;
+    g_gameMemory.backbufferWidth = buffer->width;
+    g_gameMemory.backbufferHeight = buffer->height;
+}
+
+// NOTE: client can pass 0,0 as the new width,height to free the buffer and not allocate a new one.
 static void Win32ResizeBackbuffer(win32_backbuffer_t *buffer, int newWidth, int newHeight)
 {
 	if(buffer->memory) {
@@ -1029,17 +1056,18 @@ static void Win32ResizeBackbuffer(win32_backbuffer_t *buffer, int newWidth, int 
 	buffer->info.bmiHeader.biCompression = BI_RGB;
 	// NOTE(Noah): Here we are allocating memory to our bitmap since we resized it
 	buffer->bytesPerPixel = 4;
+
+    if (newWidth == 0 && newHeight == 0)
+    {
+        return;
+    }
+
 	int bitmapMemorySize = newWidth * newHeight * buffer->bytesPerPixel;
 	buffer->memory = VirtualAlloc(0, bitmapMemorySize, MEM_COMMIT, PAGE_READWRITE);
 	// NOTE(Noah): Setting pitch shit, ahah.
 	buffer->pitch = newWidth * buffer->bytesPerPixel;
 	// TODD(Noah): Probably want to clear to black each time we resize the window?
     // Or is VirtualAlloc already doing this?
-
-    // Update g_gameMemory too
-    g_gameMemory.backbufferPixels = (uint32_t *)buffer->memory;
-    g_gameMemory.backbufferWidth = newWidth;
-    g_gameMemory.backbufferHeight = newHeight;
 }
 
 static float Win32GetSecondsElapsed(
@@ -1056,23 +1084,36 @@ LARGE_INTEGER Win32GetWallClock()
 	return (Result);
 }
 
-void Win32DisplayBufferWindow(HDC deviceContext,
-                              ae::game_window_info_t winInfo) {
-    int OffsetX = (int(winInfo.width) - globalBackBuffer.width) / 2;
-    int OffsetY = (int(winInfo.height) - globalBackBuffer.height) / 2;
-    
+static void Win32DisplayBufferToDC(HDC deviceContext, LPRECT drawRect, win32_backbuffer_t *backbuffer)
+{
+    int rectWidth  = drawRect->right - drawRect->left;
+    int rectHeight = drawRect->bottom - drawRect->top;
+
+    int OffsetX = (rectWidth - backbuffer->width) / 2;
+    int OffsetY = (rectHeight - backbuffer->height) / 2;
+
     // TODO: Not all devices support the PatBlt function. For more information, see the description of the RC_BITBLT capability in the GetDeviceCaps function.
-    
-    PatBlt(deviceContext, 0, 0, winInfo.width, OffsetY, BLACKNESS);
-    PatBlt(deviceContext, 0, OffsetY + globalBackBuffer.height, winInfo.height, winInfo.height, BLACKNESS);
-    PatBlt(deviceContext, 0, 0, OffsetX, winInfo.height, BLACKNESS);
-    PatBlt(deviceContext, OffsetX + globalBackBuffer.width, 0, winInfo.width, winInfo.height, BLACKNESS);
+
+    // TODO: add these in again.
+    // clang-format off
+//    PatBlt(deviceContext, drawRect->left,                               drawRect->top,                                rectWidth, OffsetY,    BLACKNESS);  // top strip.
+//    PatBlt(deviceContext, drawRect->left,                               drawRect->top + OffsetY + backbuffer->height, rectWidth, OffsetY,    BLACKNESS);  // bottom strip.  
+//    PatBlt(deviceContext, drawRect->left,                               drawRect->top,                                OffsetX,   rectHeight, BLACKNESS);  // right strip.
+//    PatBlt(deviceContext, drawRect->left + OffsetX + backbuffer->width, drawRect->top,                                rectWidth, rectHeight, BLACKNESS);  // left strip.
+    // clang-format on
+
     //TODO(Noah): Correct aspect ratio. Also, figure out what this TODO means.
     StretchDIBits(deviceContext,
-        OffsetX, OffsetY, globalBackBuffer.width, globalBackBuffer.height,
-        0, 0, globalBackBuffer.width, globalBackBuffer.height,
-        globalBackBuffer.memory,
-        &globalBackBuffer.info,
+        OffsetX + drawRect->left,
+        OffsetY + drawRect->top,
+        rectWidth,
+        rectHeight,
+        0,
+        0,
+        backbuffer->width,
+        backbuffer->height,
+        backbuffer->memory,
+        &backbuffer->info,
         DIB_RGB_COLORS,
         SRCCOPY);
 }
@@ -1169,7 +1210,9 @@ static inline void Win32MessageBox(HWND hwnd, LPCSTR message,  UINT styles)
 //static std::atomic<BOOL> g_bModalRunning = FALSE;
 static std::atomic<Win32ModalLoopKind> g_currModalLoopKind = WIN32_MODAL_LOOP_KIND_NONE;
 
-DWORD WINAPI Win32WindowProcImpl(_In_ LPVOID lpParameter)
+static win32_backbuffer_t g_ncBackbuffer = {};
+
+void WINAPI Win32WindowProcImpl(_In_ LPVOID lpParameter)
 {
     Win32WindowProcPayload *payload = (Win32WindowProcPayload *)lpParameter;
 
@@ -1184,9 +1227,32 @@ DWORD WINAPI Win32WindowProcImpl(_In_ LPVOID lpParameter)
 
     const bool bAllowInput = (g_currModalLoopKind.load() == WIN32_MODAL_LOOP_KIND_NONE);
 
+    const int frameWidth  = 0;
+    const int frameHeight = 0;
+    const int frameTop    = 100;
+
+    const COLORREF frameColor = 0xFF3F3F3F;
+
+    static HTHEME hTheme = NULL;
+
+    const int buttonOffset      = 20;
+    const int closeButtonWidth  = GetSystemMetrics(SM_CXSIZE);
+    const int closeButtonHeight = GetSystemMetrics(SM_CYSIZE);
+    const int closeButtonY      = buttonOffset;
+
+    auto fnComputeButtonRect = [=](int width) -> RECT {
+        const int closeButtonX = width - closeButtonWidth - buttonOffset;  // Adjust as needed
+
+        const RECT buttonRect = RECT{.left = closeButtonX,
+            .top                           = closeButtonY,
+            .right                         = closeButtonX + closeButtonWidth,
+            .bottom                        = closeButtonY + closeButtonHeight};
+
+        return buttonRect;
+    };
+
 #if !defined(AUTOMATA_ENGINE_DISABLE_IMGUI)
-    if (ImGui_ImplWin32_WndProcHandler(window, message, wParam, lParam))
-    {
+    if (ImGui_ImplWin32_WndProcHandler(window, message, wParam, lParam)) {
         result = true;
         goto Win32WindowProcImpl_exit;
     }
@@ -1196,12 +1262,190 @@ DWORD WINAPI Win32WindowProcImpl(_In_ LPVOID lpParameter)
     {
         UINT styles = (UINT)lParam;
         Win32MessageBox(g_hwnd, (LPCSTR)wParam, styles);
-        return 0;
+        result = 0;
+        return;
     }
 
     switch(message) {
+        // calc size message is given to us so that we may compute the client region from the proposed total window size.
+        case WM_NCCALCSIZE:
+        {
+            auto lpRect = reinterpret_cast<LPRECT>(lParam); // proposed window.
+            
+            Win32ResizeBackbuffer(&g_ncBackbuffer, lpRect->right - lpRect->left, frameTop);
+
+            // render to this backbuffer since the data is going to be constant.
+            {
+                uint32_t *pixelPointer = (uint32_t *)g_ncBackbuffer.memory;
+                for (uint32_t y = 0; y < g_ncBackbuffer.height; y++)
+                {
+                    for (uint32_t x = 0; x < g_ncBackbuffer.width; x++)
+                    {
+                        // 0xARGB                        
+                        *pixelPointer++ = frameColor;
+                    }
+                }
+
+                // overlay our logo.
+                {
+                    uint32_t dst_xOffset = 15;
+                    uint32_t dst_yOffset = 15;
+
+                    uint32_t *dstRow = (uint32_t *)g_ncBackbuffer.memory + dst_xOffset + dst_yOffset * g_ncBackbuffer.width;
+                    uint32_t *src = g_loaded_logo_data_x64.pixelPointer;
+
+                    for (uint32_t y = 0; y < g_loaded_logo_data_x64.height; y++)
+                    {
+                        uint32_t *dst = dstRow;
+                        
+                        for (uint32_t x = 0; x < g_loaded_logo_data_x64.width; x++)
+                        {
+
+                            // NOTE: note the swizzle! the dst has format 0xARGB whereas
+                            // src has 0xABGR.  
+
+                            uint32_t pixel = *src++;
+                            uint32_t A = (pixel >> 24) & 0xFF;
+                            uint32_t R = (pixel >> 0) & 0xFF;
+                            uint32_t G = (pixel >> 8) & 0xFF;
+                            uint32_t B = (pixel >> 16) & 0xFF;
+
+                            uint32_t dstColor = *dst;
+                            uint32_t R_dst = (dstColor >> 16) & 0xFF;
+                            uint32_t G_dst = (dstColor >> 8) & 0xFF;
+                            uint32_t B_dst = (dstColor >> 0) & 0xFF;
+
+                            float t = A / 255.f;
+
+                            uint32_t R_blended = R * t + R_dst * (1.f-t);
+                            uint32_t G_blended = G * t + G_dst * (1.f-t);
+                            uint32_t B_blended = B * t + B_dst * (1.f-t);
+                             
+                            *dst++ = 0xFF << 24 | R_blended << 16 | G_blended << 8 | B_blended;
+                        }
+                        dstRow += g_ncBackbuffer.width;
+                    }
+                }
+            } 
+
+            ::InflateRect(lpRect, -(frameWidth), -(frameHeight)); // we modify to indicate the client.
+            lpRect->top += frameTop;
+
+            hTheme = OpenThemeData(g_hwnd, L"WINDOW");
+        }
+        break;
+        case WM_NCHITTEST:
+        {
+            POINT cursor;
+
+            RECT rc;
+            if (!::GetWindowRect(g_hwnd, &rc))
+            {
+                result = HTNOWHERE;
+                break;
+            }
+
+            LONG width = rc.right - rc.left;
+            LONG height = rc.bottom - rc.top;
+
+            // get window cursor in window relative coordinates.
+            {
+                WORD xCursor = GET_X_LPARAM(lParam);
+                WORD yCursor = GET_Y_LPARAM(lParam);
+
+                cursor = POINT{.x = xCursor, .y = yCursor};
+
+                ScreenToClient(g_hwnd, &cursor);
+                cursor.y += frameTop; // convert from client to window space.
+            }
+            
+            if (cursor.x < 0 || cursor.y < 0 || cursor.x > width || cursor.y > height)
+            {
+                result = HTNOWHERE;
+                break;
+            }
+
+            // check for if on close button.
+            {
+                RECT buttonRect = fnComputeButtonRect(width);
+
+                if (PtInRect(&buttonRect, cursor))
+                {
+                    result = HTCLOSE;
+                    break;
+                }
+            }
+
+            enum { left = 1, top = 2, right = 4, bottom = 8 };
+            int   hit = 0;
+            POINT pt  = cursor;
+            if (pt.x < 1) hit |= left;
+            if (pt.x > width - 1) hit |= right;
+            if (pt.y < 1) hit |= top;
+            if (pt.y > height - 1) hit |= bottom;
+
+            if (hit & top && hit & left) result = HTTOPLEFT;
+            if (hit & top && hit & right) result = HTTOPRIGHT;
+            if (hit & bottom && hit & left) result = HTBOTTOMLEFT;
+            if (hit & bottom && hit & right) result = HTBOTTOMRIGHT;
+            if (hit & left) result = HTLEFT;
+            if (hit & top) result = HTTOP;
+            if (hit & right) result = HTRIGHT;
+            if (hit & bottom) result = HTBOTTOM;
+
+            if (cursor.y > frameTop) {
+                result = HTCLIENT;
+            } else {
+                result = HTCAPTION;
+            }
+
+        } break;
+        case WM_NCPAINT:
+        {
+            HDC hdc = ::GetWindowDC(g_hwnd);
+            RECT rc{};
+
+            // NOTE: the client rect coordinates are in client coordinates.
+            // so upper-left corner is 0,0.
+            ::GetClientRect(g_hwnd, &rc);
+
+            int xEdge = frameWidth;
+            int yEdge = frameHeight;
+
+            rc.right += 2 * xEdge;
+            rc.bottom += 2 * yEdge;
+            rc.top += frameTop;
+            rc.bottom += frameTop;
+
+            RECT dst = { .left = 0, .top = 0, .right = rc.right, .bottom = frameTop };
+            Win32DisplayBufferToDC(hdc, &dst, &g_ncBackbuffer);
+
+            // overlay the close button.
+            {
+                RECT buttonRect = fnComputeButtonRect(rc.right);
+
+                // Draw the themed close button using DrawThemeBackground
+                DrawThemeBackground(hTheme, hdc, WP_CLOSEBUTTON, CBS_NORMAL, &buttonRect, NULL);
+            }
+
+            ReleaseDC(g_hwnd, hdc);
+
+        } break;
+        // nc activate is sent when there is activity in the title bar. it needs to be redrawn.
+        case WM_NCACTIVATE:
+        {
+            WINDOWPLACEMENT placement;
+            placement.length = sizeof(WINDOWPLACEMENT);
+            if (GetWindowPlacement(
+                g_hwnd, &placement
+                ) && placement.showCmd == SW_SHOWMINIMIZED)
+            {
+                result =  DefWindowProc(window, message, wParam, lParam);
+            } else{
+                result = TRUE;
+            }
+        } break;
         case WM_SETCURSOR:
-        if (LOWORD(lParam) == HTCLIENT)
         {
             ImGuiIO& io = ImGui::GetIO();
             ImGuiMouseCursor imgui_cursor = ImGui::GetMouseCursor();
@@ -1212,6 +1456,12 @@ DWORD WINAPI Win32WindowProcImpl(_In_ LPVOID lpParameter)
             }
             else
             {
+                WORD hitTestResult = LOWORD(lParam);
+                if (hitTestResult == HTCAPTION)
+                    imgui_cursor = ImGuiMouseCursor_ResizeAll;
+                if (hitTestResult == HTNOWHERE)
+                    imgui_cursor = ImGuiMouseCursor_NotAllowed;
+
                 // Show OS mouse cursor
                 LPCSTR win32_cursor = IDC_ARROW;
                 switch (imgui_cursor)
@@ -1228,9 +1478,8 @@ DWORD WINAPI Win32WindowProcImpl(_In_ LPVOID lpParameter)
                 }
                 ::SetCursor(::LoadCursor(g_hInstance, win32_cursor));
             }
-            return TRUE;
-        }
-        break;
+            result = TRUE;
+        } break;
         case WM_ENTERSIZEMOVE: {
             g_currModalLoopKind.store(WIN32_MODAL_LOOP_KIND_DRAGWINDOW);// = ;
             PostMessageA( g_userInputHwnd, message, wParam, lParam );
@@ -1293,7 +1542,8 @@ DWORD WINAPI Win32WindowProcImpl(_In_ LPVOID lpParameter)
             ) {
                 GameHandleWindowResize(&g_gameMemory, width, height);
             }
-            Win32ResizeBackbuffer(&globalBackBuffer, width,height);
+            Win32ResizeBackbuffer(&globalBackBuffer, width, height);
+            UpdateGlobalEngineFallbackBackbuffer(&globalBackBuffer);
         } break;
         case WM_PAINT:
         {
@@ -1304,7 +1554,8 @@ DWORD WINAPI Win32WindowProcImpl(_In_ LPVOID lpParameter)
                 HDC hdc = BeginPaint(window, &ps);
                 ae::game_window_info_t winInfo = Platform_getWindowInfo(false);
                 // TODO: just use rcPaint.
-                Win32DisplayBufferWindow(hdc, winInfo);
+                RECT dst = { .left = 0, .top = 0, .right = LONG(winInfo.width), .bottom = LONG(winInfo.height) };
+                Win32DisplayBufferToDC(hdc, &dst, &globalBackBuffer);
                 EndPaint(window, &ps);
             }
             else
@@ -1331,7 +1582,7 @@ DWORD WINAPI Win32WindowProcImpl(_In_ LPVOID lpParameter)
 
     Win32WindowProcImpl_exit:
 
-    return 0;
+    return;
 }
 
 LRESULT CALLBACK Win32WindowProc_UserInput(HWND window,
@@ -2127,7 +2378,8 @@ DWORD WINAPI Win32GameUpdateAndRenderHandlingLoop(_In_ LPVOID lpParameter) {
             // will write our custom buffer to the screen.
             HDC                    deviceContext = GetDC(g_hwnd);
             ae::game_window_info_t winInfo       = Platform_getWindowInfo(false);
-            Win32DisplayBufferWindow(deviceContext, winInfo);
+            RECT dst = { .left = 0, .top = 0, .right = LONG(winInfo.width), .bottom = LONG(winInfo.height) };
+            Win32DisplayBufferToDC(deviceContext, &dst, &globalBackBuffer);
             ReleaseDC(g_hwnd, deviceContext);
         }
 
@@ -2530,6 +2782,23 @@ int CALLBACK WinMain(HINSTANCE instance,
     }
 #endif
 
+    // load the icon baked into the .EXE. we'll be using this to render to the nonclient area of the window.
+    uint32_t *iconPixels = nullptr;
+    defer(iconPixels ? free(iconPixels) : (void)0);
+    {
+        // read using stb_image and get back our iconPixels.
+        int x;
+        int y;
+        int n;
+        int req_n  = 4;
+        iconPixels = (uint32_t *)stbi_load_from_memory(
+            (stbi_uc *)static_logo_data_x64_data, static_logo_data_x64_size, &x, &y, &n, req_n);
+
+        // set the global image struct.
+        g_loaded_logo_data_x64 =
+            ae::loaded_image_t{.pixelPointer = iconPixels, .width = uint32_t(x), .height = uint32_t(y)};
+    }
+
     // Query performance counter
     {
         LARGE_INTEGER PerfCountFrequency;
@@ -2714,6 +2983,7 @@ int CALLBACK WinMain(HINSTANCE instance,
         {
             ae::game_window_info_t winInfo = Platform_getWindowInfo(false);
             Win32ResizeBackbuffer(&globalBackBuffer, winInfo.width, winInfo.height);
+            UpdateGlobalEngineFallbackBackbuffer(&globalBackBuffer);
         }
 
         // Initialize XAudio2 !!!
@@ -2960,6 +3230,10 @@ int CALLBACK WinMain(HINSTANCE instance,
 
     // TODO(Noah): Can we leverage our new nc_defer.h to replace this code below?
     {
+        // dealloc the backbuffers that were allocated.
+        Win32ResizeBackbuffer(&globalBackBuffer, 0, 0);
+        Win32ResizeBackbuffer(&g_ncBackbuffer, 0, 0);
+
         // before kill Xaudio2, stop all audio and flush, for all voices.
         for (uint32_t i = 0; i < StretchyBufferCount(g_ppSourceVoices); i++) {
             if (g_ppSourceVoices[i].voice != nullptr) {
