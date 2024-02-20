@@ -1,9 +1,14 @@
 
-![engine_photo](https://user-images.githubusercontent.com/38915815/193379831-2a68ecbe-ef65-4e45-9353-c633f1fc598e.png)
+
 
 # Automata-Engine
 
 Framework for maybe writing games. Maybe also useful for writing general GUI applications.
+
+![vkmonkeydemo](https://github.com/BluBloos/Automata-Engine/assets/38915815/32ad2e66-9517-40c0-95c1-ba309125a2ce)
+![atomation](https://github.com/BluBloos/Automata-Engine/assets/38915815/d705874c-a4a9-4e48-97c9-e689bdade0f4)
+![pathtracer](https://github.com/BluBloos/Automata-Engine/assets/38915815/cb31b64d-aa6d-4f42-82c4-27c2b1f43cfa)
+
 
 ## Supported Platforms
 
