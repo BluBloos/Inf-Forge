@@ -1064,7 +1064,7 @@ static void Win32ResizeBackbuffer(win32_backbuffer_t *buffer, int newWidth, int 
 
 	int bitmapMemorySize = newWidth * newHeight * buffer->bytesPerPixel;
 	buffer->memory = VirtualAlloc(0, bitmapMemorySize, MEM_COMMIT, PAGE_READWRITE);
-	// NOTE(Noah): Setting pitch shit, ahah.
+	// NOTE(Noah): Setting pitch.
 	buffer->pitch = newWidth * buffer->bytesPerPixel;
 	// TODD(Noah): Probably want to clear to black each time we resize the window?
     // Or is VirtualAlloc already doing this?
@@ -2017,7 +2017,7 @@ intptr_t Platform_createVoice() {
 // Another TODO would be ... make this NEVER fail! WHY would I
 // voluntarily release that sort of paradigm over to the game?
 // It's my job to put Xaudio in check. Why would you fail? Like ...
-// nah man. None of that shit!
+// nah man. None of that!
 //
 // the paradigm should be like so. If things fail that should normally
 // work no problem, it means that something is catasrophically wrong.
