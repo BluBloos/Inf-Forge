@@ -1503,7 +1503,7 @@ int CALLBACK WinMain(HINSTANCE instance,
                 }
             }
 
-            static bool            bEngineIntroOver    = false;
+            static bool            bEngineIntroOver    = true;
             static constexpr float engineIntroDuration = 4.f;
 
             // is engine intro over?
@@ -1594,8 +1594,8 @@ int CALLBACK WinMain(HINSTANCE instance,
                 ImGui::Render();
 #if defined(AUTOMATA_ENGINE_GL_BACKEND)
                 ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-            }
 #endif
+                }
 #endif
 
             {

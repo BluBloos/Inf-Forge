@@ -66,7 +66,7 @@ namespace automata_engine {
         platform::GLOBAL_UPDATE_MODEL = newModel;
     }
 
-    loaded_image_t platform::stbImageLoad(char *fileName) {
+    loaded_image_t platform::stbImageLoad(const char *fileName) {
         int x, y, n;
         int desired_channels=4;
         loaded_image_t myImage = {};

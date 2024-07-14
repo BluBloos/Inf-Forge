@@ -581,7 +581,7 @@ namespace automata_engine {
         /// @brief read an image from disk into memory using stb_image.
         ///
         /// Must be freed with freeLoadedImage. The pixel data will be in 0xABGR (32bpp) format.
-        loaded_image_t stbImageLoad(char *fileName);
+        loaded_image_t stbImageLoad(const char *fileName);
 
         /// @brief get the lastly polled user input.
         void getUserInput(user_input_t *userInput);
